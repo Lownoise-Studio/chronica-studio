@@ -62,7 +62,7 @@ export default function ProjectScreen() {
   if (!project) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <EmptyState icon="alert-circle" title="Project not found" />
+        <EmptyState icon="alert-circle" title="Story not found" />
       </View>
     );
   }
@@ -138,7 +138,7 @@ export default function ProjectScreen() {
         {([
           [totalScenes, 'Scenes'],
           [totalPlaces, advancedMode ? 'Locations' : 'Places'],
-          [project.assets.length, 'Assets'],
+          [project.assets.length, advancedMode ? 'Assets' : 'Images'],
         ] as [number, string][]).map(([val, label], i) => (
           <React.Fragment key={label}>
             {i > 0 && <View style={[styles.statDiv, { backgroundColor: colors.border }]} />}

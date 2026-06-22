@@ -104,7 +104,7 @@ export default function ExportScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.cardHeader}>
           <Feather name="download" size={18} color={colors.primary} />
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Project</Text>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Story</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
           Save your story as a backup file you can restore or share later.
@@ -140,11 +140,11 @@ export default function ExportScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={styles.cardHeader}>
           <Feather name="upload" size={18} color={colors.primary} />
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Import Project</Text>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Import a Story</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Load a previously exported Chronica Studio JSON file.
-          The imported project will be added as a new project in your library.
+          Load a previously exported Chronica Studio backup file.
+          The imported story will be added to your library.
         </Text>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}

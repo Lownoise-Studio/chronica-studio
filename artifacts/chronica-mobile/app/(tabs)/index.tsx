@@ -44,7 +44,7 @@ export default function HomeScreen() {
   const showProjectMenu = (p: Project) => {
     Alert.alert(p.title, 'Choose an action', [
       {
-        text: 'Rename / Edit Info',
+        text: 'Edit Story Info',
         onPress: () => openRename(p),
       },
       {
@@ -58,7 +58,7 @@ export default function HomeScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: () => {
-          Alert.alert('Delete Project', `Delete "${p.title}"? This cannot be undone.`, [
+          Alert.alert('Delete Story', `Delete "${p.title}"? This cannot be undone.`, [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Delete',
@@ -75,7 +75,7 @@ export default function HomeScreen() {
     ]);
   };
 
-  const sheetTitle = sheet?.kind === 'create' ? 'New Project' : 'Rename Project';
+  const sheetTitle = sheet?.kind === 'create' ? 'New Story' : 'Rename Story';
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -119,9 +119,9 @@ export default function HomeScreen() {
           isLoaded ? (
             <EmptyState
               icon="book-open"
-              title="No projects yet"
+              title="No stories yet"
               message="Create your first story to get started. Tap + to begin."
-              actionLabel="Create Project"
+              actionLabel="New Story"
               onAction={openCreate}
             />
           ) : null

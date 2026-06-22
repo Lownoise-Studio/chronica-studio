@@ -47,13 +47,13 @@ export function ProjectCard({
           <View style={styles.metaItem}>
             <Feather name="file-text" size={11} color={colors.mutedForeground} />
             <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-              {project.fragments.length} fragment{project.fragments.length !== 1 ? 's' : ''}
+              {project.fragments.length} scene{project.fragments.length !== 1 ? 's' : ''}
             </Text>
           </View>
           <View style={styles.metaItem}>
             <Feather name="map-pin" size={11} color={colors.mutedForeground} />
             <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-              {locs} location{locs !== 1 ? 's' : ''}
+              {locs} place{locs !== 1 ? 's' : ''}
             </Text>
           </View>
           <Text style={[styles.metaText, { color: colors.mutedForeground }]}>

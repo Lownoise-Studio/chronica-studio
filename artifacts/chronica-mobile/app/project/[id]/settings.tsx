@@ -115,7 +115,7 @@ export default function SettingsScreen() {
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete Project', `Delete "${project.title}"? This cannot be undone.`, [
+    Alert.alert('Delete Story', `Delete "${project.title}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => { deleteProject(projectId!); router.dismissAll(); } },
     ]);
@@ -131,7 +131,7 @@ export default function SettingsScreen() {
     : [
         ['Scenes', project.fragments.length],
         ['Places', new Set(project.fragments.map(f => f.locationId)).size],
-        ['Assets', project.assets.length],
+        ['Images', project.assets.length],
         ['Total Choices', project.fragments.reduce((s, f) => s + f.choices.length, 0)],
       ];
 
@@ -143,11 +143,11 @@ export default function SettingsScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.secTitle, { color: colors.foreground }]}>Project Info</Text>
+        <Text style={[styles.secTitle, { color: colors.foreground }]}>Story Info</Text>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Title</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-          value={title} onChangeText={setTitle} placeholder="Project title" placeholderTextColor={colors.mutedForeground}
+          value={title} onChangeText={setTitle} placeholder="Story title" placeholderTextColor={colors.mutedForeground}
         />
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Description</Text>
         <TextInput
@@ -167,7 +167,7 @@ export default function SettingsScreen() {
             : 'The opening scene and any starting values for a new playtest.'}
         </Text>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-          {advancedMode ? 'Start Location ID' : 'Opening Scene ID'}
+          {advancedMode ? 'Start Location ID' : 'First Scene'}
         </Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
@@ -224,7 +224,7 @@ export default function SettingsScreen() {
         <Text style={[styles.secTitle, { color: colors.destructive }]}>Danger Zone</Text>
         <TouchableOpacity style={[styles.deleteBtn, { borderColor: colors.destructive }]} onPress={confirmDelete} activeOpacity={0.8}>
           <Feather name="trash-2" size={15} color={colors.destructive} />
-          <Text style={[styles.deleteBtnText, { color: colors.destructive }]}>Delete Project</Text>
+          <Text style={[styles.deleteBtnText, { color: colors.destructive }]}>Delete Story</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
