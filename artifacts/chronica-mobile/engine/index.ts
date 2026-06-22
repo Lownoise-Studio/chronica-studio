@@ -6,3 +6,4 @@ export * from './turn-resolver';
 export * from './chronica-session';
 export * from './validator';
 export * from './editor-helpers';
+export * from './story-graph';

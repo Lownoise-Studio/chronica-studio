@@ -112,6 +112,13 @@ export default function ProjectScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+          onPress={() => router.push(`/project/${project.id}/graph` as any)}
+          activeOpacity={0.8}
+        >
+          <Feather name="git-merge" size={18} color={colors.foreground} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
           onPress={() => router.push(`/project/${project.id}/assets` as any)}
           activeOpacity={0.8}
         >
