@@ -36,6 +36,7 @@ function RootLayoutNav() {
       <Stack.Screen name="project/[id]/assets" options={{ title: "Assets" }} />
       <Stack.Screen name="project/[id]/play" options={{ headerShown: false }} />
       <Stack.Screen name="project/[id]/settings" options={{ title: "Settings" }} />
+      <Stack.Screen name="project/[id]/export" options={{ title: "Export / Import" }} />
     </Stack>
   );
 }

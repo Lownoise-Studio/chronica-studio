@@ -18,7 +18,7 @@ export default function ProjectScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { getProject, addFragment, deleteFragment } = useProjects();
+  const { getProject, addFragment, deleteFragment, getValidationErrors } = useProjects();
   const [search, setSearch] = useState('');
 
   const project = getProject(id!);
@@ -34,6 +34,7 @@ export default function ProjectScreen() {
       ? project.fragments.filter(
           f =>
             f.locationId.toLowerCase().includes(q) ||
+            f.title.toLowerCase().includes(q) ||
             f.text.toLowerCase().includes(q)
         )
       : project.fragments;
@@ -51,6 +52,9 @@ export default function ProjectScreen() {
       }));
   }, [project, search]);
 
+  const validationErrors = useMemo(() => getValidationErrors(id!), [project]);
+  const errorCount = validationErrors.length;
+
   if (!project) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -62,7 +66,8 @@ export default function ProjectScreen() {
   const handleAddFragment = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const f = addFragment(project.id, {
-      locationId: 'start',
+      title: '',
+      locationId: 'new-fragment',
       priority: 0,
       conditions: [],
       effects: [],
@@ -73,7 +78,7 @@ export default function ProjectScreen() {
   };
 
   const handleDeleteFragment = (uid: string, locId: string) => {
-    Alert.alert('Delete Fragment', `Delete fragment at "${locId}"?`, [
+    Alert.alert('Delete Fragment', `Delete fragment "${locId}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
@@ -98,14 +103,21 @@ export default function ProjectScreen() {
           activeOpacity={0.8}
         >
           <Feather name="play" size={15} color="#fff" />
-          <Text style={styles.playBtnText}>Play</Text>
+          <Text style={styles.playBtnText}>Playtest</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
           onPress={() => router.push(`/project/${project.id}/assets` as any)}
           activeOpacity={0.8}
         >
-          <Feather name="folder" size={18} color={colors.foreground} />
+          <Feather name="image" size={18} color={colors.foreground} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+          onPress={() => router.push(`/project/${project.id}/export` as any)}
+          activeOpacity={0.8}
+        >
+          <Feather name="download" size={18} color={colors.foreground} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
@@ -133,6 +145,23 @@ export default function ProjectScreen() {
         ))}
       </View>
 
+      {/* Validation warning */}
+      {errorCount > 0 && (
+        <TouchableOpacity
+          style={[styles.warnBanner, { backgroundColor: colors.destructive + '22', borderBottomColor: colors.destructive + '55' }]}
+          onPress={() => {
+            const msgs = validationErrors.slice(0, 5).map(e => `• ${e.message}`).join('\n');
+            Alert.alert(`${errorCount} issue${errorCount > 1 ? 's' : ''} found`, msgs);
+          }}
+          activeOpacity={0.8}
+        >
+          <Feather name="alert-triangle" size={13} color={colors.destructive} />
+          <Text style={[styles.warnText, { color: colors.destructive }]}>
+            {errorCount} issue{errorCount !== 1 ? 's' : ''} — tap to review
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Search bar */}
       <View style={[styles.searchRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
@@ -140,7 +169,7 @@ export default function ProjectScreen() {
           style={[styles.searchInput, { color: colors.foreground }]}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search fragments or locations…"
+          placeholder="Search fragments…"
           placeholderTextColor={colors.mutedForeground}
           autoCorrect={false}
           autoCapitalize="none"
@@ -155,16 +184,12 @@ export default function ProjectScreen() {
 
       {sections.length === 0 ? (
         search.length > 0 ? (
-          <EmptyState
-            icon="search"
-            title="No results"
-            message={`No fragments match "${search}"`}
-          />
+          <EmptyState icon="search" title="No results" message={`No fragments match "${search}"`} />
         ) : (
           <EmptyState
             icon="file-text"
             title="No fragments yet"
-            message="Add your first fragment to start writing"
+            message="Add your first fragment to start writing your story"
             actionLabel="Add Fragment"
             onAction={handleAddFragment}
           />
@@ -176,6 +201,7 @@ export default function ProjectScreen() {
           renderItem={({ item }) => (
             <FragmentListItem
               fragment={item}
+              hasError={validationErrors.some(e => e.fragmentUid === item.uid)}
               onPress={() => router.push(`/project/${project.id}/fragment/${item.uid}` as any)}
               onDelete={() => handleDeleteFragment(item.uid, item.locationId)}
             />
@@ -216,21 +242,12 @@ export default function ProjectScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1,
   },
   playBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 8,
-    paddingVertical: 10,
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, borderRadius: 8, paddingVertical: 10,
   },
   playBtnText: { color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   iconBtn: { width: 40, height: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
@@ -239,48 +256,28 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   statLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   statDiv: { width: 1, marginVertical: 4 },
+  warnBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1,
+  },
+  warnText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
   searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Inter_400Regular',
-    paddingVertical: 0,
-  },
+  searchInput: { flex: 1, fontSize: 14, fontFamily: 'Inter_400Regular', paddingVertical: 0 },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    paddingTop: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 20, paddingVertical: 8, paddingTop: 16,
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  sectionTitle: {
-    flex: 1,
-    fontSize: 11,
-    fontFamily: 'Inter_500Medium',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+  sectionTitle: { flex: 1, fontSize: 11, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.8 },
   sectionCount: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   fab: {
-    position: 'absolute',
-    right: 20,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    position: 'absolute', right: 20,
+    width: 54, height: 54, borderRadius: 27,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
   },
 });

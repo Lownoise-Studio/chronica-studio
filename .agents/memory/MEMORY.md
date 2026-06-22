@@ -1,1 +1,4 @@
-- [pnpm install strategy](pnpm-install-strategy.md) — workspace install needs --prefer-offline --no-frozen-lockfile; plain install times out silently
+- [pnpm install strategy](pnpm-install-strategy.md) — workspace install needs --prefer-offline; plain install times out silently
+- [expo-file-system legacy + Metro web](expo-fs-legacy-web.md) — legacy FS sub-path needs a .web.ts stub or Metro web bundler fails
+- [jest compat with expo 54](jest-expo54-compat.md) — jest@30 breaks with jest-expo@54; must use jest@~29.7.0 + jest-expo@~54.0.17
+- [jest Metro watch conflict](jest-metro-watch.md) — installing jest creates temp dirs that Metro tries to watch; add blockList to metro.config.js

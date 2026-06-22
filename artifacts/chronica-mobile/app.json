@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Chronica",
-    "slug": "chronica-mobile",
+    "name": "Pocket Story Engine",
+    "slug": "pocket-story-engine",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "chronica",
+    "scheme": "pocketstory",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "studio.lownoise.chronica"
+      "bundleIdentifier": "studio.lownoise.pocketstory"
     },
     "android": {
-      "package": "studio.lownoise.chronica",
+      "package": "studio.lownoise.pocketstory",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0a0a0f"
@@ -40,7 +40,8 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-image-picker"
     ],
     "experiments": {
       "typedRoutes": true,

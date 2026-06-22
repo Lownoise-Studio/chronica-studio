@@ -8,34 +8,47 @@ import { ArrayEditor } from './ArrayEditor';
 const generateId = (): string =>
   Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
+function getGotoTarget(action: string): string | null {
+  const steps = action.split(';').map(s => s.trim());
+  for (const step of steps) {
+    if (step.startsWith('goto:')) return step.slice(5).trim();
+  }
+  return null;
+}
+
 function ChoiceCard({
-  choice,
-  index,
-  onChange,
-  onRemove,
+  choice, index, onChange, onRemove, knownLocations,
 }: {
   choice: Choice;
   index: number;
   onChange: (patch: Partial<Choice>) => void;
   onRemove: () => void;
+  knownLocations?: Set<string>;
 }) {
   const colors = useColors();
-  const [showConditions, setShowConditions] = useState(choice.conditions?.length > 0);
+  const [showConditions, setShowConditions] = useState(!!(choice.conditions?.length));
+
+  const gotoTarget = getGotoTarget(choice.action);
+  const isBrokenLink = gotoTarget && knownLocations && !knownLocations.has(gotoTarget);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+    <View style={[styles.card, { backgroundColor: colors.secondary, borderColor: isBrokenLink ? colors.destructive + '88' : colors.border }]}>
       <View style={styles.cardHeader}>
         <Text style={[styles.cardNum, { color: colors.mutedForeground }]}>Choice {index + 1}</Text>
+        {isBrokenLink && (
+          <View style={styles.brokenBadge}>
+            <Feather name="alert-circle" size={11} color={colors.destructive} />
+            <Text style={[styles.brokenText, { color: colors.destructive }]}>
+              "{gotoTarget}" not found
+            </Text>
+          </View>
+        )}
         <View style={styles.cardActions}>
           <TouchableOpacity
             onPress={() => setShowConditions(!showConditions)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Feather
-              name="filter"
-              size={14}
-              color={showConditions ? colors.primary : colors.mutedForeground}
-            />
+            <Feather name="filter" size={14} color={showConditions ? colors.primary : colors.mutedForeground} />
           </TouchableOpacity>
           <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Feather name="trash-2" size={14} color={colors.destructive} />
@@ -57,15 +70,18 @@ function ChoiceCard({
       <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
         <TextInput
-          style={[styles.fieldInput, { color: colors.foreground }]}
+          style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
           value={choice.action}
           onChangeText={v => onChange({ action: v })}
-          placeholder="goto:location  or  variables.x += 1  or  set:met_guard"
+          placeholder="goto:location  ·  set:flag  ·  variables.x += 1"
           placeholderTextColor={colors.mutedForeground}
           autoCorrect={false}
           spellCheck={false}
           autoCapitalize="none"
         />
+        <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
+          goto:locationId to navigate  ·  semicolons for multiple steps
+        </Text>
       </View>
 
       {showConditions && (
@@ -86,9 +102,11 @@ function ChoiceCard({
 export function ChoiceEditor({
   choices,
   onChange,
+  knownLocations,
 }: {
   choices: Choice[];
   onChange: (choices: Choice[]) => void;
+  knownLocations?: Set<string>;
 }) {
   const colors = useColors();
 
@@ -110,6 +128,7 @@ export function ChoiceEditor({
           index={i}
           onChange={patch => update(choice.uid, patch)}
           onRemove={() => remove(choice.uid)}
+          knownLocations={knownLocations}
         />
       ))}
       <TouchableOpacity
@@ -128,21 +147,18 @@ const styles = StyleSheet.create({
   container: { gap: 8 },
   label: { fontSize: 11, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.8 },
   card: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 8 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cardNum: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  brokenBadge: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  brokenText: { fontSize: 10, fontFamily: 'Inter_400Regular' },
   cardActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   field: { borderBottomWidth: 1, paddingBottom: 8, gap: 2 },
   fieldLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   fieldInput: { fontSize: 13, fontFamily: 'Inter_400Regular', minHeight: 28 },
+  actionHint: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2 },
   addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', paddingVertical: 12,
   },
   addBtnText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
 });

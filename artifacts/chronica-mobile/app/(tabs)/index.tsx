@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  FlatList, KeyboardAvoidingView, Modal, Platform, StyleSheet,
-  Text, TextInput, TouchableOpacity, View, Alert,
+  Alert, FlatList, KeyboardAvoidingView, Modal,
+  Platform, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -11,53 +11,89 @@ import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { ProjectCard } from '@/components/ProjectCard';
 import { EmptyState } from '@/components/EmptyState';
+import { Onboarding } from '@/components/Onboarding';
+import { Project } from '@/engine/types';
+
+type Sheet = { kind: 'create' } | { kind: 'rename'; project: Project } | null;
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { projects, createProject, deleteProject, isLoaded } = useProjects();
-  const [modal, setModal] = useState(false);
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
+  const { projects, createProject, deleteProject, duplicateProject, updateProject, isLoaded, hasOnboarded, setHasOnboarded } = useProjects();
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [titleInput, setTitleInput] = useState('');
+  const [descInput, setDescInput] = useState('');
 
-  const handleCreate = () => {
-    if (!title.trim()) return;
+  const openCreate = () => { setTitleInput(''); setDescInput(''); setSheet({ kind: 'create' }); };
+
+  const openRename = (p: Project) => { setTitleInput(p.title); setDescInput(p.description); setSheet({ kind: 'rename', project: p }); };
+
+  const handleSubmit = () => {
+    if (!titleInput.trim()) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    createProject(title.trim(), desc.trim());
-    setTitle('');
-    setDesc('');
-    setModal(false);
+    if (sheet?.kind === 'create') {
+      const p = createProject(titleInput.trim(), descInput.trim());
+      setSheet(null);
+      router.push(`/project/${p.id}` as any);
+    } else if (sheet?.kind === 'rename') {
+      updateProject(sheet.project.id, { title: titleInput.trim(), description: descInput.trim() });
+      setSheet(null);
+    }
   };
 
-  const confirmDelete = (id: string, name: string) => {
-    Alert.alert('Delete Project', `Delete "${name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
+  const showProjectMenu = (p: Project) => {
+    Alert.alert(p.title, 'Choose an action', [
       {
-        text: 'Delete', style: 'destructive',
+        text: 'Rename / Edit Info',
+        onPress: () => openRename(p),
+      },
+      {
+        text: 'Duplicate',
         onPress: () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          deleteProject(id);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          duplicateProject(p.id);
         },
       },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert('Delete Project', `Delete "${p.title}"? This cannot be undone.`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                deleteProject(p.id);
+              },
+            },
+          ]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
+  const sheetTitle = sheet?.kind === 'create' ? 'New Project' : 'Rename Project';
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {!hasOnboarded && (
+        <Onboarding onDismiss={() => setHasOnboarded(true)} />
+      )}
+
       <View style={[
         styles.header,
-        {
-          paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16),
-          borderBottomColor: colors.border,
-        },
+        { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16), borderBottomColor: colors.border },
       ]}>
         <View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Chronica</Text>
-          <Text style={[styles.studio, { color: colors.primary }]}>by Lownoise Studio</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Pocket Story</Text>
+          <Text style={[styles.studio, { color: colors.primary }]}>Engine · by Lownoise Studio</Text>
         </View>
         <TouchableOpacity
           style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          onPress={() => setModal(true)}
+          onPress={openCreate}
           activeOpacity={0.8}
         >
           <Feather name="plus" size={20} color="#fff" />
@@ -71,7 +107,7 @@ export default function HomeScreen() {
           <ProjectCard
             project={item}
             onPress={() => router.push(`/project/${item.id}` as any)}
-            onLongPress={() => confirmDelete(item.id, item.title)}
+            onLongPress={() => showProjectMenu(item)}
           />
         )}
         contentContainerStyle={[
@@ -84,40 +120,42 @@ export default function HomeScreen() {
             <EmptyState
               icon="book-open"
               title="No projects yet"
-              message="Create your first narrative game to get started"
-              actionLabel="New Project"
-              onAction={() => setModal(true)}
+              message="Create your first story to get started. Tap + to begin."
+              actionLabel="Create Project"
+              onAction={openCreate}
             />
           ) : null
         }
         showsVerticalScrollIndicator={false}
       />
 
-      <Modal visible={modal} transparent animationType="slide" onRequestClose={() => setModal(false)}>
+      {/* Create / Rename sheet */}
+      <Modal visible={!!sheet} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
         <KeyboardAvoidingView
           style={styles.overlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setModal(false)} activeOpacity={1} />
-          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} activeOpacity={1} />
+          <View style={[styles.sheetBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>New Project</Text>
+            <Text style={[styles.sheetTitle, { color: colors.foreground }]}>{sheetTitle}</Text>
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Title</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="My Narrative Game"
+              value={titleInput}
+              onChangeText={setTitleInput}
+              placeholder="My Story"
               placeholderTextColor={colors.mutedForeground}
               autoFocus
+              returnKeyType="next"
             />
 
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Description (optional)</Text>
             <TextInput
               style={[styles.input, styles.textArea, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-              value={desc}
-              onChangeText={setDesc}
+              value={descInput}
+              onChangeText={setDescInput}
               placeholder="A brief description of your story..."
               placeholderTextColor={colors.mutedForeground}
               multiline
@@ -127,17 +165,20 @@ export default function HomeScreen() {
             <View style={styles.sheetActions}>
               <TouchableOpacity
                 style={[styles.sheetBtn, { borderColor: colors.border }]}
-                onPress={() => setModal(false)}
+                onPress={() => setSheet(null)}
                 activeOpacity={0.8}
               >
                 <Text style={[styles.sheetBtnText, { color: colors.mutedForeground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.sheetBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                onPress={handleCreate}
+                onPress={handleSubmit}
+                disabled={!titleInput.trim()}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.sheetBtnText, { color: '#fff' }]}>Create</Text>
+                <Text style={[styles.sheetBtnText, { color: '#fff' }]}>
+                  {sheet?.kind === 'create' ? 'Create' : 'Save'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -157,20 +198,16 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
   },
-  title: { fontSize: 28, fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
-  studio: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  title: { fontSize: 24, fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
+  studio: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   list: { paddingTop: 12 },
   listEmpty: { flex: 1 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
-  sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    padding: 24,
-    paddingTop: 16,
-    gap: 10,
+  sheetBox: {
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderBottomWidth: 0,
+    padding: 24, paddingTop: 16, gap: 10,
   },
   sheetHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 8 },
   sheetTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 4 },
