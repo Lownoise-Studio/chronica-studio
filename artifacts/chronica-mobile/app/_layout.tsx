@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProjectsProvider } from "@/context/ProjectsContext";
+import { AdvancedModeProvider } from "@/context/AdvancedModeContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,7 +33,7 @@ function RootLayoutNav() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="project/[id]/index" options={{ title: "Project" }} />
-      <Stack.Screen name="project/[id]/fragment/[uid]" options={{ title: "Fragment" }} />
+      <Stack.Screen name="project/[id]/fragment/[uid]" options={{ title: "Scene" }} />
       <Stack.Screen name="project/[id]/assets" options={{ title: "Assets" }} />
       <Stack.Screen name="project/[id]/play" options={{ headerShown: false }} />
       <Stack.Screen name="project/[id]/settings" options={{ title: "Settings" }} />
@@ -61,13 +62,15 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <ProjectsProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </ProjectsProvider>
+          <AdvancedModeProvider>
+            <ProjectsProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </ProjectsProvider>
+          </AdvancedModeProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

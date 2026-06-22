@@ -16,22 +16,22 @@ const STEPS: Step[] = [
   {
     icon: 'book-open',
     title: 'Welcome to Pocket Story Engine',
-    body: 'Create branching narrative games directly on your phone.\n\nEach story is made of fragments — nodes in a graph that the player moves between.',
+    body: "Create branching stories directly on your phone — no coding needed.\n\nYour story is made of scenes: moments your reader moves through, one choice at a time.",
   },
   {
     icon: 'file-text',
-    title: 'Build Fragments',
-    body: 'Every fragment has a Location ID, story text, optional conditions, and effects.\n\nLocation IDs are how fragments find each other — like addresses in your story graph.',
+    title: 'Write Your Scenes',
+    body: "Each scene is a moment in your story. Write what the reader sees, feels, or hears.\n\nGive each scene a name so you can find it easily.",
   },
   {
     icon: 'git-branch',
     title: 'Connect with Choices',
-    body: 'Add choices to let players navigate. Use goto:location to move to another fragment.\n\nAdd conditions like variables.trust >= 2 to gate choices by state.',
+    body: "Add choices to let readers steer the story. Each choice links to another scene.\n\nYou can also add unlock requirements — conditions a reader must meet before a choice appears.",
   },
   {
     icon: 'play',
-    title: 'Playtest & Export',
-    body: 'Use Playtest mode to run through your story and see the debug inspector.\n\nWhen ready, export your project as a JSON file to back up or share it.',
+    title: 'Playtest & Share',
+    body: "Tap Playtest to read through your story and check every path.\n\nWhen you're ready, export your project as a file to back it up or share it with others.",
   },
 ];
 
@@ -50,21 +50,17 @@ export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
     <Modal visible transparent animationType="fade">
       <View style={[styles.overlay, { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 24 }]}>
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {/* Skip */}
           <TouchableOpacity style={styles.skipBtn} onPress={onDismiss}>
             <Text style={[styles.skipText, { color: colors.mutedForeground }]}>Skip</Text>
           </TouchableOpacity>
 
-          {/* Icon */}
           <View style={[styles.iconRing, { backgroundColor: colors.primary + '22', borderColor: colors.primary + '44' }]}>
             <Feather name={current.icon as any} size={36} color={colors.primary} />
           </View>
 
-          {/* Text */}
           <Text style={[styles.title, { color: colors.foreground }]}>{current.title}</Text>
           <Text style={[styles.body, { color: colors.mutedForeground }]}>{current.body}</Text>
 
-          {/* Dots */}
           <View style={styles.dots}>
             {STEPS.map((_, i) => (
               <View
@@ -77,7 +73,6 @@ export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
             ))}
           </View>
 
-          {/* Navigation */}
           <View style={styles.nav}>
             {step > 0 ? (
               <TouchableOpacity
@@ -94,7 +89,7 @@ export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
               onPress={next}
               activeOpacity={0.8}
             >
-              <Text style={styles.navBtnTextLight}>{isLast ? "Let's go" : 'Next'}</Text>
+              <Text style={styles.navBtnTextLight}>{isLast ? "Start writing" : 'Next'}</Text>
               {!isLast && <Feather name="arrow-right" size={16} color="#fff" />}
             </TouchableOpacity>
           </View>

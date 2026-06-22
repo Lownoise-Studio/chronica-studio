@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { Fragment } from '@/engine/types';
 
 export function FragmentListItem({
@@ -16,6 +17,10 @@ export function FragmentListItem({
   onDelete: () => void;
 }) {
   const colors = useColors();
+  const { advancedMode } = useAdvancedMode();
+
+  const displayName = fragment.title || fragment.locationId || 'Untitled scene';
+
   return (
     <TouchableOpacity
       style={[
@@ -30,15 +35,21 @@ export function FragmentListItem({
     >
       <View style={styles.left}>
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
-            <Text style={[styles.badgeText, { color: colors.primary }]} numberOfLines={1}>
-              {fragment.locationId || 'no-location'}
+          {advancedMode ? (
+            <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+              <Text style={[styles.badgeText, { color: colors.primary }]} numberOfLines={1}>
+                {fragment.locationId || 'no-id'}
+              </Text>
+              <Text style={[styles.priority, { color: colors.mutedForeground }]}>
+                p{fragment.priority}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.sceneName, { color: colors.foreground }]} numberOfLines={1}>
+              {displayName}
             </Text>
-            <Text style={[styles.priority, { color: colors.mutedForeground }]}>
-              p{fragment.priority}
-            </Text>
-          </View>
-          {fragment.title && fragment.title !== fragment.locationId && (
+          )}
+          {advancedMode && fragment.title && fragment.title !== fragment.locationId && (
             <Text style={[styles.titleText, { color: colors.mutedForeground }]} numberOfLines={1}>
               {fragment.title}
             </Text>
@@ -47,15 +58,15 @@ export function FragmentListItem({
             <Feather name="alert-circle" size={13} color={colors.destructive} />
           )}
         </View>
-        <Text style={[styles.text, { color: colors.foreground }]} numberOfLines={2}>
-          {fragment.text || '(empty)'}
+        <Text style={[styles.text, { color: colors.mutedForeground }]} numberOfLines={2}>
+          {fragment.text || '(no text yet)'}
         </Text>
         <View style={styles.meta}>
           {fragment.conditions.length > 0 && (
             <View style={styles.metaItem}>
               <Feather name="filter" size={10} color={colors.mutedForeground} />
               <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-                {fragment.conditions.length}
+                {fragment.conditions.length} {advancedMode ? '' : 'requirement'}{fragment.conditions.length !== 1 && !advancedMode ? 's' : ''}
               </Text>
             </View>
           )}
@@ -91,6 +102,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   priority: { fontSize: 10, fontFamily: 'Inter_400Regular' },
+  sceneName: { fontSize: 14, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
   titleText: { fontSize: 11, fontFamily: 'Inter_400Regular', flexShrink: 1 },
   text: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 10 },

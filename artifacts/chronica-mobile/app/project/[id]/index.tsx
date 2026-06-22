@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { FragmentListItem } from '@/components/FragmentListItem';
 import { EmptyState } from '@/components/EmptyState';
 import { Fragment } from '@/engine/types';
@@ -19,6 +20,7 @@ export default function ProjectScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { getProject, addFragment, deleteFragment, getValidationErrors } = useProjects();
+  const { advancedMode } = useAdvancedMode();
   const [search, setSearch] = useState('');
 
   const project = getProject(id!);
@@ -40,7 +42,9 @@ export default function ProjectScreen() {
       : project.fragments;
     const groups: Record<string, Fragment[]> = {};
     for (const f of filtered) {
-      const key = f.locationId || '(no location)';
+      const key = advancedMode
+        ? (f.locationId || '(no id)')
+        : (f.locationId || '(no id)');
       if (!groups[key]) groups[key] = [];
       groups[key].push(f);
     }
@@ -50,7 +54,7 @@ export default function ProjectScreen() {
         title,
         data: [...data].sort((a, b) => b.priority - a.priority),
       }));
-  }, [project, search]);
+  }, [project, search, advancedMode]);
 
   const validationErrors = useMemo(() => getValidationErrors(id!), [project]);
   const errorCount = validationErrors.length;
@@ -67,7 +71,7 @@ export default function ProjectScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const f = addFragment(project.id, {
       title: '',
-      locationId: 'new-fragment',
+      locationId: 'new-scene',
       priority: 0,
       conditions: [],
       effects: [],
@@ -77,8 +81,9 @@ export default function ProjectScreen() {
     router.push(`/project/${project.id}/fragment/${f.uid}` as any);
   };
 
-  const handleDeleteFragment = (uid: string, locId: string) => {
-    Alert.alert('Delete Fragment', `Delete fragment "${locId}"?`, [
+  const handleDeleteFragment = (uid: string, frag: Fragment) => {
+    const name = frag.title || frag.locationId;
+    Alert.alert('Delete Scene', `Delete "${name}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive',
@@ -90,8 +95,8 @@ export default function ProjectScreen() {
     ]);
   };
 
-  const totalFragments = project.fragments.length;
-  const totalLocations = new Set(project.fragments.map(f => f.locationId)).size;
+  const totalScenes = project.fragments.length;
+  const totalPlaces = new Set(project.fragments.map(f => f.locationId)).size;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -131,8 +136,8 @@ export default function ProjectScreen() {
       {/* Stats */}
       <View style={[styles.stats, { borderBottomColor: colors.border }]}>
         {([
-          [totalFragments, 'Fragments'],
-          [totalLocations, 'Locations'],
+          [totalScenes, 'Scenes'],
+          [totalPlaces, advancedMode ? 'Locations' : 'Places'],
           [project.assets.length, 'Assets'],
         ] as [number, string][]).map(([val, label], i) => (
           <React.Fragment key={label}>
@@ -169,7 +174,7 @@ export default function ProjectScreen() {
           style={[styles.searchInput, { color: colors.foreground }]}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search fragments…"
+          placeholder="Search scenes…"
           placeholderTextColor={colors.mutedForeground}
           autoCorrect={false}
           autoCapitalize="none"
@@ -184,13 +189,13 @@ export default function ProjectScreen() {
 
       {sections.length === 0 ? (
         search.length > 0 ? (
-          <EmptyState icon="search" title="No results" message={`No fragments match "${search}"`} />
+          <EmptyState icon="search" title="No results" message={`No scenes match "${search}"`} />
         ) : (
           <EmptyState
             icon="file-text"
-            title="No fragments yet"
-            message="Add your first fragment to start writing your story"
-            actionLabel="Add Fragment"
+            title="No scenes yet"
+            message="Add your first scene to begin your story"
+            actionLabel="Add Scene"
             onAction={handleAddFragment}
           />
         )
@@ -203,7 +208,7 @@ export default function ProjectScreen() {
               fragment={item}
               hasError={validationErrors.some(e => e.fragmentUid === item.uid)}
               onPress={() => router.push(`/project/${project.id}/fragment/${item.uid}` as any)}
-              onDelete={() => handleDeleteFragment(item.uid, item.locationId)}
+              onDelete={() => handleDeleteFragment(item.uid, item)}
             />
           )}
           renderSectionHeader={({ section }) => (

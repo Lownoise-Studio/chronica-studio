@@ -1,14 +1,15 @@
 import React from 'react';
-import { Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 
 const features = [
-  ['book', 'Fragment-based narrative editor'],
-  ['git-branch', 'Branching choices with conditions'],
-  ['sliders', 'State variables & memory flags'],
-  ['play', 'Playtest mode with debug inspector'],
+  ['book', 'Scene-based story editor'],
+  ['git-branch', 'Branching choices with unlock requirements'],
+  ['sliders', 'Story variables & memory flags'],
+  ['play', 'Playtest mode to check every path'],
   ['image', 'Image asset management'],
   ['download', 'Export & import as JSON'],
 ] as const;
@@ -16,6 +17,7 @@ const features = [
 export default function AboutScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { advancedMode, toggleAdvancedMode } = useAdvancedMode();
 
   return (
     <ScrollView
@@ -35,13 +37,32 @@ export default function AboutScreen() {
         <Text style={[styles.version, { color: colors.mutedForeground }]}>Version 1.0.0</Text>
       </View>
 
+      {/* Advanced Mode toggle */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: advancedMode ? colors.primary + '55' : colors.border }]}>
+        <View style={styles.toggleRow}>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Advanced Mode</Text>
+            <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
+              {advancedMode
+                ? 'Showing technical labels — Scene IDs, conditions syntax, state inspector, and priority controls.'
+                : 'Showing writer-friendly labels. Enable to access Scene IDs, expression syntax, the state inspector, and priority controls.'}
+            </Text>
+          </View>
+          <Switch
+            value={advancedMode}
+            onValueChange={toggleAdvancedMode}
+            trackColor={{ false: colors.border, true: colors.primary + 'aa' }}
+            thumbColor={advancedMode ? colors.primary : colors.mutedForeground}
+          />
+        </View>
+      </View>
+
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>What is this?</Text>
         <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
-          Pocket Story Engine lets you create, edit, playtest, and export branching narrative games
+          Pocket Story Engine lets you write, edit, playtest, and share branching stories
           directly from your Android phone.{'\n\n'}
-          Build fragments, connect them with choices, add conditions and variables, then playtest
-          your story immediately — no desktop required.
+          Build scenes, connect them with choices, and playtest your story immediately — no desktop required.
         </Text>
       </View>
 
@@ -55,17 +76,32 @@ export default function AboutScreen() {
         ))}
       </View>
 
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>How the engine works</Text>
-        <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
-          Each story is built from <Text style={{ color: colors.foreground }}>fragments</Text> — nodes in a graph.
-          Every fragment has a <Text style={{ color: colors.foreground }}>location ID</Text>, narrative text,
-          optional conditions (when to show it), effects (state changes on entry), and choices (what the player can do next).{'\n\n'}
-          Choices carry actions like <Text style={{ color: colors.accent }}>goto:location</Text> to navigate,
-          or expressions like <Text style={{ color: colors.accent }}>variables.trust += 1</Text> to modify state.{'\n\n'}
-          The engine picks the highest-priority fragment whose conditions all pass for the current location and state.
-        </Text>
-      </View>
+      {advancedMode ? (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>How the engine works</Text>
+          <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
+            Each story is built from <Text style={{ color: colors.foreground }}>fragments</Text> — nodes in a graph.
+            Every fragment has a <Text style={{ color: colors.foreground }}>location ID</Text>, narrative text,
+            optional conditions (when to show it), effects (state changes on entry), and choices (what the player can do next).{'\n\n'}
+            Choices carry actions like <Text style={{ color: colors.accent }}>goto:location</Text> to navigate,
+            or expressions like <Text style={{ color: colors.accent }}>variables.trust += 1</Text> to modify state.{'\n\n'}
+            The engine picks the highest-priority fragment whose conditions all pass for the current location and state.
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>How it works</Text>
+          <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
+            Your story is made of <Text style={{ color: colors.foreground }}>scenes</Text> — each one is a moment the reader can land on.
+            {'\n\n'}
+            Add <Text style={{ color: colors.foreground }}>choices</Text> to branch the story. Each choice links to another scene by its ID.
+            {'\n\n'}
+            Use <Text style={{ color: colors.foreground }}>unlock requirements</Text> to gate choices behind conditions — so choices only appear when the reader has earned them.
+            {'\n\n'}
+            Hit <Text style={{ color: colors.foreground }}>Playtest</Text> at any time to read through your story exactly as a reader would.
+          </Text>
+        </View>
+      )}
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>Credits</Text>
@@ -95,5 +131,6 @@ const styles = StyleSheet.create({
   cardBody: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 20 },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   featureText: { fontSize: 13, fontFamily: 'Inter_400Regular' },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   footer: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 8, marginBottom: 8 },
 });

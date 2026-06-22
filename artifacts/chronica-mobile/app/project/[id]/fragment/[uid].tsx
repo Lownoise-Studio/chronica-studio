@@ -7,6 +7,7 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { ArrayEditor } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
 import { Choice } from '@/engine/types';
@@ -17,6 +18,7 @@ export default function FragmentEditorScreen() {
   const colors = useColors();
   const navigation = useNavigation();
   const { getProject, updateFragment } = useProjects();
+  const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
   const fragment = project?.fragments.find(f => f.uid === uid);
@@ -43,7 +45,6 @@ export default function FragmentEditorScreen() {
     }
   }, [fragment?.uid]);
 
-  // Live validation
   const knownLocations = useMemo(
     () => new Set(project?.fragments.map(f => f.locationId) ?? []),
     [project?.fragments.length]
@@ -56,8 +57,8 @@ export default function FragmentEditorScreen() {
     if (!project || !fragment) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     updateFragment(project.id, fragment.uid, {
-      title: title.trim() || locationId.trim() || 'Fragment',
-      locationId: locationId.trim() || 'new-fragment',
+      title: title.trim() || locationId.trim() || 'Scene',
+      locationId: locationId.trim() || 'new-scene',
       priority: parseInt(priority, 10) || 0,
       text,
       conditions,
@@ -70,7 +71,7 @@ export default function FragmentEditorScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      title: title.trim() ? `Edit: ${title.trim()}` : 'Edit Fragment',
+      title: title.trim() ? `Edit: ${title.trim()}` : 'Edit Scene',
       headerRight: () => (
         <TouchableOpacity onPress={doSave} style={{ marginRight: Platform.OS === 'ios' ? 0 : 8 }}>
           <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 15 }}>Save</Text>
@@ -82,7 +83,7 @@ export default function FragmentEditorScreen() {
   if (!project || !fragment) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, padding: 16 }]}>
-        <Text style={{ color: colors.foreground }}>Fragment not found</Text>
+        <Text style={{ color: colors.foreground }}>Scene not found</Text>
       </View>
     );
   }
@@ -96,9 +97,9 @@ export default function FragmentEditorScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      {/* Title */}
+      {/* Scene Name */}
       <View>
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>FRAGMENT TITLE</Text>
+        <Text style={[styles.label, { color: colors.mutedForeground }]}>SCENE NAME</Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
           value={title}
@@ -107,49 +108,53 @@ export default function FragmentEditorScreen() {
           placeholderTextColor={colors.mutedForeground}
         />
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-          A human-readable name shown in the editor list
+          A name you can recognise in your scene list
         </Text>
       </View>
 
-      {/* Location + Priority */}
+      {/* Scene ID (Advanced) + Priority */}
       <View style={styles.row}>
-        <View style={styles.fieldFlex}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>LOCATION ID</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-            value={locationId}
-            onChangeText={setLocationId}
-            placeholder="forest-entrance"
-            placeholderTextColor={colors.mutedForeground}
-            autoCorrect={false}
-            spellCheck={false}
-            autoCapitalize="none"
-          />
-          <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-            Used in goto: actions to navigate here
-          </Text>
-        </View>
-        <View style={styles.fieldNarrow}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>PRIORITY</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-            value={priority}
-            onChangeText={setPriority}
-            keyboardType="number-pad"
-            placeholder="0"
-            placeholderTextColor={colors.mutedForeground}
-          />
-        </View>
+        {advancedMode && (
+          <View style={styles.fieldFlex}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>SCENE ID</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+              value={locationId}
+              onChangeText={setLocationId}
+              placeholder="forest-entrance"
+              placeholderTextColor={colors.mutedForeground}
+              autoCorrect={false}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+              Other scenes link to this ID
+            </Text>
+          </View>
+        )}
+        {advancedMode && (
+          <View style={styles.fieldNarrow}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>PRIORITY</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+              value={priority}
+              onChangeText={setPriority}
+              keyboardType="number-pad"
+              placeholder="0"
+              placeholderTextColor={colors.mutedForeground}
+            />
+          </View>
+        )}
       </View>
 
-      {/* Text */}
+      {/* Story Text */}
       <View>
         <Text style={[styles.label, { color: colors.mutedForeground }]}>STORY TEXT</Text>
         <TextInput
           style={[styles.textArea, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
           value={text}
           onChangeText={setText}
-          placeholder="Write what the player sees at this point in the story…"
+          placeholder="Write what the reader sees at this moment in the story…"
           placeholderTextColor={colors.mutedForeground}
           multiline
           textAlignVertical="top"
@@ -158,27 +163,33 @@ export default function FragmentEditorScreen() {
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />
 
+      {/* Unlock Requirements / Conditions */}
       <ArrayEditor
-        label="CONDITIONS"
+        label={advancedMode ? 'CONDITIONS' : 'UNLOCK REQUIREMENTS'}
         items={conditions}
         onChange={setConditions}
-        placeholder="variables.trust >= 3"
-        hint="All must pass for this fragment to appear at its location"
+        placeholder={advancedMode ? 'variables.trust >= 3' : 'e.g. variables.trust >= 3'}
+        hint={
+          advancedMode
+            ? 'All must pass for this fragment to appear at its location'
+            : 'All must be met before this scene can appear'
+        }
       />
       {conditionErrors.length > 0 && (
         <Text style={[styles.errorText, { color: colors.destructive }]}>
-          {conditionErrors.length} invalid condition{conditionErrors.length > 1 ? 's' : ''}
+          {conditionErrors.length} invalid {advancedMode ? 'condition' : 'requirement'}{conditionErrors.length > 1 ? 's' : ''}
         </Text>
       )}
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />
 
+      {/* Effects */}
       <ArrayEditor
-        label="EFFECTS"
+        label="ENTRY EFFECTS"
         items={effects}
         onChange={setEffects}
-        placeholder="variables.mood = &quot;somber&quot;"
-        hint="Applied when this fragment becomes active"
+        placeholder='variables.mood = "somber"'
+        hint="Applied when this scene becomes active"
       />
       {effectErrors.length > 0 && (
         <Text style={[styles.errorText, { color: colors.destructive }]}>
@@ -227,7 +238,7 @@ export default function FragmentEditorScreen() {
         activeOpacity={0.8}
       >
         <Feather name="check" size={17} color="#fff" />
-        <Text style={styles.saveBtnText}>Save Fragment</Text>
+        <Text style={styles.saveBtnText}>Save Scene</Text>
       </TouchableOpacity>
     </ScrollView>
   );

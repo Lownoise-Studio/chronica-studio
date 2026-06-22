@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import {
@@ -38,6 +39,7 @@ export default function PlayScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getProject } = useProjects();
+  const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
   const [gameState, setGameState] = useState<ChronicaState | null>(null);
@@ -89,16 +91,16 @@ export default function PlayScreen() {
   }, [project, applyResult]);
 
   const resetGame = () => {
-    Alert.alert('Reset', 'Restart from the beginning?', [
+    Alert.alert('Restart', 'Start the story over from the beginning?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', onPress: startGame },
+      { text: 'Restart', onPress: startGame },
     ]);
   };
 
   const loadSave = useCallback(async () => {
     try {
       const json = await AsyncStorage.getItem(`pse_save_${projectId}`);
-      if (!json) { Alert.alert('No Save Found', 'Start a new game first.'); return; }
+      if (!json) { Alert.alert('No Save Found', 'Start a new playtest first.'); return; }
       const save = JSON.parse(json);
       const state = deserializeState(save.state);
       if (!state || !project) return;
@@ -119,7 +121,7 @@ export default function PlayScreen() {
       savedAt: new Date().toISOString(),
     }));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    Alert.alert('Saved', 'Game state saved.');
+    Alert.alert('Saved', 'Progress saved.');
   };
 
   const handleChoice = (choice: Choice) => {
@@ -127,7 +129,12 @@ export default function PlayScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const result = engineChoose(choice, gameState, project.fragments);
     if (!result.fragment) {
-      Alert.alert('Dead End', `No fragment found for this destination.\nCheck your location IDs and conditions.`);
+      Alert.alert(
+        'Dead End',
+        advancedMode
+          ? `No fragment found for this destination.\nCheck your location IDs and conditions.`
+          : `This choice has no destination yet. Check the scene link.`
+      );
       return;
     }
     applyResult(gameState, result.fragment, result.visibleChoices, true);
@@ -157,7 +164,7 @@ export default function PlayScreen() {
         <Text style={[styles.modeBadge, { color: colors.accent }]}>Playtest Mode</Text>
         {project.fragments.length === 0 ? (
           <Text style={[styles.noFrags, { color: colors.destructive }]}>
-            Add fragments to your project before playtesting
+            Add scenes to your project before playtesting
           </Text>
         ) : (
           <View style={styles.startBtns}>
@@ -191,7 +198,9 @@ export default function PlayScreen() {
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowHistory(!showHistory)} style={styles.locationRow}>
           <Text style={[styles.locationBadge, { color: colors.primary }]}>
-            {currentFragment?.locationId ?? '—'}
+            {advancedMode
+              ? (currentFragment?.locationId ?? '—')
+              : (currentFragment?.title || currentFragment?.locationId || '—')}
           </Text>
           <Feather name="clock" size={12} color={colors.mutedForeground} />
           <Text style={[styles.historyCount, { color: colors.mutedForeground }]}>{history.length}</Text>
@@ -213,9 +222,17 @@ export default function PlayScreen() {
             {history.map((h, i) => (
               <View key={i} style={styles.historyRow}>
                 <Text style={[styles.historyNum, { color: colors.mutedForeground }]}>{i + 1}</Text>
-                <Text style={[styles.historyLoc, { color: colors.primary }]}>{h.locationId}</Text>
-                {h.title && h.title !== h.locationId && (
-                  <Text style={[styles.historyTitle, { color: colors.mutedForeground }]}>{h.title}</Text>
+                {advancedMode ? (
+                  <>
+                    <Text style={[styles.historyLoc, { color: colors.primary }]}>{h.locationId}</Text>
+                    {h.title && h.title !== h.locationId && (
+                      <Text style={[styles.historyTitle, { color: colors.mutedForeground }]}>{h.title}</Text>
+                    )}
+                  </>
+                ) : (
+                  <Text style={[styles.historyLoc, { color: colors.primary }]}>
+                    {h.title || h.locationId}
+                  </Text>
                 )}
               </View>
             ))}
@@ -238,7 +255,7 @@ export default function PlayScreen() {
               <Text style={[styles.fragmentTitle, { color: colors.accent }]}>{currentFragment.title}</Text>
             )}
             <Text style={[styles.fragmentText, { color: '#f0eef8' }]}>
-              {currentFragment.text || '(empty fragment)'}
+              {currentFragment.text || '(this scene has no text yet)'}
             </Text>
 
             {visibleChoices.length > 0 ? (
@@ -262,7 +279,7 @@ export default function PlayScreen() {
                 <Feather name="flag" size={20} color={colors.primary} />
                 <Text style={[styles.endText, { color: colors.mutedForeground }]}>End of this path</Text>
                 <Text style={[styles.endSub, { color: colors.mutedForeground }]}>
-                  Visited {history.length} fragment{history.length !== 1 ? 's' : ''}
+                  Visited {history.length} scene{history.length !== 1 ? 's' : ''}
                 </Text>
                 <TouchableOpacity style={[styles.restartBtn, { backgroundColor: colors.primary }]} onPress={startGame}>
                   <Text style={styles.restartBtnText}>Restart</Text>
@@ -270,7 +287,7 @@ export default function PlayScreen() {
               </View>
             )}
 
-            {gameState && (
+            {advancedMode && gameState && (
               <View style={{ marginTop: 8 }}>
                 <DebugPanel
                   state={gameState}
@@ -285,8 +302,12 @@ export default function PlayScreen() {
         ) : (
           <EmptyState
             icon="alert-circle"
-            title="Fragment not found"
-            message={`No fragment matches location "${gameState?.location}"`}
+            title="Scene not found"
+            message={
+              advancedMode
+                ? `No fragment matches location "${gameState?.location}"`
+                : `No scene found. Check that your starting scene is set up correctly.`
+            }
           />
         )}
       </ScrollView>

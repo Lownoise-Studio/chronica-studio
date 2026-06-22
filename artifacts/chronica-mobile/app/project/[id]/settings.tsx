@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { VariableValue } from '@/engine/types';
 
 type KVEntry = { key: string; value: string };
@@ -80,6 +81,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getProject, updateProject, deleteProject } = useProjects();
+  const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
   const [title, setTitle] = useState('');
@@ -119,12 +121,19 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const stats: [string, number][] = [
-    ['Fragments', project.fragments.length],
-    ['Locations', new Set(project.fragments.map(f => f.locationId)).size],
-    ['Assets', project.assets.length],
-    ['Total Choices', project.fragments.reduce((s, f) => s + f.choices.length, 0)],
-  ];
+  const stats: [string, number][] = advancedMode
+    ? [
+        ['Fragments', project.fragments.length],
+        ['Locations', new Set(project.fragments.map(f => f.locationId)).size],
+        ['Assets', project.assets.length],
+        ['Total Choices', project.fragments.reduce((s, f) => s + f.choices.length, 0)],
+      ]
+    : [
+        ['Scenes', project.fragments.length],
+        ['Places', new Set(project.fragments.map(f => f.locationId)).size],
+        ['Assets', project.assets.length],
+        ['Total Choices', project.fragments.reduce((s, f) => s + f.choices.length, 0)],
+      ];
 
   return (
     <ScrollView
@@ -149,28 +158,38 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.secTitle, { color: colors.foreground }]}>Default Game State</Text>
-        <Text style={[styles.secDesc, { color: colors.mutedForeground }]}>
-          The start location and initial values for every new playtest session.
+        <Text style={[styles.secTitle, { color: colors.foreground }]}>
+          {advancedMode ? 'Default Game State' : 'Story Setup'}
         </Text>
-        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Start Location ID</Text>
+        <Text style={[styles.secDesc, { color: colors.mutedForeground }]}>
+          {advancedMode
+            ? 'The start location and initial values for every new playtest session.'
+            : 'The opening scene and any starting values for a new playtest.'}
+        </Text>
+        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+          {advancedMode ? 'Start Location ID' : 'Opening Scene ID'}
+        </Text>
         <TextInput
           style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
           value={startLoc} onChangeText={setStartLoc} placeholder="start"
           placeholderTextColor={colors.mutedForeground} autoCapitalize="none" autoCorrect={false}
         />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <KVEditor
-          label="Variables"
-          hint={'Numeric/string/boolean (e.g. trust = 0, mood = "neutral")'}
-          entries={varEntries} onChange={setVarEntries}
-        />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <KVEditor
-          label="Memory flags"
-          hint="Boolean flags (e.g. met_guard = false)"
-          entries={memEntries} onChange={setMemEntries}
-        />
+        {advancedMode && (
+          <>
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <KVEditor
+              label="Variables"
+              hint={'Numeric/string/boolean (e.g. trust = 0, mood = "neutral")'}
+              entries={varEntries} onChange={setVarEntries}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.border }]} />
+            <KVEditor
+              label="Memory flags"
+              hint="Boolean flags (e.g. met_guard = false)"
+              entries={memEntries} onChange={setMemEntries}
+            />
+          </>
+        )}
       </View>
 
       <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={save} activeOpacity={0.8}>

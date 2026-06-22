@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { Choice } from '@/engine/types';
 import { ArrayEditor } from './ArrayEditor';
 
@@ -26,6 +27,7 @@ function ChoiceCard({
   knownLocations?: Set<string>;
 }) {
   const colors = useColors();
+  const { advancedMode } = useAdvancedMode();
   const [showConditions, setShowConditions] = useState(!!(choice.conditions?.length));
 
   const gotoTarget = getGotoTarget(choice.action);
@@ -39,7 +41,7 @@ function ChoiceCard({
           <View style={styles.brokenBadge}>
             <Feather name="alert-circle" size={11} color={colors.destructive} />
             <Text style={[styles.brokenText, { color: colors.destructive }]}>
-              "{gotoTarget}" not found
+              Scene "{gotoTarget}" not found
             </Text>
           </View>
         )}
@@ -62,27 +64,49 @@ function ChoiceCard({
           style={[styles.fieldInput, { color: colors.foreground }]}
           value={choice.label}
           onChangeText={v => onChange({ label: v })}
-          placeholder="Text shown to player"
+          placeholder="Text shown to the reader"
           placeholderTextColor={colors.mutedForeground}
         />
       </View>
 
-      <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
-        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
-        <TextInput
-          style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
-          value={choice.action}
-          onChangeText={v => onChange({ action: v })}
-          placeholder="goto:location  ·  set:flag  ·  variables.x += 1"
-          placeholderTextColor={colors.mutedForeground}
-          autoCorrect={false}
-          spellCheck={false}
-          autoCapitalize="none"
-        />
-        <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
-          goto:locationId to navigate  ·  semicolons for multiple steps
-        </Text>
-      </View>
+      {advancedMode ? (
+        <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
+          <TextInput
+            style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
+            value={choice.action}
+            onChangeText={v => onChange({ action: v })}
+            placeholder="goto:location  ·  set:flag  ·  variables.x += 1"
+            placeholderTextColor={colors.mutedForeground}
+            autoCorrect={false}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+          <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
+            goto:sceneId to navigate  ·  semicolons for multiple steps
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Destination</Text>
+          <TextInput
+            style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
+            value={choice.action.startsWith('goto:') ? choice.action.slice(5) : choice.action}
+            onChangeText={v => {
+              const cleaned = v.trim();
+              onChange({ action: cleaned ? `goto:${cleaned}` : '' });
+            }}
+            placeholder="scene-id"
+            placeholderTextColor={colors.mutedForeground}
+            autoCorrect={false}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+          <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
+            Scene ID this choice leads to
+          </Text>
+        </View>
+      )}
 
       {showConditions && (
         <View style={{ marginTop: 4 }}>
@@ -90,8 +114,8 @@ function ChoiceCard({
             label="SHOW WHEN"
             items={choice.conditions ?? []}
             onChange={conditions => onChange({ conditions })}
-            placeholder="variables.trust >= 2"
-            hint="All must pass for this choice to appear"
+            placeholder={advancedMode ? 'variables.trust >= 2' : 'e.g. variables.trust >= 2'}
+            hint="All must be met for this choice to appear"
           />
         </View>
       )}
