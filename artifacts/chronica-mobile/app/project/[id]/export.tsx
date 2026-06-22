@@ -139,7 +139,7 @@ export default function ExportScreen() {
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>Import Project</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Load a previously exported Pocket Story Engine JSON file.
+          Load a previously exported Chronica Studio JSON file.
           The imported project will be added as a new project in your library.
         </Text>
         <TouchableOpacity

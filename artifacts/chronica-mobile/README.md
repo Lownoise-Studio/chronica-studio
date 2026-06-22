@@ -1,6 +1,6 @@
-Pocket Story Engine by Lownoise Studio
+Chronica Studio by Lownoise Studio
 
-A mobile-first narrative game engine for Android creators.
+A mobile-first narrative game editor for Android creators.
 Create, edit, test, and export branching narrative games directly from your phone.
 
 This is not the production Chronica Engine.

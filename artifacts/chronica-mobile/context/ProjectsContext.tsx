@@ -235,7 +235,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     try {
       const data = JSON.parse(json);
       if (!data || typeof data !== 'object') return { ok: false, error: 'Not a valid JSON object.' };
-      if (!data.schemaVersion) return { ok: false, error: 'Missing schemaVersion — not a Pocket Story Engine project file.' };
+      if (!data.schemaVersion) return { ok: false, error: 'Missing schemaVersion — not a Chronica Studio project file.' };
       if (!data.id || !data.title) return { ok: false, error: 'Missing required fields (id, title).' };
       if (!Array.isArray(data.fragments)) return { ok: false, error: 'Invalid project: fragments must be an array.' };
 

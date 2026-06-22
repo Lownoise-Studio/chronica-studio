@@ -88,8 +88,8 @@ export default function HomeScreen() {
         { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16), borderBottomColor: colors.border },
       ]}>
         <View>
-          <Text style={[styles.title, { color: colors.foreground }]}>Pocket Story</Text>
-          <Text style={[styles.studio, { color: colors.primary }]}>Engine · by Lownoise Studio</Text>
+          <Text style={[styles.title, { color: colors.foreground }]}>Chronica Studio</Text>
+          <Text style={[styles.studio, { color: colors.primary }]}>by Lownoise Studio</Text>
         </View>
         <TouchableOpacity
           style={[styles.addBtn, { backgroundColor: colors.primary }]}

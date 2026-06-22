@@ -32,7 +32,7 @@ export default function AboutScreen() {
         <View style={[styles.icon, { backgroundColor: colors.primary }]}>
           <Feather name="book-open" size={36} color="#fff" />
         </View>
-        <Text style={[styles.appName, { color: colors.foreground }]}>Pocket Story Engine</Text>
+        <Text style={[styles.appName, { color: colors.foreground }]}>Chronica Studio</Text>
         <Text style={[styles.studioName, { color: colors.primary }]}>by Lownoise Studio</Text>
         <Text style={[styles.version, { color: colors.mutedForeground }]}>Version 1.0.0</Text>
       </View>
@@ -60,7 +60,7 @@ export default function AboutScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>What is this?</Text>
         <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
-          Pocket Story Engine lets you write, edit, playtest, and share branching stories
+          Chronica Studio lets you write, edit, playtest, and share branching stories
           directly from your Android phone.{'\n\n'}
           Build scenes, connect them with choices, and playtest your story immediately — no desktop required.
         </Text>

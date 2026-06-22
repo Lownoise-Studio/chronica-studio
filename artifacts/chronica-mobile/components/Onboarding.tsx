@@ -15,7 +15,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     icon: 'book-open',
-    title: 'Welcome to Pocket Story Engine',
+    title: 'Welcome to Chronica Studio',
     body: "Create branching stories directly on your phone — no coding needed.\n\nYour story is made of scenes: moments your reader moves through, one choice at a time.",
   },
   {
