@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "Xd9c0ft64Bb_6JrQMSDwS"
+uri = "file://artifacts/chronica-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"

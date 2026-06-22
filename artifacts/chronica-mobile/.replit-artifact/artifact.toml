@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Chronica"
+version = "1.0.0"
+id = "artifacts/chronica-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 22367
+
+[services.development]
+run = "pnpm --filter @workspace/chronica-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/chronica-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/chronica-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22367"
+BASE_PATH = "/"

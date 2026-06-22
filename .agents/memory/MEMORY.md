@@ -1,0 +1,1 @@
+- [pnpm install strategy](pnpm-install-strategy.md) — workspace install needs --prefer-offline --no-frozen-lockfile; plain install times out silently
