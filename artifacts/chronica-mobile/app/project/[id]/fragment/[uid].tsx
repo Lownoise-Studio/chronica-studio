@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
-import { KeyboardAwareScrollViewCompat } from 'react-native-keyboard-controller';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
@@ -84,10 +83,9 @@ export default function FragmentEditorScreen() {
   const audioAssets = project.assets.filter(a => a.type === 'audio').map(a => a.name);
 
   return (
-    <KeyboardAwareScrollViewCompat
+    <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
-      bottomOffset={16}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
@@ -218,7 +216,7 @@ export default function FragmentEditorScreen() {
         <Feather name="check" size={17} color="#fff" />
         <Text style={styles.saveBtnText}>Save Fragment</Text>
       </TouchableOpacity>
-    </KeyboardAwareScrollViewCompat>
+    </ScrollView>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Alert, ImageBackground, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
@@ -17,6 +17,20 @@ import {
   startSession, choose as engineChoose, serializeState, deserializeState,
 } from '@/engine';
 
+async function playAudioFromUri(uri: string): Promise<{ unload: () => void } | null> {
+  try {
+    const { Audio } = await import('expo-av');
+    await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+    const { sound } = await Audio.Sound.createAsync(
+      { uri },
+      { isLooping: true, shouldPlay: true }
+    );
+    return { unload: () => sound.unloadAsync().catch(() => {}) };
+  } catch {
+    return null;
+  }
+}
+
 export default function PlayScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
@@ -27,6 +41,35 @@ export default function PlayScreen() {
   const [gameState, setGameState] = useState<ChronicaState | null>(null);
   const [currentFragment, setCurrentFragment] = useState<Fragment | null>(null);
   const [started, setStarted] = useState(false);
+  const audioHandleRef = useRef<{ unload: () => void } | null>(null);
+
+  const getAssetUri = useCallback(
+    (name?: string) => name ? project?.assets.find(a => a.name === name)?.uri : undefined,
+    [project]
+  );
+
+  useEffect(() => {
+    const audioName = currentFragment?.backgroundAudio;
+    const uri = getAssetUri(audioName);
+
+    if (audioHandleRef.current) {
+      audioHandleRef.current.unload();
+      audioHandleRef.current = null;
+    }
+
+    if (uri) {
+      playAudioFromUri(uri).then(handle => {
+        audioHandleRef.current = handle;
+      });
+    }
+
+    return () => {
+      if (audioHandleRef.current) {
+        audioHandleRef.current.unload();
+        audioHandleRef.current = null;
+      }
+    };
+  }, [currentFragment?.uid, currentFragment?.backgroundAudio]);
 
   const startGame = useCallback(() => {
     if (!project?.fragments.length) return;
@@ -75,9 +118,6 @@ export default function PlayScreen() {
     setGameState({ ...stateCopy });
     setCurrentFragment(nextFrag);
   };
-
-  const getAssetUri = (name?: string) =>
-    name ? project?.assets.find(a => a.name === name)?.uri : undefined;
 
   const bgUri = getAssetUri(currentFragment?.backgroundImage);
 
@@ -149,6 +189,7 @@ export default function PlayScreen() {
           { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 24 },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {currentFragment ? (
           <>
@@ -184,7 +225,10 @@ export default function PlayScreen() {
 
             {gameState && (
               <View style={{ marginTop: 8 }}>
-                <DebugPanel state={gameState} />
+                <DebugPanel
+                  state={gameState}
+                  onStateChange={updated => setGameState({ ...updated })}
+                />
               </View>
             )}
           </>

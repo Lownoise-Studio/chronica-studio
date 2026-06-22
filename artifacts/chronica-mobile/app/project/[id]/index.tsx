@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert, Platform, SectionList, StyleSheet, Text, TouchableOpacity, View,
+  Alert, Platform, SectionList, StyleSheet, Text,
+  TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
@@ -18,19 +19,26 @@ export default function ProjectScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { getProject, addFragment, deleteFragment } = useProjects();
+  const [search, setSearch] = useState('');
 
   const project = getProject(id!);
 
   useEffect(() => {
-    if (project) {
-      navigation.setOptions({ title: project.title });
-    }
+    if (project) navigation.setOptions({ title: project.title });
   }, [project?.title]);
 
   const sections = useMemo(() => {
     if (!project) return [];
+    const q = search.trim().toLowerCase();
+    const filtered = q
+      ? project.fragments.filter(
+          f =>
+            f.locationId.toLowerCase().includes(q) ||
+            f.text.toLowerCase().includes(q)
+        )
+      : project.fragments;
     const groups: Record<string, Fragment[]> = {};
-    for (const f of project.fragments) {
+    for (const f of filtered) {
       const key = f.locationId || '(no location)';
       if (!groups[key]) groups[key] = [];
       groups[key].push(f);
@@ -41,7 +49,7 @@ export default function ProjectScreen() {
         title,
         data: [...data].sort((a, b) => b.priority - a.priority),
       }));
-  }, [project]);
+  }, [project, search]);
 
   if (!project) {
     return (
@@ -77,6 +85,9 @@ export default function ProjectScreen() {
     ]);
   };
 
+  const totalFragments = project.fragments.length;
+  const totalLocations = new Set(project.fragments.map(f => f.locationId)).size;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Action bar */}
@@ -108,8 +119,8 @@ export default function ProjectScreen() {
       {/* Stats */}
       <View style={[styles.stats, { borderBottomColor: colors.border }]}>
         {([
-          [project.fragments.length, 'Fragments'],
-          [new Set(project.fragments.map(f => f.locationId)).size, 'Locations'],
+          [totalFragments, 'Fragments'],
+          [totalLocations, 'Locations'],
           [project.assets.length, 'Assets'],
         ] as [number, string][]).map(([val, label], i) => (
           <React.Fragment key={label}>
@@ -122,14 +133,42 @@ export default function ProjectScreen() {
         ))}
       </View>
 
-      {sections.length === 0 ? (
-        <EmptyState
-          icon="file-text"
-          title="No fragments yet"
-          message="Add your first fragment to start writing"
-          actionLabel="Add Fragment"
-          onAction={handleAddFragment}
+      {/* Search bar */}
+      <View style={[styles.searchRow, { borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <Feather name="search" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.foreground }]}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search fragments or locations…"
+          placeholderTextColor={colors.mutedForeground}
+          autoCorrect={false}
+          autoCapitalize="none"
+          clearButtonMode="while-editing"
         />
+        {search.length > 0 && Platform.OS !== 'ios' && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {sections.length === 0 ? (
+        search.length > 0 ? (
+          <EmptyState
+            icon="search"
+            title="No results"
+            message={`No fragments match "${search}"`}
+          />
+        ) : (
+          <EmptyState
+            icon="file-text"
+            title="No fragments yet"
+            message="Add your first fragment to start writing"
+            actionLabel="Add Fragment"
+            onAction={handleAddFragment}
+          />
+        )
       ) : (
         <SectionList
           sections={sections}
@@ -146,6 +185,9 @@ export default function ProjectScreen() {
               <View style={[styles.dot, { backgroundColor: colors.primary }]} />
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
                 {section.title}
+              </Text>
+              <Text style={[styles.sectionCount, { color: colors.mutedForeground }]}>
+                {section.data.length}
               </Text>
             </View>
           )}
@@ -197,6 +239,19 @@ const styles = StyleSheet.create({
   statVal: { fontSize: 20, fontFamily: 'Inter_700Bold' },
   statLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   statDiv: { width: 1, marginVertical: 4 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    paddingVertical: 0,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,11 +262,13 @@ const styles = StyleSheet.create({
   },
   dot: { width: 6, height: 6, borderRadius: 3 },
   sectionTitle: {
+    flex: 1,
     fontSize: 11,
     fontFamily: 'Inter_500Medium',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
+  sectionCount: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   fab: {
     position: 'absolute',
     right: 20,

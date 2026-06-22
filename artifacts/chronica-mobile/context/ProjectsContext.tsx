@@ -113,7 +113,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return false;
       const data = await res.json();
       if (data.project) {
-        save(projects.map(p => p.id === projectId ? data.project : p));
+        const exists = projects.some(p => p.id === projectId);
+        if (exists) {
+          save(projects.map(p => p.id === projectId ? data.project : p));
+        } else {
+          save([...projects, data.project]);
+        }
         return true;
       }
       return false;
