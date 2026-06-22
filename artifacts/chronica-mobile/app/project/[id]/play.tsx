@@ -83,7 +83,13 @@ export default function PlayScreen() {
 
   const startGame = useCallback(() => {
     if (!project?.fragments.length) return;
-    const startLoc = project.startLocation?.trim() || project.fragments[0].locationId;
+    const configured = project.startLocation?.trim();
+    // Fall back to the first fragment if startLocation is blank or doesn't
+    // match any existing fragment (e.g. left at the default 'start' value)
+    const startLoc =
+      configured && project.fragments.some(f => f.locationId === configured)
+        ? configured
+        : project.fragments[0].locationId;
     const result = startSession(startLoc, project.fragments, project.initialVariables ?? {}, project.initialMemory ?? {});
     setHistory(result.fragment ? [{ locationId: result.fragment.locationId, title: result.fragment.title || result.fragment.locationId }] : []);
     applyResult(result.state, result.fragment, result.visibleChoices);

@@ -194,8 +194,17 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const addFragment = (projectId: string, fragment: Omit<Fragment, 'uid'>): Fragment => {
     const f: Fragment = { ...fragment, uid: generateId() };
-    persist(projects.map(p => p.id === projectId
-      ? { ...p, fragments: [...p.fragments, f], updatedAt: nowIso() } : p));
+    persist(projects.map(p => {
+      if (p.id !== projectId) return p;
+      const isFirst = p.fragments.length === 0;
+      return {
+        ...p,
+        fragments: [...p.fragments, f],
+        // Auto-wire the opening scene when the very first scene is created
+        startLocation: isFirst ? f.locationId : p.startLocation,
+        updatedAt: nowIso(),
+      };
+    }));
     return f;
   };
 
