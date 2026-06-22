@@ -124,7 +124,7 @@ export default function AssetsScreen() {
         ListHeaderComponent={
           assets.length > 0 ? (
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Tap an asset to preview. Long-press for more options.
+              Tap an image to preview. Long-press for more options.
             </Text>
           ) : null
         }
@@ -132,7 +132,7 @@ export default function AssetsScreen() {
           <EmptyState
             icon="image"
             title="No images yet"
-            message="Import images from your photo library to use as fragment backgrounds"
+            message="Import images from your photo library to use as scene backgrounds"
             actionLabel="Import Image"
             onAction={handleImportImage}
           />

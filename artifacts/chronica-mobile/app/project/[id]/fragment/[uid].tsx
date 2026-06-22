@@ -181,20 +181,22 @@ export default function FragmentEditorScreen() {
         </Text>
       )}
 
-      <View style={[styles.div, { backgroundColor: colors.border }]} />
-
-      {/* Effects */}
-      <ArrayEditor
-        label="ENTRY EFFECTS"
-        items={effects}
-        onChange={setEffects}
-        placeholder='variables.mood = "somber"'
-        hint="Applied when this scene becomes active"
-      />
-      {effectErrors.length > 0 && (
-        <Text style={[styles.errorText, { color: colors.destructive }]}>
-          {effectErrors.length} invalid effect{effectErrors.length > 1 ? 's' : ''}
-        </Text>
+      {advancedMode && (
+        <>
+          <View style={[styles.div, { backgroundColor: colors.border }]} />
+          <ArrayEditor
+            label="ENTRY EFFECTS"
+            items={effects}
+            onChange={setEffects}
+            placeholder='variables.mood = "somber"'
+            hint="Applied when this scene becomes active"
+          />
+          {effectErrors.length > 0 && (
+            <Text style={[styles.errorText, { color: colors.destructive }]}>
+              {effectErrors.length} invalid effect{effectErrors.length > 1 ? 's' : ''}
+            </Text>
+          )}
+        </>
       )}
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />

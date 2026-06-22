@@ -174,7 +174,7 @@ export default function PlayScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.secondary }]} onPress={loadSave} activeOpacity={0.8}>
               <Feather name="download" size={17} color={colors.foreground} />
-              <Text style={[styles.startBtnText, { color: colors.foreground }]}>Load Save</Text>
+              <Text style={[styles.startBtnText, { color: colors.foreground }]}>Resume</Text>
             </TouchableOpacity>
           </View>
         )}

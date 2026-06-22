@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { validateProject } from '@/engine/validator';
 import { documentDirectory, ensureDir } from '@/storage/fileSystem';
 
@@ -35,6 +36,7 @@ export default function ExportScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getProject, exportProject, importProject } = useProjects();
+  const { advancedMode } = useAdvancedMode();
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [working, setWorking] = useState(false);
 
@@ -105,20 +107,22 @@ export default function ExportScreen() {
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Project</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Save this project as a portable JSON file you can share or back up.
-          Asset URIs are stripped — only project data and fragment content is exported.
+          Save your story as a backup file you can restore or share later.
+          Images are not included — only your writing and choices.
         </Text>
         {errors.length > 0 && (
           <View style={[styles.warnBox, { backgroundColor: colors.destructive + '22', borderColor: colors.destructive + '55' }]}>
             <Feather name="alert-triangle" size={13} color={colors.destructive} />
             <Text style={[styles.warnText, { color: colors.destructive }]}>
-              {errors.length} validation issue{errors.length !== 1 ? 's' : ''} found. Export will still work but the project may not play correctly.
+              {errors.length} issue{errors.length !== 1 ? 's' : ''} found in your story. Export will still work, but some scenes may not run as expected.
             </Text>
           </View>
         )}
         <View style={styles.meta}>
-          <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>{project.fragments.length} fragments</Text>
-          <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>Schema v{project.schemaVersion}</Text>
+          <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>{project.fragments.length} scenes</Text>
+          {advancedMode && (
+            <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>Schema v{project.schemaVersion}</Text>
+          )}
           <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>Updated {new Date(project.updatedAt).toLocaleDateString()}</Text>
         </View>
         <TouchableOpacity
@@ -171,18 +175,20 @@ export default function ExportScreen() {
         </View>
       )}
 
-      {/* Format reference */}
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>File Format</Text>
-        <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Exported files include:{'\n'}
-          • <Text style={{ color: colors.foreground }}>schemaVersion</Text> — format version for compatibility checks{'\n'}
-          • <Text style={{ color: colors.foreground }}>id, title, description</Text> — project metadata{'\n'}
-          • <Text style={{ color: colors.foreground }}>fragments[]</Text> — all story fragments with choices{'\n'}
-          • <Text style={{ color: colors.foreground }}>startLocation, initialVariables, initialMemory</Text> — default game state{'\n'}
-          Asset files are not embedded — re-import images after loading on a new device.
-        </Text>
-      </View>
+      {/* Format reference — Advanced Mode only */}
+      {advancedMode && (
+        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>File Format</Text>
+          <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
+            Exported files include:{'\n'}
+            • <Text style={{ color: colors.foreground }}>schemaVersion</Text> — format version for compatibility checks{'\n'}
+            • <Text style={{ color: colors.foreground }}>id, title, description</Text> — project metadata{'\n'}
+            • <Text style={{ color: colors.foreground }}>fragments[]</Text> — all story fragments with choices{'\n'}
+            • <Text style={{ color: colors.foreground }}>startLocation, initialVariables, initialMemory</Text> — default game state{'\n'}
+            Asset files are not embedded — re-import images after loading on a new device.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }

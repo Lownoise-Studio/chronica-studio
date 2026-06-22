@@ -215,7 +215,7 @@ export default function SettingsScreen() {
         <Feather name="download" size={16} color={colors.primary} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.secTitle, { color: colors.foreground }]}>Export / Import</Text>
-          <Text style={[styles.secDesc, { color: colors.mutedForeground }]}>Save as JSON or load from a file</Text>
+          <Text style={[styles.secDesc, { color: colors.mutedForeground }]}>Back up or restore your story</Text>
         </View>
         <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
       </TouchableOpacity>
