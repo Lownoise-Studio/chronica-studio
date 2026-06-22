@@ -15,12 +15,11 @@ const AdvancedModeContext = createContext<AdvancedModeContextType>({
 
 export function AdvancedModeProvider({ children }: { children: React.ReactNode }) {
   const [advancedMode, setAdvancedMode] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then(val => { if (val === 'true') setAdvancedMode(true); })
-      .finally(() => setLoaded(true));
+      .catch(() => {});
   }, []);
 
   const toggleAdvancedMode = () => {
@@ -30,8 +29,6 @@ export function AdvancedModeProvider({ children }: { children: React.ReactNode }
       return next;
     });
   };
-
-  if (!loaded) return null;
 
   return (
     <AdvancedModeContext.Provider value={{ advancedMode, toggleAdvancedMode }}>

@@ -3,7 +3,7 @@
  * Isolate all FileSystem calls here so the rest of the app
  * imports from this module only (easy to swap later).
  */
-import * as FS from 'expo-file-system/build/legacy';
+import * as FS from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 const isNative = Platform.OS !== 'web';

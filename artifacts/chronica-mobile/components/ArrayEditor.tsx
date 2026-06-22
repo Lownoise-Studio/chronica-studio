@@ -6,6 +6,8 @@ import { useColors } from '@/hooks/useColors';
 export interface ArrayEditorSuggestion {
   label: string;
   value: string;
+  /** When true, chip is shown as already used and cannot be tapped */
+  disabled?: boolean;
 }
 
 export function ArrayEditor({
@@ -51,7 +53,7 @@ export function ArrayEditor({
             contentContainerStyle={styles.chipsRow}
           >
             {activeSuggestions.map(s => {
-              const alreadyAdded = items.some(it => it === s.value);
+              const alreadyAdded = s.disabled ?? items.some(it => it === s.value);
               const isSelected = newItem === s.value;
               return (
                 <TouchableOpacity
@@ -59,15 +61,17 @@ export function ArrayEditor({
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: isSelected ? colors.primary + '22' : colors.secondary,
-                      borderColor: isSelected ? colors.primary : alreadyAdded ? colors.primary + '55' : colors.border,
-                      opacity: alreadyAdded ? 0.5 : 1,
+                      backgroundColor: alreadyAdded ? colors.primary + '18' : isSelected ? colors.primary + '22' : colors.secondary,
+                      borderColor: alreadyAdded ? colors.primary + '88' : isSelected ? colors.primary : colors.border,
+                      opacity: alreadyAdded ? 0.6 : 1,
                     },
                   ]}
                   onPress={() => {
                     if (alreadyAdded) return;
-                    setNewItem(s.value);
+                    onChange([...items, s.value]);
+                    setNewItem('');
                   }}
+                  disabled={alreadyAdded}
                   activeOpacity={0.7}
                 >
                   {alreadyAdded && (

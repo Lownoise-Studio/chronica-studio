@@ -12,6 +12,11 @@ import { ArrayEditor, ArrayEditorSuggestion } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
 import { Choice } from '@/engine/types';
 import { isValidCondition, isValidEffect } from '@/engine/expression-evaluator';
+import {
+  buildUnlockCondition,
+  extractProjectVariables,
+  isVariableInConditions,
+} from '@/engine/editor-helpers';
 
 export default function FragmentEditorScreen() {
   const { id: projectId, uid } = useLocalSearchParams<{ id: string; uid: string }>();
@@ -45,48 +50,14 @@ export default function FragmentEditorScreen() {
     }
   }, [fragment?.uid]);
 
-  const knownLocations = useMemo(
-    () => new Set(project?.fragments.map(f => f.locationId) ?? []),
-    [project?.fragments.length]
-  );
-
-  // Scan all effects (and initialVariables) across the project to discover
-  // variable names the author has already used, then build typed condition
-  // templates so they can tap instead of type.
   const variableSuggestions = useMemo((): ArrayEditorSuggestion[] => {
-    // Map: varName → last assigned raw value string (used to infer type)
-    const varMap = new Map<string, string>();
-
-    const processEffect = (effect: string) => {
-      // Matches: variables.NAME = VALUE  (also +=, -=, etc.)
-      const m = effect.match(/variables\.(\w+)\s*[+\-*]?=\s*(.+)/);
-      if (m) {
-        const [, name, rawVal] = m;
-        if (!varMap.has(name)) varMap.set(name, rawVal.trim());
-      }
-    };
-
-    project?.fragments.forEach(f => f.effects.forEach(processEffect));
-
-    // Also seed from initialVariables keys
-    if (project?.initialVariables) {
-      Object.entries(project.initialVariables).forEach(([k, v]) => {
-        if (!varMap.has(k)) varMap.set(k, JSON.stringify(v));
-      });
-    }
-
-    return Array.from(varMap.entries()).map(([name, rawVal]): ArrayEditorSuggestion => {
-      const isString = rawVal.startsWith('"') || rawVal.startsWith("'");
-      const isBool   = rawVal === 'true' || rawVal === 'false';
-      const isNum    = !isNaN(Number(rawVal));
-      let conditionTemplate: string;
-      if (isString)      conditionTemplate = `variables.${name} == ${rawVal}`;
-      else if (isBool)   conditionTemplate = `variables.${name} == true`;
-      else if (isNum)    conditionTemplate = `variables.${name} >= 1`;
-      else               conditionTemplate = `variables.${name} == ${rawVal}`;
-      return { label: name, value: conditionTemplate };
-    });
-  }, [project?.fragments, project?.initialVariables]);
+    if (!project) return [];
+    return extractProjectVariables(project).map(v => ({
+      label: v.name,
+      value: buildUnlockCondition(v.name, v.type, v.rawValue),
+      disabled: isVariableInConditions(v.name, conditions),
+    }));
+  }, [project, conditions]);
 
   const conditionErrors = conditions.filter(c => c.trim() && !isValidCondition(c));
   const effectErrors = effects.filter(e => e.trim() && !isValidEffect(e));
@@ -243,7 +214,7 @@ export default function FragmentEditorScreen() {
       <ChoiceEditor
         choices={choices}
         onChange={setChoices}
-        knownLocations={knownLocations}
+        fragments={project.fragments}
       />
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />

@@ -1,37 +1,89 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
-import { Choice } from '@/engine/types';
+import { Choice, Fragment } from '@/engine/types';
+import {
+  getGotoTarget,
+  getSceneOptions,
+  isValidDestination,
+  setGotoInAction,
+  type SceneOption,
+} from '@/engine/editor-helpers';
 import { ArrayEditor } from './ArrayEditor';
 
 const generateId = (): string =>
   Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
-function getGotoTarget(action: string): string | null {
-  const steps = action.split(';').map(s => s.trim());
-  for (const step of steps) {
-    if (step.startsWith('goto:')) return step.slice(5).trim();
-  }
-  return null;
+function ScenePicker({
+  scenes,
+  selectedLocationId,
+  onSelect,
+}: {
+  scenes: SceneOption[];
+  selectedLocationId: string | null;
+  onSelect: (locationId: string) => void;
+}) {
+  const colors = useColors();
+  if (!scenes.length) return null;
+
+  return (
+    <View style={styles.scenePicker}>
+      <Text style={[styles.scenePickerTitle, { color: colors.mutedForeground }]}>
+        Scenes in your story:
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsRow}
+      >
+        {scenes.map(scene => {
+          const selected = selectedLocationId === scene.locationId;
+          return (
+            <TouchableOpacity
+              key={scene.locationId}
+              style={[
+                styles.chip,
+                {
+                  backgroundColor: selected ? colors.primary + '22' : colors.muted,
+                  borderColor: selected ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => onSelect(scene.locationId)}
+              activeOpacity={0.7}
+            >
+              {selected && <Feather name="check" size={10} color={colors.primary} />}
+              <Text
+                style={[styles.chipText, { color: selected ? colors.primary : colors.foreground }]}
+                numberOfLines={1}
+              >
+                {scene.title}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 }
 
 function ChoiceCard({
-  choice, index, onChange, onRemove, knownLocations,
+  choice, index, onChange, onRemove, scenes,
 }: {
   choice: Choice;
   index: number;
   onChange: (patch: Partial<Choice>) => void;
   onRemove: () => void;
-  knownLocations?: Set<string>;
+  scenes: SceneOption[];
 }) {
   const colors = useColors();
   const { advancedMode } = useAdvancedMode();
   const [showConditions, setShowConditions] = useState(!!(choice.conditions?.length));
 
   const gotoTarget = getGotoTarget(choice.action);
-  const isBrokenLink = gotoTarget && knownLocations && !knownLocations.has(gotoTarget);
+  const knownLocations = useMemo(() => new Set(scenes.map(s => s.locationId)), [scenes]);
+  const isBrokenLink = gotoTarget != null && !isValidDestination(gotoTarget, knownLocations);
 
   return (
     <View style={[styles.card, { backgroundColor: colors.secondary, borderColor: isBrokenLink ? colors.destructive + '88' : colors.border }]}>
@@ -70,42 +122,58 @@ function ChoiceCard({
       </View>
 
       {advancedMode ? (
-        <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
-          <TextInput
-            style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
-            value={choice.action}
-            onChangeText={v => onChange({ action: v })}
-            placeholder="goto:location  ·  set:flag  ·  variables.x += 1"
-            placeholderTextColor={colors.mutedForeground}
-            autoCorrect={false}
-            spellCheck={false}
-            autoCapitalize="none"
+        <>
+          <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
+            <TextInput
+              style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
+              value={choice.action}
+              onChangeText={v => onChange({ action: v })}
+              placeholder="goto:location  ·  set:flag  ·  variables.x += 1"
+              placeholderTextColor={colors.mutedForeground}
+              autoCorrect={false}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
+              goto:sceneId to navigate  ·  semicolons for multiple steps
+            </Text>
+          </View>
+          <ScenePicker
+            scenes={scenes}
+            selectedLocationId={gotoTarget}
+            onSelect={locationId => onChange({ action: setGotoInAction(choice.action, locationId) })}
           />
-          <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
-            goto:sceneId to navigate  ·  semicolons for multiple steps
-          </Text>
-        </View>
+        </>
       ) : (
-        <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
-          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Destination</Text>
-          <TextInput
-            style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
-            value={choice.action.startsWith('goto:') ? choice.action.slice(5) : choice.action}
-            onChangeText={v => {
-              const cleaned = v.trim();
-              onChange({ action: cleaned ? `goto:${cleaned}` : '' });
-            }}
-            placeholder="scene-id"
-            placeholderTextColor={colors.mutedForeground}
-            autoCorrect={false}
-            spellCheck={false}
-            autoCapitalize="none"
+        <>
+          <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
+            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Destination</Text>
+            <TextInput
+              style={[styles.fieldInput, { color: isBrokenLink ? colors.destructive : colors.foreground }]}
+              value={gotoTarget ?? ''}
+              onChangeText={v => {
+                const cleaned = v.trim();
+                onChange({ action: cleaned ? `goto:${cleaned}` : '' });
+              }}
+              placeholder="Pick a scene below"
+              placeholderTextColor={colors.mutedForeground}
+              autoCorrect={false}
+              spellCheck={false}
+              autoCapitalize="none"
+            />
+            {isBrokenLink && (
+              <Text style={[styles.actionHint, { color: colors.destructive }]}>
+                Scene "{gotoTarget}" not found — pick one below
+              </Text>
+            )}
+          </View>
+          <ScenePicker
+            scenes={scenes}
+            selectedLocationId={gotoTarget}
+            onSelect={locationId => onChange({ action: `goto:${locationId}` })}
           />
-          <Text style={[styles.actionHint, { color: colors.mutedForeground }]}>
-            Scene ID this choice leads to
-          </Text>
-        </View>
+        </>
       )}
 
       {showConditions && (
@@ -126,13 +194,14 @@ function ChoiceCard({
 export function ChoiceEditor({
   choices,
   onChange,
-  knownLocations,
+  fragments,
 }: {
   choices: Choice[];
   onChange: (choices: Choice[]) => void;
-  knownLocations?: Set<string>;
+  fragments: Fragment[];
 }) {
   const colors = useColors();
+  const scenes = useMemo(() => getSceneOptions(fragments), [fragments]);
 
   const add = () =>
     onChange([...choices, { uid: generateId(), label: '', action: '', conditions: [] }]);
@@ -152,7 +221,7 @@ export function ChoiceEditor({
           index={i}
           onChange={patch => update(choice.uid, patch)}
           onRemove={() => remove(choice.uid)}
-          knownLocations={knownLocations}
+          scenes={scenes}
         />
       ))}
       <TouchableOpacity
@@ -180,6 +249,20 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   fieldInput: { fontSize: 13, fontFamily: 'Inter_400Regular', minHeight: 28 },
   actionHint: { fontSize: 10, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  scenePicker: { gap: 4, marginTop: 2 },
+  scenePickerTitle: { fontSize: 10, fontFamily: 'Inter_400Regular', letterSpacing: 0.3 },
+  chipsRow: { flexDirection: 'row', gap: 6, paddingVertical: 2 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    maxWidth: 160,
+  },
+  chipText: { fontSize: 12, fontFamily: 'Inter_500Medium', flexShrink: 1 },
   addBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', paddingVertical: 12,
