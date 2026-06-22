@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "studio.lownoise.chronica"
+      "bundleIdentifier": "studio.lownoise.chronicastudio"
     },
     "android": {
-      "package": "studio.lownoise.chronica",
+      "package": "studio.lownoise.chronicastudio",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0a0a0f"
