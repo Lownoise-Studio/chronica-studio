@@ -4,6 +4,7 @@ import {
   Text, TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system/build/legacy';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -44,10 +45,9 @@ export default function AssetsScreen() {
     }
     try {
       setImporting(true);
-      const DocumentPicker = await import('expo-document-picker');
-      const FileSystem = await import('expo-file-system');
+      const { getDocumentAsync } = await import('expo-document-picker');
 
-      const result = await DocumentPicker.getDocumentAsync({
+      const result = await getDocumentAsync({
         type: ['image/*', 'audio/*', 'application/json', 'text/plain'],
         multiple: true,
         copyToCacheDirectory: true,
@@ -55,10 +55,12 @@ export default function AssetsScreen() {
 
       if (result.canceled || !result.assets?.length) return;
 
+      const baseDir = FileSystem.documentDirectory ?? '';
+      const destDir = `${baseDir}chronica/${projectId}/`;
+      await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
+
       for (const file of result.assets) {
         const assetType = getAssetType(file.uri, file.mimeType ?? undefined);
-        const destDir = `${FileSystem.documentDirectory}chronica/${projectId}/`;
-        await FileSystem.makeDirectoryAsync(destDir, { intermediates: true });
         const destUri = `${destDir}${file.name}`;
         await FileSystem.copyAsync({ from: file.uri, to: destUri });
 
@@ -88,12 +90,13 @@ export default function AssetsScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: async () => {
-          const asset = project?.assets.find(a => a.id === assetId);
-          if (asset && Platform.OS !== 'web') {
-            try {
-              const FileSystem = await import('expo-file-system');
-              await FileSystem.deleteAsync(asset.uri, { idempotent: true });
-            } catch {}
+          if (Platform.OS !== 'web') {
+            const asset = project?.assets.find(a => a.id === assetId);
+            if (asset) {
+              try {
+                await FileSystem.deleteAsync(asset.uri, { idempotent: true });
+              } catch {}
+            }
           }
           deleteAsset(projectId!, assetId);
           if (previewAsset?.id === assetId) closePreview();
@@ -181,7 +184,10 @@ export default function AssetsScreen() {
       <TouchableOpacity
         style={[
           styles.fab,
-          { backgroundColor: importing ? colors.mutedForeground : colors.primary, bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 20 },
+          {
+            backgroundColor: importing ? colors.mutedForeground : colors.primary,
+            bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 20,
+          },
         ]}
         onPress={handleImport}
         disabled={importing}
@@ -207,10 +213,10 @@ export default function AssetsScreen() {
 
           {previewAsset?.type === 'audio' && (
             <View style={styles.audioPreview}>
-              <Feather name="music" size={48} color={colors.primary} />
+              <Feather name="music" size={48} color="#9d5ff5" />
               <Text style={[styles.previewName, { color: '#fff' }]}>{previewAsset.name}</Text>
               <TouchableOpacity
-                style={[styles.playAudioBtn, { backgroundColor: colors.primary }]}
+                style={[styles.playAudioBtn, { backgroundColor: '#9d5ff5' }]}
                 onPress={toggleAudio}
                 activeOpacity={0.8}
               >
@@ -220,7 +226,7 @@ export default function AssetsScreen() {
             </View>
           )}
 
-          {previewAsset?.type === 'data' && (
+          {previewAsset?.type === 'data' && previewAsset && (
             <DataPreview asset={previewAsset} />
           )}
 
@@ -238,20 +244,20 @@ export default function AssetsScreen() {
 
 function DataPreview({ asset }: { asset: ProjectAsset }) {
   const [content, setContent] = useState<string | null>(null);
-  const colors = useColors();
 
   React.useEffect(() => {
-    if (Platform.OS === 'web') return;
-    import('expo-file-system').then(fs =>
-      fs.readAsStringAsync(asset.uri).then(setContent).catch(() => setContent('(could not read file)'))
-    );
+    if (Platform.OS === 'web') {
+      setContent('(file preview not available on web)');
+      return;
+    }
+    FileSystem.readAsStringAsync(asset.uri)
+      .then(text => setContent(text))
+      .catch(() => setContent('(could not read file)'));
   }, [asset.uri]);
 
   return (
     <ScrollView style={styles.dataPreview} contentContainerStyle={{ padding: 16 }}>
-      <Text style={[styles.dataText, { color: '#e0ddf0' }]}>
-        {content ?? 'Loading…'}
-      </Text>
+      <Text style={styles.dataText}>{content ?? 'Loading…'}</Text>
     </ScrollView>
   );
 }
@@ -317,6 +323,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   dataText: {
+    color: '#e0ddf0',
     fontSize: 12,
     fontFamily: 'Inter_400Regular',
     lineHeight: 18,
