@@ -15,13 +15,19 @@ const icons: Record<string, string> = { audio: 'music', data: 'file-text', image
 export function AssetItem({
   asset,
   onDelete,
+  onPreview,
 }: {
   asset: ProjectAsset;
   onDelete: () => void;
+  onPreview?: () => void;
 }) {
   const colors = useColors();
   return (
-    <View style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <TouchableOpacity
+      style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={onPreview}
+      activeOpacity={onPreview ? 0.7 : 1}
+    >
       {asset.type === 'image' ? (
         <Image source={{ uri: asset.uri }} style={styles.thumb} />
       ) : (
@@ -37,10 +43,13 @@ export function AssetItem({
           {asset.type.toUpperCase()} · {fmtSize(asset.size)}
         </Text>
       </View>
+      {onPreview && (
+        <Feather name="eye" size={15} color={colors.mutedForeground} style={{ marginRight: 4 }} />
+      )}
       <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Feather name="trash-2" size={16} color={colors.destructive} />
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 }
 

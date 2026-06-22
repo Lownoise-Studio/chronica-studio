@@ -1,11 +1,87 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { Choice } from '@/engine/types';
+import { ArrayEditor } from './ArrayEditor';
 
 const generateId = (): string =>
   Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+
+function ChoiceCard({
+  choice,
+  index,
+  onChange,
+  onRemove,
+}: {
+  choice: Choice;
+  index: number;
+  onChange: (patch: Partial<Choice>) => void;
+  onRemove: () => void;
+}) {
+  const colors = useColors();
+  const [showConditions, setShowConditions] = useState(choice.conditions?.length > 0);
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+      <View style={styles.cardHeader}>
+        <Text style={[styles.cardNum, { color: colors.mutedForeground }]}>Choice {index + 1}</Text>
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            onPress={() => setShowConditions(!showConditions)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather
+              name="filter"
+              size={14}
+              color={showConditions ? colors.primary : colors.mutedForeground}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="trash-2" size={14} color={colors.destructive} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={[styles.field, { borderBottomColor: colors.border }]}>
+        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Label</Text>
+        <TextInput
+          style={[styles.fieldInput, { color: colors.foreground }]}
+          value={choice.label}
+          onChangeText={v => onChange({ label: v })}
+          placeholder="Text shown to player"
+          placeholderTextColor={colors.mutedForeground}
+        />
+      </View>
+
+      <View style={[styles.field, showConditions ? { borderBottomColor: colors.border } : {}]}>
+        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
+        <TextInput
+          style={[styles.fieldInput, { color: colors.foreground }]}
+          value={choice.action}
+          onChangeText={v => onChange({ action: v })}
+          placeholder="goto:location  or  variables.x += 1  or  set:met_guard"
+          placeholderTextColor={colors.mutedForeground}
+          autoCorrect={false}
+          spellCheck={false}
+          autoCapitalize="none"
+        />
+      </View>
+
+      {showConditions && (
+        <View style={{ marginTop: 4 }}>
+          <ArrayEditor
+            label="SHOW WHEN"
+            items={choice.conditions ?? []}
+            onChange={conditions => onChange({ conditions })}
+            placeholder="variables.trust >= 2"
+            hint="All must pass for this choice to appear"
+          />
+        </View>
+      )}
+    </View>
+  );
+}
 
 export function ChoiceEditor({
   choices,
@@ -17,7 +93,7 @@ export function ChoiceEditor({
   const colors = useColors();
 
   const add = () =>
-    onChange([...choices, { uid: generateId(), label: '', action: '' }]);
+    onChange([...choices, { uid: generateId(), label: '', action: '', conditions: [] }]);
 
   const update = (uid: string, patch: Partial<Choice>) =>
     onChange(choices.map(c => c.uid === uid ? { ...c, ...patch } : c));
@@ -28,37 +104,13 @@ export function ChoiceEditor({
     <View style={styles.container}>
       <Text style={[styles.label, { color: colors.mutedForeground }]}>CHOICES</Text>
       {choices.map((choice, i) => (
-        <View key={choice.uid} style={[styles.card, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <View style={styles.cardHeader}>
-            <Text style={[styles.cardNum, { color: colors.mutedForeground }]}>Choice {i + 1}</Text>
-            <TouchableOpacity onPress={() => remove(choice.uid)}>
-              <Feather name="trash-2" size={14} color={colors.destructive} />
-            </TouchableOpacity>
-          </View>
-          <View style={[styles.field, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Label</Text>
-            <TextInput
-              style={[styles.fieldInput, { color: colors.foreground }]}
-              value={choice.label}
-              onChangeText={v => update(choice.uid, { label: v })}
-              placeholder="Text shown to player"
-              placeholderTextColor={colors.mutedForeground}
-            />
-          </View>
-          <View style={styles.field}>
-            <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action</Text>
-            <TextInput
-              style={[styles.fieldInput, { color: colors.foreground }]}
-              value={choice.action}
-              onChangeText={v => update(choice.uid, { action: v })}
-              placeholder="goto:location or variables.x += 1"
-              placeholderTextColor={colors.mutedForeground}
-              autoCorrect={false}
-              spellCheck={false}
-              autoCapitalize="none"
-            />
-          </View>
-        </View>
+        <ChoiceCard
+          key={choice.uid}
+          choice={choice}
+          index={i}
+          onChange={patch => update(choice.uid, patch)}
+          onRemove={() => remove(choice.uid)}
+        />
       ))}
       <TouchableOpacity
         style={[styles.addBtn, { borderColor: colors.primary }]}
@@ -78,6 +130,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 8 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardNum: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  cardActions: { flexDirection: 'row', gap: 12, alignItems: 'center' },
   field: { borderBottomWidth: 1, paddingBottom: 8, gap: 2 },
   fieldLabel: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   fieldInput: { fontSize: 13, fontFamily: 'Inter_400Regular', minHeight: 28 },

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Alert, Platform, ScrollView, StyleSheet, Text, TextInput,
+  TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -8,6 +9,92 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
+import { VariableValue } from '@/engine/types';
+
+type KVEntry = { key: string; value: string };
+
+function parseKVValue(raw: string): VariableValue {
+  const t = raw.trim();
+  if (t === 'true') return true;
+  if (t === 'false') return false;
+  const n = Number(t);
+  if (!isNaN(n) && t !== '') return n;
+  return t;
+}
+
+function kvToRecord(entries: KVEntry[]): Record<string, VariableValue> {
+  const r: Record<string, VariableValue> = {};
+  for (const { key, value } of entries) {
+    if (key.trim()) r[key.trim()] = parseKVValue(value);
+  }
+  return r;
+}
+
+function recordToKV(record: Record<string, VariableValue>): KVEntry[] {
+  return Object.entries(record).map(([key, value]) => ({ key, value: JSON.stringify(value) }));
+}
+
+function KVEditor({
+  label,
+  hint,
+  entries,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  entries: KVEntry[];
+  onChange: (entries: KVEntry[]) => void;
+}) {
+  const colors = useColors();
+
+  const add = () => onChange([...entries, { key: '', value: '' }]);
+  const remove = (i: number) => onChange(entries.filter((_, idx) => idx !== i));
+  const update = (i: number, field: 'key' | 'value', val: string) => {
+    const next = [...entries];
+    next[i] = { ...next[i], [field]: val };
+    onChange(next);
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.hint, { color: colors.mutedForeground }]}>{hint}</Text>
+      {entries.map((entry, i) => (
+        <View key={i} style={styles.kvRow}>
+          <TextInput
+            style={[styles.kvInput, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+            value={entry.key}
+            onChangeText={v => update(i, 'key', v)}
+            placeholder="variableName"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TextInput
+            style={[styles.kvInput, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+            value={entry.value}
+            onChangeText={v => update(i, 'value', v)}
+            placeholder="0"
+            placeholderTextColor={colors.mutedForeground}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <TouchableOpacity onPress={() => remove(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Feather name="x" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+      ))}
+      <TouchableOpacity
+        style={[styles.addKVBtn, { borderColor: colors.border }]}
+        onPress={add}
+        activeOpacity={0.8}
+      >
+        <Feather name="plus" size={14} color={colors.primary} />
+        <Text style={[styles.addKVText, { color: colors.primary }]}>Add {label.toLowerCase()}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
@@ -18,16 +105,31 @@ export default function SettingsScreen() {
   const project = getProject(projectId!);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
+  const [startLoc, setStartLoc] = useState('start');
+  const [varEntries, setVarEntries] = useState<KVEntry[]>([]);
+  const [memEntries, setMemEntries] = useState<KVEntry[]>([]);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    if (project) { setTitle(project.title); setDesc(project.description); }
+    if (project) {
+      setTitle(project.title);
+      setDesc(project.description);
+      setStartLoc(project.startLocation ?? 'start');
+      setVarEntries(recordToKV(project.initialVariables ?? {}));
+      setMemEntries(recordToKV(project.initialMemory ?? {}));
+    }
   }, [project?.id]);
 
   if (!project) return null;
 
   const save = () => {
-    updateProject(projectId!, { title: title.trim() || project.title, description: desc.trim() });
+    updateProject(projectId!, {
+      title: title.trim() || project.title,
+      description: desc.trim(),
+      startLocation: startLoc.trim() || 'start',
+      initialVariables: kvToRecord(varEntries),
+      initialMemory: kvToRecord(memEntries),
+    });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
   };
@@ -80,6 +182,7 @@ export default function SettingsScreen() {
         paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 24,
       }}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
     >
       {/* Project info */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -102,10 +205,49 @@ export default function SettingsScreen() {
           multiline
           numberOfLines={3}
         />
-        <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={save} activeOpacity={0.8}>
-          <Text style={styles.btnText}>Save Changes</Text>
-        </TouchableOpacity>
       </View>
+
+      {/* Default game state */}
+      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.secTitle, { color: colors.foreground }]}>Default Game State</Text>
+        <Text style={[styles.secDesc, { color: colors.mutedForeground }]}>
+          Declares the start location and initial variable/memory values for every new play session.
+        </Text>
+
+        <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Start Location</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
+          value={startLoc}
+          onChangeText={setStartLoc}
+          placeholder="start"
+          placeholderTextColor={colors.mutedForeground}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <KVEditor
+          label="Variables"
+          hint="Numeric/string/boolean variables (e.g. trust = 0, mood = "neutral")"
+          entries={varEntries}
+          onChange={setVarEntries}
+        />
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <KVEditor
+          label="Memory flags"
+          hint="Boolean flags tracked across the session (e.g. met_guard = false)"
+          entries={memEntries}
+          onChange={setMemEntries}
+        />
+      </View>
+
+      <TouchableOpacity style={[styles.btn, { backgroundColor: colors.primary }]} onPress={save} activeOpacity={0.8}>
+        <Feather name="check" size={16} color="#fff" />
+        <Text style={styles.btnText}>Save Settings</Text>
+      </TouchableOpacity>
 
       {/* Cloud sync */}
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -168,9 +310,15 @@ const styles = StyleSheet.create({
   secTitle: { fontSize: 15, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
   secDesc: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   fieldLabel: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  hint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -6 },
   input: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, fontFamily: 'Inter_400Regular' },
   textArea: { height: 80, textAlignVertical: 'top' },
-  btn: { borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  divider: { height: 1 },
+  kvRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  kvInput: { flex: 1, borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, fontFamily: 'Inter_400Regular' },
+  addKVBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 8, borderWidth: 1, borderStyle: 'dashed', paddingVertical: 8, paddingHorizontal: 12 },
+  addKVText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 8, paddingVertical: 14 },
   btnText: { color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   syncRow: { flexDirection: 'row', gap: 12 },
   syncBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8, paddingVertical: 10 },

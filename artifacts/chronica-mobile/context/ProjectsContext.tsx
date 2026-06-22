@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Project, Fragment, ProjectAsset, Choice } from '@/engine/types';
+import { Project, Fragment, ProjectAsset, Choice, VariableValue } from '@/engine/types';
 
 const STORAGE_KEY = 'chronica_projects_v1';
 
@@ -11,7 +11,7 @@ interface ProjectsContextType {
   projects: Project[];
   isLoaded: boolean;
   createProject: (title: string, description: string) => Project;
-  updateProject: (id: string, updates: Partial<Pick<Project, 'title' | 'description'>>) => void;
+  updateProject: (id: string, updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory'>>) => void;
   deleteProject: (id: string) => void;
   addFragment: (projectId: string, fragment: Omit<Fragment, 'uid'>) => Fragment;
   updateFragment: (projectId: string, uid: string, updates: Partial<Fragment>) => void;
@@ -50,16 +50,25 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const createProject = (title: string, description: string): Project => {
     const p: Project = {
-      id: generateId(), title, description,
-      createdAt: now(), updatedAt: now(),
-      fragments: [], assets: [],
+      id: generateId(),
+      title,
+      description,
+      startLocation: 'start',
+      initialVariables: {},
+      initialMemory: {},
+      createdAt: now(),
+      updatedAt: now(),
+      fragments: [],
+      assets: [],
     };
     save([...projects, p]);
     return p;
   };
 
-  const updateProject = (id: string, updates: Partial<Pick<Project, 'title' | 'description'>>) =>
-    save(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: now() } : p));
+  const updateProject = (
+    id: string,
+    updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory'>>
+  ) => save(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: now() } : p));
 
   const deleteProject = (id: string) => save(projects.filter(p => p.id !== id));
 

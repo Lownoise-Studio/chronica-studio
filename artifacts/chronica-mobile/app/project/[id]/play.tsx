@@ -14,7 +14,8 @@ import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import {
   Fragment, Choice, ChronicaState,
-  startSession, choose as engineChoose, serializeState, deserializeState,
+  startSession, choose as engineChoose,
+  serializeState, deserializeState, getVisibleChoices,
 } from '@/engine';
 
 async function playAudioFromUri(uri: string): Promise<{ unload: () => void } | null> {
@@ -40,6 +41,7 @@ export default function PlayScreen() {
   const project = getProject(projectId!);
   const [gameState, setGameState] = useState<ChronicaState | null>(null);
   const [currentFragment, setCurrentFragment] = useState<Fragment | null>(null);
+  const [visibleChoices, setVisibleChoices] = useState<Choice[]>([]);
   const [started, setStarted] = useState(false);
   const audioHandleRef = useRef<{ unload: () => void } | null>(null);
 
@@ -73,10 +75,16 @@ export default function PlayScreen() {
 
   const startGame = useCallback(() => {
     if (!project?.fragments.length) return;
-    const firstLocation = project.fragments[0].locationId;
-    const { state, fragment } = startSession(firstLocation, project.fragments);
-    setGameState({ ...state });
-    setCurrentFragment(fragment);
+    const startLoc = project.startLocation?.trim() || project.fragments[0].locationId;
+    const result = startSession(
+      startLoc,
+      project.fragments,
+      project.initialVariables ?? {},
+      project.initialMemory ?? {},
+    );
+    setGameState({ ...result.state });
+    setCurrentFragment(result.fragment);
+    setVisibleChoices(result.visibleChoices);
     setStarted(true);
   }, [project]);
 
@@ -87,10 +95,12 @@ export default function PlayScreen() {
       const save = JSON.parse(json);
       const state = deserializeState(save.state);
       if (!state || !project) return;
-      const frag = project.fragments.find(f => f.locationId === state.location && f.conditions.length === 0)
-        ?? project.fragments.find(f => f.locationId === state.location) ?? null;
+      const { getActiveFragment } = await import('@/engine/fragment-store');
+      const frag = getActiveFragment(state.location, state, project.fragments);
+      const choices = frag ? getVisibleChoices(frag, state) : [];
       setGameState({ ...state });
       setCurrentFragment(frag);
+      setVisibleChoices(choices);
       setStarted(true);
     } catch { Alert.alert('Error', 'Could not load save.'); }
   }, [projectId, project]);
@@ -109,14 +119,14 @@ export default function PlayScreen() {
   const handleChoice = (choice: Choice) => {
     if (!gameState || !project) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const stateCopy: ChronicaState = JSON.parse(serializeState(gameState));
-    const nextFrag = engineChoose(choice, stateCopy, project.fragments);
-    if (!nextFrag) {
+    const result = engineChoose(choice, gameState, project.fragments);
+    if (!result.fragment) {
       Alert.alert('Dead End', 'No fragment found. Check your location IDs and conditions.');
       return;
     }
-    setGameState({ ...stateCopy });
-    setCurrentFragment(nextFrag);
+    setGameState({ ...gameState });
+    setCurrentFragment(result.fragment);
+    setVisibleChoices(result.visibleChoices);
   };
 
   const bgUri = getAssetUri(currentFragment?.backgroundImage);
@@ -197,9 +207,9 @@ export default function PlayScreen() {
               {currentFragment.text || '(empty fragment)'}
             </Text>
 
-            {currentFragment.choices.length > 0 ? (
+            {visibleChoices.length > 0 ? (
               <View style={styles.choiceList}>
-                {currentFragment.choices.map(choice => (
+                {visibleChoices.map(choice => (
                   <TouchableOpacity
                     key={choice.uid}
                     style={[styles.choiceBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
@@ -227,7 +237,12 @@ export default function PlayScreen() {
               <View style={{ marginTop: 8 }}>
                 <DebugPanel
                   state={gameState}
-                  onStateChange={updated => setGameState({ ...updated })}
+                  onStateChange={updated => {
+                    setGameState({ ...updated });
+                    if (currentFragment) {
+                      setVisibleChoices(getVisibleChoices(currentFragment, updated));
+                    }
+                  }}
                 />
               </View>
             )}

@@ -4,6 +4,7 @@ export interface Choice {
   uid: string;
   label: string;
   action: string;
+  conditions: string[];
 }
 
 export interface Fragment {
@@ -40,6 +41,9 @@ export interface Project {
   id: string;
   title: string;
   description: string;
+  startLocation: string;
+  initialVariables: Record<string, VariableValue>;
+  initialMemory: Record<string, VariableValue>;
   createdAt: string;
   updatedAt: string;
   fragments: Fragment[];
