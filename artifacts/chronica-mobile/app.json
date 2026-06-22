@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "studio.lownoise.chronicastudio"
+      "bundleIdentifier": "studio.lownoise.chronicastudio",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Chronica Studio uses your photo library to add background images to your story scenes."
+      }
     },
     "android": {
       "package": "studio.lownoise.chronicastudio",
@@ -41,7 +44,12 @@
       ],
       "expo-font",
       "expo-web-browser",
-      "expo-image-picker"
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Chronica Studio uses your photo library to add background images to your story scenes."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

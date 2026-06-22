@@ -77,7 +77,7 @@ export default function AssetsScreen() {
   };
 
   const handleDelete = (assetId: string, name: string) => {
-    Alert.alert('Remove Asset', `Remove "${name}" from this project?`, [
+    Alert.alert('Remove Image', `Remove "${name}" from this story?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive',

@@ -23,8 +23,14 @@ async function writeAndShareJson(filename: string, content: string): Promise<voi
     await FS.makeDirectoryAsync(dir, { intermediates: true });
     const path = `${dir}${filename}`;
     await FS.writeAsStringAsync(path, content);
-    // Share the JSON text — works across all Android share targets
-    await Share.share({ message: content, title: filename });
+    if (Platform.OS === 'ios') {
+      // iOS: share the file URL so the system presents it as a .json file
+      // that other apps (Files, Mail, AirDrop, etc.) can receive correctly.
+      await Share.share({ url: path, title: filename });
+    } else {
+      // Android: share content as text — works across all share targets
+      await Share.share({ message: content, title: filename });
+    }
   } catch {
     // Final fallback: share content as plain text
     await Share.share({ message: content, title: filename });
@@ -53,7 +59,7 @@ export default function ExportScreen() {
       const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}_v${project.schemaVersion}.json`;
       await writeAndShareJson(filename, json);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setStatus({ ok: true, msg: 'Project exported successfully.' });
+      setStatus({ ok: true, msg: 'Story exported and shared successfully.' });
     } catch (e: any) {
       setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
     } finally {
@@ -63,7 +69,7 @@ export default function ExportScreen() {
 
   const handleImport = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'File import is only available on Android.');
+      Alert.alert('Not supported', 'File import is not available in the web preview. Use the iOS or Android app.');
       return;
     }
     setWorking(true);
