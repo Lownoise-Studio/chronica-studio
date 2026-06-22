@@ -229,7 +229,7 @@ export default function SettingsScreen() {
 
         <KVEditor
           label="Variables"
-          hint="Numeric/string/boolean variables (e.g. trust = 0, mood = "neutral")"
+          hint={'Numeric/string/boolean variables (e.g. trust = 0, mood = "neutral")'}
           entries={varEntries}
           onChange={setVarEntries}
         />
