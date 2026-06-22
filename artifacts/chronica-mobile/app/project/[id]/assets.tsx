@@ -31,17 +31,18 @@ export default function AssetsScreen() {
   const project = getProject(projectId!);
 
   const handleImportImage = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Image import is only available on Android and iOS.');
-      return;
-    }
     try {
       setImporting(true);
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Allow access to your photo library to import images.');
-        return;
+
+      // On native, request permission first; web uses the browser file picker natively
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission required', 'Allow access to your photo library to import images.');
+          return;
+        }
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
@@ -49,25 +50,43 @@ export default function AssetsScreen() {
       });
       if (result.canceled || !result.assets?.length) return;
 
-      const dir = assetDir(projectId!);
-      await ensureDir(dir);
-
-      for (const img of result.assets) {
-        const ext = img.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-        const name = `img_${generateId()}.${ext}`;
-        const destUri = `${dir}${name}`;
-        await copyFile(img.uri, destUri);
-        const asset: ProjectAsset = {
-          id: generateId(),
-          name,
-          type: 'image',
-          uri: destUri,
-          mimeType: `image/${ext}`,
-          size: img.fileSize ?? 0,
-          importedAt: new Date().toISOString(),
-        };
-        addAsset(projectId!, asset);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (Platform.OS !== 'web') {
+        // Native: copy picked images into persistent app storage
+        const dir = assetDir(projectId!);
+        await ensureDir(dir);
+        for (const img of result.assets) {
+          const ext = img.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
+          const name = `img_${generateId()}.${ext}`;
+          const destUri = `${dir}${name}`;
+          await copyFile(img.uri, destUri);
+          addAsset(projectId!, {
+            id: generateId(),
+            name,
+            type: 'image',
+            uri: destUri,
+            mimeType: `image/${ext}`,
+            size: img.fileSize ?? 0,
+            importedAt: new Date().toISOString(),
+          });
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+      } else {
+        // Web: expo-image-picker returns a blob URI that is directly usable —
+        // no file-system copy needed
+        for (const img of result.assets) {
+          const mimeType = img.mimeType ?? 'image/jpeg';
+          const ext = mimeType.split('/')[1] ?? 'jpg';
+          const name = img.fileName ?? `img_${generateId()}.${ext}`;
+          addAsset(projectId!, {
+            id: generateId(),
+            name,
+            type: 'image',
+            uri: img.uri,
+            mimeType,
+            size: img.fileSize ?? 0,
+            importedAt: new Date().toISOString(),
+          });
+        }
       }
     } catch {
       Alert.alert('Import failed', 'Could not import the selected image(s).');
