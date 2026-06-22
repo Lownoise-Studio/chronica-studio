@@ -8,7 +8,7 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
-import { ArrayEditor } from '@/components/ArrayEditor';
+import { ArrayEditor, ArrayEditorSuggestion } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
 import { Choice } from '@/engine/types';
 import { isValidCondition, isValidEffect } from '@/engine/expression-evaluator';
@@ -49,6 +49,44 @@ export default function FragmentEditorScreen() {
     () => new Set(project?.fragments.map(f => f.locationId) ?? []),
     [project?.fragments.length]
   );
+
+  // Scan all effects (and initialVariables) across the project to discover
+  // variable names the author has already used, then build typed condition
+  // templates so they can tap instead of type.
+  const variableSuggestions = useMemo((): ArrayEditorSuggestion[] => {
+    // Map: varName → last assigned raw value string (used to infer type)
+    const varMap = new Map<string, string>();
+
+    const processEffect = (effect: string) => {
+      // Matches: variables.NAME = VALUE  (also +=, -=, etc.)
+      const m = effect.match(/variables\.(\w+)\s*[+\-*]?=\s*(.+)/);
+      if (m) {
+        const [, name, rawVal] = m;
+        if (!varMap.has(name)) varMap.set(name, rawVal.trim());
+      }
+    };
+
+    project?.fragments.forEach(f => f.effects.forEach(processEffect));
+
+    // Also seed from initialVariables keys
+    if (project?.initialVariables) {
+      Object.entries(project.initialVariables).forEach(([k, v]) => {
+        if (!varMap.has(k)) varMap.set(k, JSON.stringify(v));
+      });
+    }
+
+    return Array.from(varMap.entries()).map(([name, rawVal]): ArrayEditorSuggestion => {
+      const isString = rawVal.startsWith('"') || rawVal.startsWith("'");
+      const isBool   = rawVal === 'true' || rawVal === 'false';
+      const isNum    = !isNaN(Number(rawVal));
+      let conditionTemplate: string;
+      if (isString)      conditionTemplate = `variables.${name} == ${rawVal}`;
+      else if (isBool)   conditionTemplate = `variables.${name} == true`;
+      else if (isNum)    conditionTemplate = `variables.${name} >= 1`;
+      else               conditionTemplate = `variables.${name} == ${rawVal}`;
+      return { label: name, value: conditionTemplate };
+    });
+  }, [project?.fragments, project?.initialVariables]);
 
   const conditionErrors = conditions.filter(c => c.trim() && !isValidCondition(c));
   const effectErrors = effects.filter(e => e.trim() && !isValidEffect(e));
@@ -174,6 +212,7 @@ export default function FragmentEditorScreen() {
             ? 'All must pass for this fragment to appear at its location'
             : 'All must be met before this scene can appear'
         }
+        suggestions={variableSuggestions}
       />
       {conditionErrors.length > 0 && (
         <Text style={[styles.errorText, { color: colors.destructive }]}>
