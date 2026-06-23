@@ -1,8 +1,14 @@
-import { Project, Fragment, ValidationError } from './types';
+import { Project, Fragment, ValidationError, ProjectAsset } from './types';
 import { isValidCondition, isValidEffect } from './expression-evaluator';
+import { findAssetByName } from './chronica-package';
 
 function extractGotoTarget(action: string): string[] {
   return action.split(';').map(s => s.trim()).filter(s => s.startsWith('goto:')).map(s => s.slice(5).trim());
+}
+
+function assetExists(assets: ProjectAsset[], name: string): boolean {
+  const asset = findAssetByName(assets, name);
+  return !!asset?.uri?.trim();
 }
 
 /**
@@ -52,6 +58,75 @@ export function findBrokenLinks(project: Project): ValidationError[] {
   return errors;
 }
 
+/** Flag duplicate locationId values across fragments. */
+export function findDuplicateLocations(project: Project): ValidationError[] {
+  const seen = new Map<string, Fragment>();
+  const errors: ValidationError[] = [];
+  for (const frag of project.fragments) {
+    const prev = seen.get(frag.locationId);
+    if (prev) {
+      const meta = { fragmentUid: frag.uid, fragmentTitle: frag.title || frag.locationId };
+      errors.push({
+        ...meta,
+        type: 'duplicate-location',
+        message: `Duplicate scene ID "${frag.locationId}" (also used by "${prev.title || prev.locationId}")`,
+      });
+    } else {
+      seen.set(frag.locationId, frag);
+    }
+  }
+  return errors;
+}
+
+/** Flag backgroundImage / backgroundAudio refs missing from the asset library. */
+export function findMissingAssetRefs(project: Project): ValidationError[] {
+  const errors: ValidationError[] = [];
+  for (const frag of project.fragments) {
+    const meta = { fragmentUid: frag.uid, fragmentTitle: frag.title || frag.locationId };
+    if (frag.backgroundImage?.trim() && !assetExists(project.assets, frag.backgroundImage.trim())) {
+      errors.push({
+        ...meta,
+        type: 'missing-asset',
+        message: `Background image "${frag.backgroundImage}" is not in the asset library`,
+      });
+    }
+    if (frag.backgroundAudio?.trim() && !assetExists(project.assets, frag.backgroundAudio.trim())) {
+      errors.push({
+        ...meta,
+        type: 'missing-asset',
+        message: `Background audio "${frag.backgroundAudio}" is not in the asset library`,
+      });
+    }
+  }
+  return errors;
+}
+
+/** Scenes with no incoming goto links that are not the start location. */
+export function findOrphanScenes(project: Project): ValidationError[] {
+  const targets = new Set<string>();
+  for (const frag of project.fragments) {
+    for (const choice of frag.choices) {
+      for (const target of extractGotoTarget(choice.action)) {
+        if (target) targets.add(target);
+      }
+    }
+  }
+
+  const start = project.startLocation?.trim();
+  const errors: ValidationError[] = [];
+  for (const frag of project.fragments) {
+    if (frag.locationId === start) continue;
+    if (targets.has(frag.locationId)) continue;
+    errors.push({
+      fragmentUid: frag.uid,
+      fragmentTitle: frag.title || frag.locationId,
+      type: 'orphan-scene',
+      message: `Scene "${frag.title || frag.locationId}" has no incoming links and is not the start scene`,
+    });
+  }
+  return errors;
+}
+
 /**
  * Full project validation: start location, expression syntax, broken links.
  */
@@ -74,5 +149,8 @@ export function validateProject(project: Project): ValidationError[] {
   }
 
   errors.push(...findBrokenLinks(project));
+  errors.push(...findDuplicateLocations(project));
+  errors.push(...findMissingAssetRefs(project));
+  errors.push(...findOrphanScenes(project));
   return errors;
 }

@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Onboarding } from '@/components/Onboarding';
 import { Project } from '@/engine/types';
 import { pickAndLoadGame } from '@/storage/load-game';
+import { buildShowcasePackageBytes } from '@/demo/showcase-package';
 
 type Sheet = { kind: 'create' } | { kind: 'rename'; project: Project } | null;
 
@@ -25,6 +26,7 @@ export default function HomeScreen() {
   const [titleInput, setTitleInput] = useState('');
   const [descInput, setDescInput] = useState('');
   const [loadingGame, setLoadingGame] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
   const openCreate = () => { setTitleInput(''); setDescInput(''); setSheet({ kind: 'create' }); };
 
@@ -51,6 +53,32 @@ export default function HomeScreen() {
       Alert.alert('Could not load game', msg);
     } finally {
       setLoadingGame(false);
+    }
+  };
+
+  const handleTryDemo = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported', 'Try Demo is not available in the web preview. Use the iOS or Android app.');
+      return;
+    }
+    setLoadingDemo(true);
+    try {
+      const bytes = buildShowcasePackageBytes();
+      const outcome = await importProjectPackage(bytes);
+      if (!outcome.ok || !outcome.project) {
+        Alert.alert('Could not load demo', outcome.error ?? 'Demo package failed.');
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({
+        pathname: `/project/${outcome.project.id}/play`,
+        params: { loaded: '1' },
+      } as any);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not load demo.';
+      Alert.alert('Could not load demo', msg);
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -160,6 +188,23 @@ export default function HomeScreen() {
           !projects.length && styles.listEmpty,
           { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 16 },
         ]}
+        ListHeaderComponent={
+          <TouchableOpacity
+            style={[styles.demoCard, { backgroundColor: colors.card, borderColor: colors.primary + '44' }]}
+            onPress={handleTryDemo}
+            disabled={loadingDemo || loadingGame}
+            activeOpacity={0.85}
+          >
+            <View style={styles.demoCardHeader}>
+              <Feather name="zap" size={18} color={colors.primary} />
+              <Text style={[styles.demoTitle, { color: colors.foreground }]}>Try Demo</Text>
+              {loadingDemo && <ActivityIndicator size="small" color={colors.primary} />}
+            </View>
+            <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
+              Play The Crossroads — a bundled .chronica game with backgrounds and branching paths.
+            </Text>
+          </TouchableOpacity>
+        }
         ListEmptyComponent={
           isLoaded ? (
             <EmptyState
@@ -262,6 +307,17 @@ const styles = StyleSheet.create({
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   list: { paddingTop: 12 },
   listEmpty: { flex: 1 },
+  demoCard: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    gap: 6,
+  },
+  demoCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  demoTitle: { flex: 1, fontSize: 15, fontFamily: 'Inter_600SemiBold' },
+  demoDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   sheetBox: {
     borderTopLeftRadius: 20, borderTopRightRadius: 20,

@@ -1,0 +1,125 @@
+import { Project } from '@/engine/types';
+
+/** Minimal valid 1x1 PNG (same bytes reused for each demo background). */
+export const DEMO_PNG_BYTES = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+  0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41,
+  0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+  0x42, 0x60, 0x82,
+]);
+
+export function getShowcaseProject(): Project {
+  return {
+    schemaVersion: 1,
+    id: 'showcase-crossroads',
+    title: 'The Crossroads',
+    description: 'A short demo — branch between forest and river, unlock a hidden grove.',
+    startLocation: 'intro',
+    initialVariables: { visited_forest: false },
+    initialMemory: {},
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    assets: [
+      {
+        id: 'asset-intro',
+        name: 'intro.jpg',
+        type: 'image',
+        uri: 'file:///demo/intro.jpg',
+        mimeType: 'image/jpeg',
+        size: DEMO_PNG_BYTES.length,
+        importedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'asset-forest',
+        name: 'forest.jpg',
+        type: 'image',
+        uri: 'file:///demo/forest.jpg',
+        mimeType: 'image/jpeg',
+        size: DEMO_PNG_BYTES.length,
+        importedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'asset-river',
+        name: 'river.jpg',
+        type: 'image',
+        uri: 'file:///demo/river.jpg',
+        mimeType: 'image/jpeg',
+        size: DEMO_PNG_BYTES.length,
+        importedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'asset-grove',
+        name: 'grove.jpg',
+        type: 'image',
+        uri: 'file:///demo/grove.jpg',
+        mimeType: 'image/jpeg',
+        size: DEMO_PNG_BYTES.length,
+        importedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+    fragments: [
+      {
+        uid: 'show-f1',
+        title: 'The Crossroads',
+        locationId: 'intro',
+        priority: 0,
+        conditions: [],
+        effects: [],
+        text: 'You stand at a crossroads. Two paths diverge — a dark forest and a glittering river. Which way do you go?',
+        choices: [
+          { uid: 'show-c1', label: 'Take the forest path', action: 'goto:forest', conditions: [] },
+          { uid: 'show-c2', label: 'Follow the river', action: 'goto:river', conditions: [] },
+          {
+            uid: 'show-c3',
+            label: 'Seek the hidden grove',
+            action: 'goto:grove',
+            conditions: ['variables.visited_forest == true'],
+          },
+        ],
+        backgroundImage: 'intro.jpg',
+      },
+      {
+        uid: 'show-f2',
+        title: 'Forest',
+        locationId: 'forest',
+        priority: 0,
+        conditions: [],
+        effects: ['variables.visited_forest = true'],
+        text: 'Ancient trees loom overhead. You feel watched, but not threatened. A path leads back to the crossroads.',
+        choices: [
+          { uid: 'show-c4', label: 'Return to the crossroads', action: 'goto:intro', conditions: [] },
+        ],
+        backgroundImage: 'forest.jpg',
+      },
+      {
+        uid: 'show-f3',
+        title: 'River',
+        locationId: 'river',
+        priority: 0,
+        conditions: [],
+        effects: [],
+        text: 'The river glitters in the fading light. You feel at peace. This is where your journey ends — for now.',
+        choices: [],
+        backgroundImage: 'river.jpg',
+      },
+      {
+        uid: 'show-f4',
+        title: 'Hidden Grove',
+        locationId: 'grove',
+        priority: 0,
+        conditions: [],
+        effects: [],
+        text: 'Only those who walked the forest know this place. Sunlight filters through leaves like stained glass.',
+        choices: [
+          { uid: 'show-c5', label: 'Return to the crossroads', action: 'goto:intro', conditions: [] },
+        ],
+        backgroundImage: 'grove.jpg',
+      },
+    ],
+  };
+}

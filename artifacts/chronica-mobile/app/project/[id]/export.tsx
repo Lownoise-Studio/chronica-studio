@@ -97,6 +97,13 @@ export default function ExportScreen() {
       Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the iOS or Android app.');
       return;
     }
+    if (errors.length > 0) {
+      Alert.alert(
+        'Fix issues before export',
+        `${errors.length} validation issue${errors.length !== 1 ? 's' : ''} must be resolved before exporting a game package.\n\n${errors.slice(0, 4).map(e => `• ${e.message}`).join('\n')}`,
+      );
+      return;
+    }
     setWorking(true);
     try {
       const built = await buildChronicaPackageBytes(project);

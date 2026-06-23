@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Alert, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
@@ -7,20 +7,15 @@ import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
+import { useChronicaRuntime } from '@/hooks/useChronicaRuntime';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
-import {
-  Fragment, Choice, ChronicaState,
-  startSession, choose as engineChoose,
-  serializeState, deserializeState, getVisibleChoices,
-  getActiveFragment,
-} from '@/engine';
-import { resolveSceneAudioUri, resolveSceneBackgroundUri } from '@/engine/asset-resolver';
+import { Choice } from '@/engine';
+import { loadRuntimeSave, persistRuntimeSave } from '@/runtime';
 import {
   BACKGROUND_OVERLAY_OPACITY,
   CONTENT_PANEL_BG,
@@ -31,18 +26,18 @@ import {
   shouldShowSceneBackground,
 } from '@/engine/player-presentation';
 
-type HistoryEntry = { locationId: string; title: string };
-
 async function playAudioFromUri(uri: string): Promise<{ unload: () => void } | null> {
   try {
     const { Audio } = await import('expo-av');
     await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
     const { sound } = await Audio.Sound.createAsync(
       { uri },
-      { isLooping: true, shouldPlay: true }
+      { isLooping: true, shouldPlay: true },
     );
     return { unload: () => sound.unloadAsync().catch(() => {}) };
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export default function PlayScreen() {
@@ -53,71 +48,48 @@ export default function PlayScreen() {
   const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
-  const [gameState, setGameState] = useState<ChronicaState | null>(null);
-  const [currentFragment, setCurrentFragment] = useState<Fragment | null>(null);
-  const [visibleChoices, setVisibleChoices] = useState<Choice[]>([]);
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const {
+    started,
+    state: gameState,
+    fragment: currentFragment,
+    visibleChoices,
+    history,
+    backgroundUri: bgUri,
+    audioUri,
+    start,
+    resume,
+    choose,
+    setRuntimeState,
+    toSave,
+  } = useChronicaRuntime(project);
+
   const [showHistory, setShowHistory] = useState(false);
-  const [started, setStarted] = useState(false);
   const [showLoadedBanner, setShowLoadedBanner] = useState(loaded === '1');
   const [bgLoadFailed, setBgLoadFailed] = useState(false);
   const audioHandleRef = useRef<{ unload: () => void } | null>(null);
-
-  const bgUri = project
-    ? resolveSceneBackgroundUri(project.assets, currentFragment?.backgroundImage)
-    : undefined;
 
   useEffect(() => {
     setBgLoadFailed(false);
   }, [currentFragment?.uid, bgUri]);
 
   useEffect(() => {
-    const uri = project
-      ? resolveSceneAudioUri(project.assets, currentFragment?.backgroundAudio)
-      : undefined;
     if (audioHandleRef.current) {
       audioHandleRef.current.unload();
       audioHandleRef.current = null;
     }
-    if (uri) {
-      playAudioFromUri(uri).then(h => { audioHandleRef.current = h; });
+    if (audioUri) {
+      playAudioFromUri(audioUri).then(h => { audioHandleRef.current = h; });
     }
-    return () => { audioHandleRef.current?.unload(); audioHandleRef.current = null; };
-  }, [currentFragment?.uid, currentFragment?.backgroundAudio, project]);
-
-  const applyResult = useCallback((
-    state: ChronicaState,
-    frag: Fragment | null,
-    choices: Choice[],
-    addToHistory = false
-  ) => {
-    setGameState({ ...state });
-    setCurrentFragment(frag);
-    setVisibleChoices(choices);
-    if (addToHistory && frag) {
-      setHistory(h => [...h, { locationId: frag.locationId, title: frag.title || frag.locationId }]);
-    }
-  }, []);
-
-  const startGame = useCallback(() => {
-    if (!project?.fragments.length) return;
-    const configured = project.startLocation?.trim();
-    // Fall back to the first fragment if startLocation is blank or doesn't
-    // match any existing fragment (e.g. left at the default 'start' value)
-    const startLoc =
-      configured && project.fragments.some(f => f.locationId === configured)
-        ? configured
-        : project.fragments[0].locationId;
-    const result = startSession(startLoc, project.fragments, project.initialVariables ?? {}, project.initialMemory ?? {});
-    setHistory(result.fragment ? [{ locationId: result.fragment.locationId, title: result.fragment.title || result.fragment.locationId }] : []);
-    applyResult(result.state, result.fragment, result.visibleChoices);
-    setStarted(true);
-  }, [project, applyResult]);
+    return () => {
+      audioHandleRef.current?.unload();
+      audioHandleRef.current = null;
+    };
+  }, [currentFragment?.uid, audioUri]);
 
   useEffect(() => {
     if (loaded !== '1' || started || !project?.fragments.length) return;
-    startGame();
-  }, [loaded, started, project, startGame]);
+    start();
+  }, [loaded, started, project, start]);
 
   useEffect(() => {
     if (!showLoadedBanner) return;
@@ -128,51 +100,40 @@ export default function PlayScreen() {
   const resetGame = () => {
     Alert.alert('Restart', 'Start the story over from the beginning?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Restart', onPress: startGame },
+      { text: 'Restart', onPress: start },
     ]);
   };
 
-  const loadSave = useCallback(async () => {
-    try {
-      const json = await AsyncStorage.getItem(`pse_save_${projectId}`);
-      if (!json) { Alert.alert('No Save Found', 'Start a new playtest first.'); return; }
-      const save = JSON.parse(json);
-      const state = deserializeState(save.state);
-      if (!state || !project) return;
-      const frag = getActiveFragment(state.location, state, project.fragments);
-      const choices = frag ? getVisibleChoices(frag, state) : [];
-      setHistory(save.history ?? []);
-      applyResult(state, frag, choices);
-      setStarted(true);
-    } catch { Alert.alert('Error', 'Could not load save.'); }
-  }, [projectId, project, applyResult]);
+  const loadSave = async () => {
+    const save = await loadRuntimeSave(projectId!);
+    if (!save) {
+      Alert.alert('No Save Found', 'Start a new playtest first.');
+      return;
+    }
+    if (!resume(save)) {
+      Alert.alert('Error', 'Could not load save.');
+    }
+  };
 
   const saveGame = async () => {
-    if (!gameState) return;
-    await AsyncStorage.setItem(`pse_save_${projectId}`, JSON.stringify({
-      projectId,
-      state: JSON.parse(serializeState(gameState)),
-      history,
-      savedAt: new Date().toISOString(),
-    }));
+    const payload = toSave(projectId!);
+    if (!payload) return;
+    await persistRuntimeSave(payload);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert('Saved', 'Progress saved.');
   };
 
   const handleChoice = (choice: Choice) => {
-    if (!gameState || !project) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const result = engineChoose(choice, gameState, project.fragments);
-    if (!result.fragment) {
+    const result = choose(choice);
+    if (!result.ok && result.reason === 'dead-end') {
       Alert.alert(
         'Dead End',
         advancedMode
-          ? `No fragment found for this destination.\nCheck your location IDs and conditions.`
-          : `This choice has no destination yet. Check the scene link.`
+          ? 'No fragment found for this destination.\nCheck your location IDs and conditions.'
+          : 'This choice has no destination yet. Check the scene link.',
       );
-      return;
     }
-    applyResult(gameState, result.fragment, result.visibleChoices, true);
   };
 
   const showBackground = shouldShowSceneBackground(bgUri, bgLoadFailed);
@@ -206,7 +167,7 @@ export default function PlayScreen() {
           </Text>
         ) : (
           <View style={styles.startBtns}>
-            <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.primary }]} onPress={startGame} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.primary }]} onPress={start} activeOpacity={0.8}>
               <Feather name="play" size={17} color="#fff" />
               <Text style={styles.startBtnText}>Start Playtest</Text>
             </TouchableOpacity>
@@ -360,19 +321,18 @@ export default function PlayScreen() {
                 <Text style={[styles.endSub, { color: colors.mutedForeground }]}>
                   Visited {history.length} scene{history.length !== 1 ? 's' : ''}
                 </Text>
-                <TouchableOpacity style={[styles.restartBtn, { backgroundColor: colors.primary }]} onPress={startGame}>
+                <TouchableOpacity style={[styles.restartBtn, { backgroundColor: colors.primary }]} onPress={start}>
                   <Text style={styles.restartBtnText}>Restart</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {advancedMode && gameState && (
+            {advancedMode && gameState && currentFragment && (
               <View style={{ marginTop: 8 }}>
                 <DebugPanel
                   state={gameState}
                   onStateChange={updated => {
-                    setGameState({ ...updated });
-                    if (currentFragment) setVisibleChoices(getVisibleChoices(currentFragment, updated));
+                    setRuntimeState(updated);
                   }}
                 />
               </View>
@@ -385,7 +345,7 @@ export default function PlayScreen() {
             message={
               advancedMode
                 ? `No fragment matches location "${gameState?.location}"`
-                : `No scene found. Check that your starting scene is set up correctly.`
+                : 'No scene found. Check that your starting scene is set up correctly.'
             }
           />
         )}

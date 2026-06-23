@@ -151,3 +151,41 @@ describe('validateProject', () => {
     expect(errors.some(e => e.type === 'missing-start')).toBe(true);
   });
 });
+
+describe('findDuplicateLocations', () => {
+  test('flags duplicate locationId', () => {
+    const project = makeProject([
+      makeFragment('f1', 'intro'),
+      makeFragment('f2', 'intro'),
+    ]);
+    project.startLocation = 'intro';
+    const errors = validateProject(project);
+    expect(errors.some(e => e.type === 'duplicate-location')).toBe(true);
+  });
+});
+
+describe('findMissingAssetRefs', () => {
+  test('flags missing background image', () => {
+    const project = makeProject([
+      makeFragment('f1', 'intro', { backgroundImage: 'missing.jpg' }),
+    ]);
+    project.startLocation = 'intro';
+    const errors = validateProject(project);
+    expect(errors.some(e => e.type === 'missing-asset')).toBe(true);
+  });
+});
+
+describe('findOrphanScenes', () => {
+  test('flags scene with no incoming links', () => {
+    const project = makeProject([
+      makeFragment('f1', 'intro', {
+        choices: [{ uid: 'c1', label: 'Go', action: 'goto:forest', conditions: [] }],
+      }),
+      makeFragment('f2', 'forest'),
+      makeFragment('f3', 'orphan'),
+    ]);
+    project.startLocation = 'intro';
+    const errors = validateProject(project);
+    expect(errors.some(e => e.type === 'orphan-scene' && e.message.includes('orphan'))).toBe(true);
+  });
+});

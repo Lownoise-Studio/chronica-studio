@@ -17,18 +17,22 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 | Variable unlock chips (tap-to-insert conditions from story state) | ✅ |
 | Playtest / in-app player | ✅ |
 | Asset import (images, audio, data) | ✅ |
-| Project export / import (JSON) | ✅ |
-| Engine tests (expressions, validator, turn resolver, editor helpers) | ✅ |
+| Project export / import (JSON backup) | ✅ |
+| `.chronica` game package export / import | ✅ |
+| Load Game from Library (import + play immediately) | ✅ |
+| Runtime host module (`runtime/chronica-runtime.ts`) | ✅ |
+| Bundled Try Demo showcase (`.chronica` in-memory) | ✅ |
+| Story Graph View | ✅ |
+| Engine tests (expressions, validator, turn resolver, runtime, packages) | ✅ |
 | Advanced Mode (raw IDs, conditions syntax, state inspector) | ✅ |
 | Onboarding for first-time creators | ✅ |
+| ENGINE_SPEC.md + RUNTIME_SPEC.md | ✅ |
 
 **Remaining in Phase 1**
 
-- [ ] **Story Graph View** ← *Next recommended feature*
-- [ ] Validation UX (surface broken links and invalid expressions in-editor)
-- [ ] Scene reordering / duplicate scene from graph
 - [ ] EAS build pipeline documented and verified for APK/AAB
-- [ ] Root README for GitHub (replace Replit-centric docs)
+- [ ] Validation UX polish (inline markers on scene list / graph)
+- [ ] Scene reordering / duplicate scene from graph
 
 ---
 
@@ -42,6 +46,8 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 - [ ] Text presentation modes (narration vs dialogue box)
 - [ ] Audio cues (BGM, SFX per scene or choice)
 - [ ] Asset library improvements (preview, tags, reuse across scenes)
+
+*Background images per scene and package round-trip are ✅ in Phase 1.*
 
 ---
 
@@ -62,14 +68,16 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 
 ## Phase 4 — Export / Packaging / Sharing
 
-**Goal:** Creators can ship playable builds, not just JSON files.
+**Goal:** Creators can ship playable builds, not just packages.
 
 - [ ] Standalone Android APK/AAB via EAS
 - [ ] Embedded player runtime (no Expo Go required)
 - [ ] Custom app icon and splash per project (optional white-label)
 - [ ] Share project via file, link, or cloud backup
 - [ ] API server sync (`artifacts/api-server` scaffold exists; not wired to mobile)
-- [ ] Versioned project schema migrations
+- [ ] Versioned project schema migrations (partial — `schemaVersion` + migrate on load)
+
+*`.chronica` portable packages and Load Game are ✅.*
 
 ---
 
@@ -87,27 +95,17 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 
 ---
 
-## Next recommended feature: Story Graph View
-
-**Why:** Creators currently edit scenes in a list and wire choices manually. A graph view would show scenes as nodes and choices as edges—making structure visible, catching broken links, and speeding up large projects.
-
-**Scope sketch (Phase 1 completion):**
-
-- Read-only graph of `locationId` nodes and `goto:` edges
-- Tap node → open scene editor
-- Highlight orphan scenes and broken destinations
-- No engine changes required; pure editor UX over existing project model
-
----
-
 ## Current stack (for planning context)
 
 | Layer | Location |
 |-------|----------|
 | Mobile app | `artifacts/chronica-mobile` |
 | TS engine port | `artifacts/chronica-mobile/engine/` |
+| Runtime host | `artifacts/chronica-mobile/runtime/` |
+| Demo showcase | `artifacts/chronica-mobile/demo/` |
 | Godot reference engine | separate repo / `attached_assets` import |
 | API scaffold | `artifacts/api-server`, `lib/` |
 | Design sandbox (Replit) | `artifacts/mockup-sandbox` |
 
-See `docs/local-dev.md` for running the app locally.
+See [docs/local-dev.md](docs/local-dev.md) for running the app locally.  
+See [README.md](README.md) for repo overview.

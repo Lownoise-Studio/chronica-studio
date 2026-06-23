@@ -65,6 +65,6 @@ export interface GameSave {
 export interface ValidationError {
   fragmentUid: string;
   fragmentTitle: string;
-  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'missing-start';
+  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene';
   message: string;
 }
