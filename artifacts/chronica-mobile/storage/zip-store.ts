@@ -39,8 +39,8 @@ function readUint32(view: DataView, offset: number) {
   return view.getUint32(offset, true);
 }
 
-function normalizeZipPath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+export function normalizeZipPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^\.\//, '');
 }
 
 export function encodeZip(entries: ZipEntry[]): Uint8Array {
@@ -188,8 +188,21 @@ export function zipEntryMap(entries: ZipEntry[]): Map<string, Uint8Array> {
   return map;
 }
 
+export function getZipBinaryFile(map: Map<string, Uint8Array>, path: string): Uint8Array | undefined {
+  const normalized = normalizeZipPath(path);
+  const direct = map.get(normalized);
+  if (direct) return direct;
+  for (const [key, data] of map) {
+    const entryPath = normalizeZipPath(key);
+    if (entryPath === normalized || entryPath.toLowerCase() === normalized.toLowerCase()) {
+      return data;
+    }
+  }
+  return undefined;
+}
+
 export function getZipTextFile(map: Map<string, Uint8Array>, path: string): string | null {
-  const data = map.get(normalizeZipPath(path));
+  const data = getZipBinaryFile(map, path);
   if (!data) return null;
   return new TextDecoder().decode(data);
 }

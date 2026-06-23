@@ -10,6 +10,7 @@ export interface StoryVariable {
 }
 
 export interface SceneOption {
+  uid: string;
   locationId: string;
   title: string;
 }
@@ -98,7 +99,7 @@ export function extractProjectVariables(
 
 export function getSceneOptions(fragments: Fragment[]): SceneOption[] {
   return fragments
-    .map(f => ({ locationId: f.locationId, title: f.title || f.locationId }))
+    .map(f => ({ uid: f.uid, locationId: f.locationId, title: f.title || f.locationId }))
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 

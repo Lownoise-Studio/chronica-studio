@@ -42,7 +42,7 @@ function ScenePicker({
           const selected = selectedLocationId === scene.locationId;
           return (
             <TouchableOpacity
-              key={scene.locationId}
+              key={scene.uid}
               style={[
                 styles.chip,
                 {

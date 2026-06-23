@@ -1,3 +1,4 @@
+import { normalizeAssetUri } from './asset-resolver';
 import { Project, ProjectAsset } from './types';
 
 export const CHRONICA_PACKAGE_FORMAT = 'chronica-package';
@@ -54,8 +55,33 @@ export function findAssetByName(assets: ProjectAsset[], name: string): ProjectAs
 }
 
 export function packageAssetPath(filename: string): string {
-  const safe = filename.replace(/[/\\]/g, '_');
+  const safe = sanitizePackageFilename(filename);
   return `${ASSETS_PREFIX}${safe}`;
+}
+
+export function sanitizePackageFilename(filename: string): string {
+  return filename.replace(/\\/g, '/').split('/').pop()?.replace(/[/\\]/g, '_') ?? filename.replace(/[/\\]/g, '_');
+}
+
+function normalizePackagePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^\.\//, '');
+}
+
+function lookupLocalUri(
+  localUriByPackagePath: Record<string, string>,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const trimmed = key.trim();
+    if (!trimmed) continue;
+    const normalized = normalizePackagePath(trimmed);
+    const hit =
+      localUriByPackagePath[trimmed]
+      ?? localUriByPackagePath[normalized]
+      ?? localUriByPackagePath[normalized.toLowerCase()];
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 export function createPackageManifest(
@@ -200,16 +226,63 @@ export function hydrateImportedPackageProject(
   story: Project,
   localUriByPackagePath: Record<string, string>,
 ): Project {
+  const safeName = (name: string) => sanitizePackageFilename(name);
+  const assets = story.assets.map(asset => {
+    const filename = safeName(asset.name);
+    const pkgPath = asset.uri?.startsWith(ASSETS_PREFIX)
+      ? normalizePackagePath(asset.uri)
+      : packageAssetPath(asset.name);
+
+    const localUri = lookupLocalUri(
+      localUriByPackagePath,
+      pkgPath,
+      packageAssetPath(asset.name),
+      packageAssetPath(filename),
+      filename,
+      asset.name,
+      asset.uri ?? '',
+    );
+
+    if (localUri) {
+      return { ...asset, uri: normalizeAssetUri(localUri) };
+    }
+    if (asset.uri && !asset.uri.startsWith(ASSETS_PREFIX)) {
+      return { ...asset, uri: normalizeAssetUri(asset.uri) };
+    }
+    return { ...asset, uri: '' };
+  });
+
+  const knownNames = new Set(assets.map(a => a.name.toLowerCase()));
+  for (const frag of story.fragments) {
+    for (const ref of [frag.backgroundImage, frag.backgroundAudio]) {
+      const name = ref?.trim();
+      if (!name || knownNames.has(name.toLowerCase())) continue;
+
+      const localUri = lookupLocalUri(
+        localUriByPackagePath,
+        packageAssetPath(name),
+        packageAssetPath(safeName(name)),
+        safeName(name),
+        name,
+      );
+      if (!localUri) continue;
+
+      assets.push({
+        id: name,
+        name,
+        type: frag.backgroundAudio?.trim() === name ? 'audio' : 'image',
+        uri: normalizeAssetUri(localUri),
+        mimeType: '',
+        size: 0,
+        importedAt: new Date().toISOString(),
+      });
+      knownNames.add(name.toLowerCase());
+    }
+  }
+
   return {
     ...story,
-    assets: story.assets.map(asset => {
-      const pkgPath = asset.uri?.startsWith(ASSETS_PREFIX)
-        ? asset.uri
-        : packageAssetPath(asset.name);
-      const localUri = localUriByPackagePath[pkgPath]
-        ?? localUriByPackagePath[packageAssetPath(asset.name)];
-      return localUri ? { ...asset, uri: localUri } : { ...asset, uri: '' };
-    }),
+    assets,
     fragments: story.fragments.map(f => ({ ...f })),
   };
 }

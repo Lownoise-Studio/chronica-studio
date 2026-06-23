@@ -92,8 +92,23 @@ describe('asset reference rewriting', () => {
     ]);
     const hydrated = hydrateImportedPackageProject(story, {
       'assets/forest.jpg': 'file:///device/pse_assets/new-id/forest.jpg',
+      'forest.jpg': 'file:///device/pse_assets/new-id/forest.jpg',
     });
     expect(resolveSceneBackgroundUri(hydrated.assets, hydrated.fragments[0].backgroundImage))
+      .toBe('file:///device/pse_assets/new-id/forest.jpg');
+  });
+
+  test('hydrate adds missing asset records from extracted files', () => {
+    const story = {
+      ...makeProject(),
+      assets: [],
+    };
+    const hydrated = hydrateImportedPackageProject(story, {
+      'assets/forest.jpg': 'file:///device/pse_assets/new-id/forest.jpg',
+    });
+    expect(hydrated.assets).toHaveLength(1);
+    expect(hydrated.assets[0].name).toBe('forest.jpg');
+    expect(resolveSceneBackgroundUri(hydrated.assets, 'forest.jpg'))
       .toBe('file:///device/pse_assets/new-id/forest.jpg');
   });
 });

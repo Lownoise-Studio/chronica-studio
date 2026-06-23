@@ -1,9 +1,12 @@
 import {
+  ASSETS_PREFIX,
   BuildPackagePlan,
   MANIFEST_PATH,
   STORY_PATH,
   hydrateImportedPackageProject,
+  packageAssetPath,
   planChronicaPackage,
+  sanitizePackageFilename,
   validatePackageManifest,
   validatePackageStory,
 } from '@/engine/chronica-package';
@@ -13,9 +16,17 @@ import {
   ensureDir,
   fileExists,
   readBytes,
+  toLocalFileUri,
   writeBytes,
 } from '@/storage/fileSystem';
-import { decodeZip, encodeZip, getZipTextFile, zipEntryMap, type ZipEntry } from '@/storage/zip-store';
+import {
+  decodeZip,
+  encodeZip,
+  getZipTextFile,
+  normalizeZipPath,
+  zipEntryMap,
+  type ZipEntry,
+} from '@/storage/zip-store';
 
 export type BuildChronicaPackageResult = {
   ok: true;
@@ -36,6 +47,44 @@ export type ImportChronicaPackageResult = {
   ok: false;
   error: string;
 };
+
+export async function extractPackageAssets(
+  map: Map<string, Uint8Array>,
+  projectId: string,
+): Promise<Record<string, string>> {
+  const dir = assetDir(projectId);
+  await ensureDir(dir);
+
+  const localUriByPackagePath: Record<string, string> = {};
+  const written = new Set<string>();
+
+  for (const [entryPath, zipData] of map) {
+    const normalized = normalizeZipPath(entryPath);
+    if (!normalized.startsWith(ASSETS_PREFIX)) continue;
+
+    const filename = sanitizePackageFilename(normalized.slice(ASSETS_PREFIX.length));
+    if (!filename) continue;
+
+    const destUri = toLocalFileUri(`${dir}${filename}`);
+    if (!written.has(destUri)) {
+      await writeBytes(destUri, zipData);
+      written.add(destUri);
+    }
+
+    const keys = new Set([
+      normalized,
+      `${ASSETS_PREFIX}${filename}`,
+      packageAssetPath(filename),
+      filename,
+    ]);
+    for (const key of keys) {
+      localUriByPackagePath[key] = destUri;
+      localUriByPackagePath[key.toLowerCase()] = destUri;
+    }
+  }
+
+  return localUriByPackagePath;
+}
 
 export async function buildChronicaPackageBytes(
   project: Project,
@@ -125,21 +174,7 @@ export async function parseChronicaPackage(
   const storyResult = validatePackageStory(storyData);
   if (!storyResult.ok) return { ok: false, error: storyResult.error };
 
-  const dir = assetDir(targetProjectId);
-  await ensureDir(dir);
-
-  const localUriByPackagePath: Record<string, string> = {};
-  for (const asset of storyResult.story.assets) {
-    const pkgPath = asset.uri?.startsWith('assets/')
-      ? asset.uri
-      : `assets/${asset.name}`;
-    const zipData = map.get(pkgPath);
-    if (!zipData) continue;
-    const destUri = `${dir}${asset.name.replace(/[/\\]/g, '_')}`;
-    await writeBytes(destUri, zipData);
-    localUriByPackagePath[pkgPath] = destUri;
-  }
-
+  const localUriByPackagePath = await extractPackageAssets(map, targetProjectId);
   const project = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);
   return {
     ok: true,

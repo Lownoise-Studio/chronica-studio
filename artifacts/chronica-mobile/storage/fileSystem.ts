@@ -49,9 +49,26 @@ export async function readBytes(uri: string): Promise<Uint8Array> {
   return base64ToBytes(b64);
 }
 
+/** Local filesystem path suitable for expo-file-system and expo-image. */
+export function toLocalFileUri(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return trimmed;
+  if (
+    trimmed.startsWith('file://') ||
+    trimmed.startsWith('content://')
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    return `file://${trimmed}`;
+  }
+  return trimmed;
+}
+
 export async function writeBytes(uri: string, data: Uint8Array): Promise<void> {
   if (!isNative) throw new Error('writeBytes is not available on web');
-  await FS.writeAsStringAsync(uri, bytesToBase64(data), { encoding: FS.EncodingType.Base64 });
+  const fileUri = toLocalFileUri(uri);
+  await FS.writeAsStringAsync(fileUri, bytesToBase64(data), { encoding: FS.EncodingType.Base64 });
 }
 
 export async function fileExists(uri: string): Promise<boolean> {

@@ -20,6 +20,10 @@ export async function readBytes(_uri: string): Promise<Uint8Array> {
 
 export async function writeBytes(_uri: string, _data: Uint8Array): Promise<void> {}
 
+export function toLocalFileUri(path: string): string {
+  return path;
+}
+
 export async function fileExists(_uri: string): Promise<boolean> {
   return false;
 }

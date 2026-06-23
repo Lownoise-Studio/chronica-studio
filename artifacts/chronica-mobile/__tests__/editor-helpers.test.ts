@@ -141,8 +141,8 @@ describe('getSceneOptions', () => {
       },
     ]);
     expect(options).toEqual([
-      { locationId: 'forest', title: 'Forest' },
-      { locationId: 'intro', title: 'Intro' },
+      { uid: 'f2', locationId: 'forest', title: 'Forest' },
+      { uid: 'f1', locationId: 'intro', title: 'Intro' },
     ]);
   });
 });

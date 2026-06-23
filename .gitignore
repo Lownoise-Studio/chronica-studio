@@ -4,12 +4,13 @@
 dist
 tmp
 out-tsc
-*.tsbuildinfo
-.expo
+**/*.tsbuildinfo
+**/.expo/
 .expo-shared
+artifacts/chronica-mobile/static-build/
 
 # dependencies
-node_modules
+node_modules/
 
 # IDEs and editors
 /.idea
@@ -47,3 +48,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+.config/
+
+# Session uploads (Replit / local imports — not source)
+attached_assets/
