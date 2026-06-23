@@ -9,12 +9,16 @@ export function EmptyState({
   message,
   actionLabel,
   onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
 }: {
   icon: string;
   title: string;
   message?: string;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
 }) {
   const colors = useColors();
   return (
@@ -24,15 +28,28 @@ export function EmptyState({
       {!!message && (
         <Text style={[styles.message, { color: colors.mutedForeground }]}>{message}</Text>
       )}
-      {actionLabel && onAction && (
-        <TouchableOpacity
-          style={[styles.btn, { backgroundColor: colors.primary }]}
-          onPress={onAction}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.btnText, { color: colors.primaryForeground }]}>{actionLabel}</Text>
-        </TouchableOpacity>
-      )}
+      {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
+        <View style={styles.actions}>
+          {secondaryActionLabel && onSecondaryAction && (
+            <TouchableOpacity
+              style={[styles.btn, styles.secondaryBtn, { borderColor: colors.border }]}
+              onPress={onSecondaryAction}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.btnText, { color: colors.foreground }]}>{secondaryActionLabel}</Text>
+            </TouchableOpacity>
+          )}
+          {actionLabel && onAction && (
+            <TouchableOpacity
+              style={[styles.btn, { backgroundColor: colors.primary }]}
+              onPress={onAction}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.btnText, { color: colors.primaryForeground }]}>{actionLabel}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -42,5 +59,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
   message: { fontSize: 14, fontFamily: 'Inter_400Regular', textAlign: 'center', lineHeight: 20 },
   btn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  secondaryBtn: { backgroundColor: 'transparent', borderWidth: 1 },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 8 },
   btnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
 });

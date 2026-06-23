@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Alert, FlatList, KeyboardAvoidingView, Modal,
+  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal,
   Platform, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -13,18 +13,46 @@ import { ProjectCard } from '@/components/ProjectCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Onboarding } from '@/components/Onboarding';
 import { Project } from '@/engine/types';
+import { pickAndLoadGame } from '@/storage/load-game';
 
 type Sheet = { kind: 'create' } | { kind: 'rename'; project: Project } | null;
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { projects, createProject, deleteProject, duplicateProject, updateProject, isLoaded, hasOnboarded, setHasOnboarded } = useProjects();
+  const { projects, createProject, deleteProject, duplicateProject, updateProject, importProject, importProjectPackage, isLoaded, hasOnboarded, setHasOnboarded } = useProjects();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [titleInput, setTitleInput] = useState('');
   const [descInput, setDescInput] = useState('');
+  const [loadingGame, setLoadingGame] = useState(false);
 
   const openCreate = () => { setTitleInput(''); setDescInput(''); setSheet({ kind: 'create' }); };
+
+  const handleLoadGame = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported', 'Load Game is not available in the web preview. Use the iOS or Android app.');
+      return;
+    }
+    setLoadingGame(true);
+    try {
+      const result = await pickAndLoadGame({ importProject, importProjectPackage });
+      if (!result.ok) {
+        if (result.cancelled) return;
+        Alert.alert('Could not load game', result.error);
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.push({
+        pathname: `/project/${result.project.id}/play`,
+        params: { loaded: '1' },
+      } as any);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not load game.';
+      Alert.alert('Could not load game', msg);
+    } finally {
+      setLoadingGame(false);
+    }
+  };
 
   const openRename = (p: Project) => { setTitleInput(p.title); setDescInput(p.description); setSheet({ kind: 'rename', project: p }); };
 
@@ -91,13 +119,30 @@ export default function HomeScreen() {
           <Text style={[styles.title, { color: colors.foreground }]}>Chronica Studio</Text>
           <Text style={[styles.studio, { color: colors.primary }]}>by Lownoise Studio</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.addBtn, { backgroundColor: colors.primary }]}
-          onPress={openCreate}
-          activeOpacity={0.8}
-        >
-          <Feather name="plus" size={20} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.loadBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+            onPress={handleLoadGame}
+            disabled={loadingGame}
+            activeOpacity={0.8}
+          >
+            {loadingGame ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Feather name="play-circle" size={16} color={colors.primary} />
+                <Text style={[styles.loadBtnText, { color: colors.foreground }]}>Load Game</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.primary }]}
+            onPress={openCreate}
+            activeOpacity={0.8}
+          >
+            <Feather name="plus" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -120,9 +165,11 @@ export default function HomeScreen() {
             <EmptyState
               icon="book-open"
               title="No stories yet"
-              message="Create your first story to get started. Tap + to begin."
+              message="Create a new story, or load a .chronica game package to start playing right away."
               actionLabel="New Story"
               onAction={openCreate}
+              secondaryActionLabel="Load Game"
+              onSecondaryAction={handleLoadGame}
             />
           ) : null
         }
@@ -200,6 +247,18 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontFamily: 'Inter_700Bold', letterSpacing: -0.5 },
   studio: { fontSize: 11, fontFamily: 'Inter_400Regular' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  loadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    minHeight: 40,
+  },
+  loadBtnText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   addBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   list: { paddingTop: 12 },
   listEmpty: { flex: 1 },

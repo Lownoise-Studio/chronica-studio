@@ -6,11 +6,28 @@ import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import * as FS from 'expo-file-system/legacy';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { validateProject } from '@/engine/validator';
-import { documentDirectory, ensureDir } from '@/storage/fileSystem';
+import { isChronicaPackageBytes } from '@/engine/chronica-package';
+import { documentDirectory } from '@/storage/fileSystem';
+import { buildChronicaPackageBytes } from '@/storage/chronica-package-io';
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function readFileBytes(uri: string): Promise<Uint8Array> {
+  const b64 = await FS.readAsStringAsync(uri, { encoding: FS.EncodingType.Base64 });
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 async function writeAndShareJson(filename: string, content: string): Promise<void> {
   if (Platform.OS === 'web') {
@@ -18,30 +35,37 @@ async function writeAndShareJson(filename: string, content: string): Promise<voi
     return;
   }
   try {
-    const FS = await import('expo-file-system/build/legacy');
     const dir = `${documentDirectory}pse_exports/`;
     await FS.makeDirectoryAsync(dir, { intermediates: true });
     const path = `${dir}${filename}`;
     await FS.writeAsStringAsync(path, content);
     if (Platform.OS === 'ios') {
-      // iOS: share the file URL so the system presents it as a .json file
-      // that other apps (Files, Mail, AirDrop, etc.) can receive correctly.
       await Share.share({ url: path, title: filename });
     } else {
-      // Android: share content as text — works across all share targets
       await Share.share({ message: content, title: filename });
     }
   } catch {
-    // Final fallback: share content as plain text
     await Share.share({ message: content, title: filename });
   }
+}
+
+async function writeAndSharePackage(filename: string, bytes: Uint8Array): Promise<void> {
+  if (Platform.OS === 'web') {
+    Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the iOS or Android app.');
+    return;
+  }
+  const dir = `${documentDirectory}pse_exports/`;
+  await FS.makeDirectoryAsync(dir, { intermediates: true });
+  const path = `${dir}${filename}`;
+  await FS.writeAsStringAsync(path, bytesToBase64(bytes), { encoding: FS.EncodingType.Base64 });
+  await Share.share({ url: path, title: filename });
 }
 
 export default function ExportScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getProject, exportProject, importProject } = useProjects();
+  const { getProject, exportProject, importProject, importProjectPackage } = useProjects();
   const { advancedMode } = useAdvancedMode();
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const [working, setWorking] = useState(false);
@@ -50,8 +74,9 @@ export default function ExportScreen() {
   if (!project) return null;
 
   const errors = validateProject(project);
+  const imageCount = project.assets.filter(a => a.type === 'image').length;
 
-  const handleExport = async () => {
+  const handleExportJson = async () => {
     setWorking(true);
     try {
       const json = exportProject(projectId!);
@@ -59,7 +84,61 @@ export default function ExportScreen() {
       const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}_v${project.schemaVersion}.json`;
       await writeAndShareJson(filename, json);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setStatus({ ok: true, msg: 'Story exported and shared successfully.' });
+      setStatus({ ok: true, msg: 'Story JSON exported and shared successfully.' });
+    } catch (e: any) {
+      setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const handleExportPackage = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the iOS or Android app.');
+      return;
+    }
+    setWorking(true);
+    try {
+      const built = await buildChronicaPackageBytes(project);
+      if (!built.ok) {
+        setStatus({ ok: false, msg: built.error });
+        return;
+      }
+      if (built.warnings.length) {
+        Alert.alert(
+          'Export warnings',
+          built.warnings.join('\n\n'),
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => setWorking(false) },
+            {
+              text: 'Export anyway',
+              onPress: async () => {
+                try {
+                  const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}.chronica`;
+                  await writeAndSharePackage(filename, built.bytes);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setStatus({
+                    ok: true,
+                    msg: `Game package exported with ${built.plan.assetFiles.length} image(s).`,
+                  });
+                } catch (e: any) {
+                  setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
+                } finally {
+                  setWorking(false);
+                }
+              },
+            },
+          ],
+        );
+        return;
+      }
+      const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}.chronica`;
+      await writeAndSharePackage(filename, built.bytes);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStatus({
+        ok: true,
+        msg: `Game package exported with ${built.plan.assetFiles.length} image(s).`,
+      });
     } catch (e: any) {
       setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
     } finally {
@@ -75,14 +154,29 @@ export default function ExportScreen() {
     setWorking(true);
     try {
       const { getDocumentAsync } = await import('expo-document-picker');
-      const FS = await import('expo-file-system/build/legacy');
       const result = await getDocumentAsync({
-        type: ['application/json', 'text/plain', 'text/json', '*/*'],
+        type: ['application/zip', 'application/json', 'text/plain', 'text/json', '*/*'],
         copyToCacheDirectory: true,
       });
       if (result.canceled || !result.assets?.length) return;
       const file = result.assets[0];
-      const content = await FS.readAsStringAsync(file.uri);
+      const bytes = await readFileBytes(file.uri);
+
+      if (isChronicaPackageBytes(bytes)) {
+        const outcome = await importProjectPackage(bytes);
+        if (outcome.ok && outcome.project) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setStatus({
+            ok: true,
+            msg: `Imported game package "${outcome.project.title}" with images.`,
+          });
+        } else {
+          setStatus({ ok: false, msg: outcome.error ?? 'Package import failed.' });
+        }
+        return;
+      }
+
+      const content = new TextDecoder().decode(bytes);
       const outcome = importProject(content);
       if (outcome.ok && outcome.project) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -106,15 +200,15 @@ export default function ExportScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      {/* Export */}
-      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* Export game package (preferred) */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.primary + '55' }]}>
         <View style={styles.cardHeader}>
-          <Feather name="download" size={18} color={colors.primary} />
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Story</Text>
+          <Feather name="package" size={18} color={colors.primary} />
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Game Package</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Save your story as a backup file you can restore or share later.
-          Images are not included — only your writing and choices.
+          Recommended. Exports your story plus image files in a single .chronica package.
+          Another device can import it and play with backgrounds intact.
         </Text>
         {errors.length > 0 && (
           <View style={[styles.warnBox, { backgroundColor: colors.destructive + '22', borderColor: colors.destructive + '55' }]}>
@@ -126,19 +220,38 @@ export default function ExportScreen() {
         )}
         <View style={styles.meta}>
           <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>{project.fragments.length} scenes</Text>
-          {advancedMode && (
-            <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>Schema v{project.schemaVersion}</Text>
-          )}
+          <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>{imageCount} image{imageCount !== 1 ? 's' : ''}</Text>
           <Text style={[styles.metaItem, { color: colors.mutedForeground }]}>Updated {new Date(project.updatedAt).toLocaleDateString()}</Text>
         </View>
         <TouchableOpacity
           style={[styles.btn, { backgroundColor: colors.primary }]}
-          onPress={handleExport}
+          onPress={handleExportPackage}
           disabled={working}
           activeOpacity={0.8}
         >
-          <Feather name={working ? 'loader' : 'share'} size={16} color="#fff" />
-          <Text style={styles.btnText}>{working ? 'Exporting…' : 'Export & Share'}</Text>
+          <Feather name={working ? 'loader' : 'package'} size={16} color="#fff" />
+          <Text style={styles.btnText}>{working ? 'Exporting…' : 'Export Game Package'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Export JSON backup */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Feather name="download" size={18} color={colors.primary} />
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>Export Story JSON</Text>
+        </View>
+        <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
+          Lightweight backup of writing and choices only. Images are not included —
+          re-import images after loading on a new device.
+        </Text>
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}
+          onPress={handleExportJson}
+          disabled={working}
+          activeOpacity={0.8}
+        >
+          <Feather name={working ? 'loader' : 'share'} size={16} color={colors.foreground} />
+          <Text style={[styles.btnText, { color: colors.foreground }]}>{working ? 'Exporting…' : 'Export JSON'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -149,7 +262,7 @@ export default function ExportScreen() {
           <Text style={[styles.cardTitle, { color: colors.foreground }]}>Import a Story</Text>
         </View>
         <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-          Load a previously exported Chronica Studio backup file.
+          Load a .chronica game package or a previously exported JSON backup.
           The imported story will be added to your library.
         </Text>
         <TouchableOpacity
@@ -163,7 +276,6 @@ export default function ExportScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Status feedback */}
       {status && (
         <View style={[
           styles.statusBox,
@@ -181,17 +293,13 @@ export default function ExportScreen() {
         </View>
       )}
 
-      {/* Format reference — Advanced Mode only */}
       {advancedMode && (
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>File Format</Text>
+          <Text style={[styles.cardTitle, { color: colors.foreground }]}>File Formats</Text>
           <Text style={[styles.cardDesc, { color: colors.mutedForeground }]}>
-            Exported files include:{'\n'}
-            • <Text style={{ color: colors.foreground }}>schemaVersion</Text> — format version for compatibility checks{'\n'}
-            • <Text style={{ color: colors.foreground }}>id, title, description</Text> — project metadata{'\n'}
-            • <Text style={{ color: colors.foreground }}>fragments[]</Text> — all story fragments with choices{'\n'}
-            • <Text style={{ color: colors.foreground }}>startLocation, initialVariables, initialMemory</Text> — default game state{'\n'}
-            Asset files are not embedded — re-import images after loading on a new device.
+            <Text style={{ color: colors.foreground }}>.chronica</Text> — ZIP package with manifest.json, story.json, and assets/{'\n'}
+            <Text style={{ color: colors.foreground }}>.json</Text> — story data only (legacy backup){'\n\n'}
+            Package manifest fields: format, version, app, exportedAt, title, assetCount, storySchemaVersion
           </Text>
         </View>
       )}

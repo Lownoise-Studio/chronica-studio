@@ -46,7 +46,7 @@ async function playAudioFromUri(uri: string): Promise<{ unload: () => void } | n
 }
 
 export default function PlayScreen() {
-  const { id: projectId } = useLocalSearchParams<{ id: string }>();
+  const { id: projectId, loaded } = useLocalSearchParams<{ id: string; loaded?: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getProject } = useProjects();
@@ -59,6 +59,7 @@ export default function PlayScreen() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [started, setStarted] = useState(false);
+  const [showLoadedBanner, setShowLoadedBanner] = useState(loaded === '1');
   const [bgLoadFailed, setBgLoadFailed] = useState(false);
   const audioHandleRef = useRef<{ unload: () => void } | null>(null);
 
@@ -112,6 +113,17 @@ export default function PlayScreen() {
     applyResult(result.state, result.fragment, result.visibleChoices);
     setStarted(true);
   }, [project, applyResult]);
+
+  useEffect(() => {
+    if (loaded !== '1' || started || !project?.fragments.length) return;
+    startGame();
+  }, [loaded, started, project, startGame]);
+
+  useEffect(() => {
+    if (!showLoadedBanner) return;
+    const timer = setTimeout(() => setShowLoadedBanner(false), 3000);
+    return () => clearTimeout(timer);
+  }, [showLoadedBanner]);
 
   const resetGame = () => {
     Alert.alert('Restart', 'Start the story over from the beginning?', [
@@ -254,6 +266,13 @@ export default function PlayScreen() {
         </View>
       </View>
 
+      {showLoadedBanner && (
+        <View style={[styles.loadedBanner, { backgroundColor: colors.primary + 'ee' }]}>
+          <Feather name="check-circle" size={14} color="#fff" />
+          <Text style={styles.loadedBannerText}>Game loaded</Text>
+        </View>
+      )}
+
       {showHistory && history.length > 0 && (
         <View style={[styles.historyPanel, { backgroundColor: colors.card + 'ee', borderColor: colors.border }]}>
           <Text style={[styles.historyLabel, { color: colors.mutedForeground }]}>PATH HISTORY</Text>
@@ -395,6 +414,17 @@ const styles = StyleSheet.create({
   locationBadge: { fontSize: 11, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 1 },
   historyCount: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   headerActions: { flexDirection: 'row', gap: 14, alignItems: 'center' },
+  loadedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  loadedBannerText: { color: '#fff', fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   historyPanel: {
     marginHorizontal: 20, marginBottom: 8,
     borderRadius: 10, borderWidth: 1, padding: 10,

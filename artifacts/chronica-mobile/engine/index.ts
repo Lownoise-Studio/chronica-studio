@@ -9,3 +9,5 @@ export * from './editor-helpers';
 export * from './story-graph';
 export * from './asset-resolver';
 export * from './player-presentation';
+export * from './chronica-package';
+export * from './load-game';

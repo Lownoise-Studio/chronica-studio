@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, ReactNod
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Project, Fragment, ProjectAsset, Choice, VariableValue, ValidationError } from '@/engine/types';
 import { validateProject } from '@/engine/validator';
+import { parseChronicaPackage } from '@/storage/chronica-package-io';
 
 const STORAGE_KEY = 'pse_projects_v1';
 const ONBOARDED_KEY = 'pse_onboarded_v1';
@@ -97,6 +98,7 @@ interface ProjectsContextType {
   getProject: (id: string) => Project | undefined;
   exportProject: (id: string) => string | null;
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
+  importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project }>;
   getValidationErrors: (id: string) => ValidationError[];
 }
 
@@ -259,6 +261,23 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const importProjectPackage = async (
+    bytes: Uint8Array,
+  ): Promise<{ ok: boolean; error?: string; project?: Project }> => {
+    try {
+      const newId = generateId();
+      const result = await parseChronicaPackage(bytes, newId);
+      if (!result.ok) return { ok: false, error: result.error };
+
+      const migrated = migrateProject(result.project);
+      const project: Project = { ...migrated, id: newId, updatedAt: nowIso() };
+      persist([...projects, project]);
+      return { ok: true, project };
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? 'Failed to import package.' };
+    }
+  };
+
   const getValidationErrors = (id: string): ValidationError[] => {
     const p = getProject(id);
     return p ? validateProject(p) : [];
@@ -270,7 +289,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       createProject, updateProject, duplicateProject, deleteProject,
       addFragment, updateFragment, deleteFragment,
       addAsset, deleteAsset, getProject,
-      exportProject, importProject, getValidationErrors,
+      exportProject, importProject, importProjectPackage, getValidationErrors,
     }}>
       {children}
     </ProjectsContext.Provider>

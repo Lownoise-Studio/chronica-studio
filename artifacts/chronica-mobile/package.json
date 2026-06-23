@@ -20,7 +20,8 @@
     },
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1",
-      "^expo-file-system/build/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js"
+      "^expo-file-system/build/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js",
+      "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js"
     },
     "moduleFileExtensions": ["ts", "tsx", "js", "jsx", "json"]
   },
