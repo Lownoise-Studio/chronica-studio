@@ -7,3 +7,5 @@ export * from './chronica-session';
 export * from './validator';
 export * from './editor-helpers';
 export * from './story-graph';
+export * from './asset-resolver';
+export * from './player-presentation';

@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  Alert, ImageBackground, Platform, ScrollView, StyleSheet,
+  Alert, Platform, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +20,16 @@ import {
   serializeState, deserializeState, getVisibleChoices,
   getActiveFragment,
 } from '@/engine';
+import { resolveSceneAudioUri, resolveSceneBackgroundUri } from '@/engine/asset-resolver';
+import {
+  BACKGROUND_OVERLAY_OPACITY,
+  CONTENT_PANEL_BG,
+  getBackgroundOverlayColor,
+  getChoiceSurfaceColor,
+  getEndCardSurfaceColor,
+  getStoryTextColor,
+  shouldShowSceneBackground,
+} from '@/engine/player-presentation';
 
 type HistoryEntry = { locationId: string; title: string };
 
@@ -48,15 +59,21 @@ export default function PlayScreen() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [started, setStarted] = useState(false);
+  const [bgLoadFailed, setBgLoadFailed] = useState(false);
   const audioHandleRef = useRef<{ unload: () => void } | null>(null);
 
-  const getAssetUri = useCallback(
-    (name?: string) => name ? project?.assets.find(a => a.name === name)?.uri : undefined,
-    [project]
-  );
+  const bgUri = project
+    ? resolveSceneBackgroundUri(project.assets, currentFragment?.backgroundImage)
+    : undefined;
 
   useEffect(() => {
-    const uri = getAssetUri(currentFragment?.backgroundAudio);
+    setBgLoadFailed(false);
+  }, [currentFragment?.uid, bgUri]);
+
+  useEffect(() => {
+    const uri = project
+      ? resolveSceneAudioUri(project.assets, currentFragment?.backgroundAudio)
+      : undefined;
     if (audioHandleRef.current) {
       audioHandleRef.current.unload();
       audioHandleRef.current = null;
@@ -65,7 +82,7 @@ export default function PlayScreen() {
       playAudioFromUri(uri).then(h => { audioHandleRef.current = h; });
     }
     return () => { audioHandleRef.current?.unload(); audioHandleRef.current = null; };
-  }, [currentFragment?.uid, currentFragment?.backgroundAudio]);
+  }, [currentFragment?.uid, currentFragment?.backgroundAudio, project]);
 
   const applyResult = useCallback((
     state: ChronicaState,
@@ -146,7 +163,10 @@ export default function PlayScreen() {
     applyResult(gameState, result.fragment, result.visibleChoices, true);
   };
 
-  const bgUri = getAssetUri(currentFragment?.backgroundImage);
+  const showBackground = shouldShowSceneBackground(bgUri, bgLoadFailed);
+  const storyTextColor = getStoryTextColor(showBackground, colors.foreground);
+  const choiceSurfaceColor = getChoiceSurfaceColor(showBackground, colors.secondary);
+  const endCardSurfaceColor = getEndCardSurfaceColor(showBackground, colors.secondary);
 
   if (!project) {
     return (
@@ -190,12 +210,25 @@ export default function PlayScreen() {
 
   return (
     <View style={styles.fill}>
-      {bgUri ? (
-        <ImageBackground source={{ uri: bgUri }} style={StyleSheet.absoluteFill}>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.72)' }]} />
-        </ImageBackground>
+      {showBackground ? (
+        <Image
+          key={`${currentFragment?.uid ?? 'scene'}:${bgUri}`}
+          source={{ uri: bgUri }}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+          onError={() => setBgLoadFailed(true)}
+        />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background }]} />
+      )}
+      {showBackground && (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: getBackgroundOverlayColor(BACKGROUND_OVERLAY_OPACITY) },
+          ]}
+        />
       )}
 
       <View style={[styles.gameHeader, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16) }]}>
@@ -249,18 +282,25 @@ export default function PlayScreen() {
       <ScrollView
         style={styles.fill}
         contentContainerStyle={[
-          styles.gameContent,
+          showBackground ? styles.gameContentWithBg : styles.gameContent,
           { paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 24 },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <View
+          style={
+            showBackground
+              ? [styles.readingPanel, { backgroundColor: CONTENT_PANEL_BG, borderColor: colors.border }]
+              : styles.readingPanelPlain
+          }
+        >
         {currentFragment ? (
           <>
             {currentFragment.title && currentFragment.title !== currentFragment.locationId && (
               <Text style={[styles.fragmentTitle, { color: colors.accent }]}>{currentFragment.title}</Text>
             )}
-            <Text style={[styles.fragmentText, { color: '#f0eef8' }]}>
+            <Text style={[styles.fragmentText, { color: storyTextColor }]}>
               {currentFragment.text || '(this scene has no text yet)'}
             </Text>
 
@@ -269,7 +309,13 @@ export default function PlayScreen() {
                 {visibleChoices.map(choice => (
                   <TouchableOpacity
                     key={choice.uid}
-                    style={[styles.choiceBtn, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                    style={[
+                      styles.choiceBtn,
+                      {
+                        backgroundColor: choiceSurfaceColor,
+                        borderColor: colors.border,
+                      },
+                    ]}
                     onPress={() => handleChoice(choice)}
                     activeOpacity={0.8}
                   >
@@ -281,7 +327,15 @@ export default function PlayScreen() {
                 ))}
               </View>
             ) : (
-              <View style={[styles.endCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.endCard,
+                  {
+                    backgroundColor: endCardSurfaceColor,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Feather name="flag" size={20} color={colors.primary} />
                 <Text style={[styles.endText, { color: colors.mutedForeground }]}>End of this path</Text>
                 <Text style={[styles.endSub, { color: colors.mutedForeground }]}>
@@ -316,6 +370,7 @@ export default function PlayScreen() {
             }
           />
         )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -350,6 +405,14 @@ const styles = StyleSheet.create({
   historyLoc: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   historyTitle: { fontSize: 11, fontFamily: 'Inter_400Regular', flex: 1 },
   gameContent: { padding: 24, gap: 20 },
+  gameContentWithBg: { paddingHorizontal: 14, paddingTop: 8, gap: 0 },
+  readingPanel: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+    gap: 20,
+  },
+  readingPanelPlain: { gap: 20 },
   fragmentTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.5 },
   fragmentText: { fontSize: 17, fontFamily: 'Inter_400Regular', lineHeight: 28 },
   choiceList: { gap: 10 },
