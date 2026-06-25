@@ -10,7 +10,7 @@ import * as FS from 'expo-file-system/legacy';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
-import { validateProject } from '@/engine/validator';
+import { compileProject } from '@/engine/compiler';
 import { isChronicaPackageBytes } from '@/engine/chronica-package';
 import { documentDirectory } from '@/storage/fileSystem';
 import { buildChronicaPackageBytes } from '@/storage/chronica-package-io';
@@ -73,7 +73,8 @@ export default function ExportScreen() {
   const project = getProject(projectId!);
   if (!project) return null;
 
-  const errors = validateProject(project);
+  const compileResult = compileProject(project);
+  const errors = compileResult.ok ? [] : compileResult.diagnostics;
   const imageCount = project.assets.filter(a => a.type === 'image').length;
 
   const handleExportJson = async () => {

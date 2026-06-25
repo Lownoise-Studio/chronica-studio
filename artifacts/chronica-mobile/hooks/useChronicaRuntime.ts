@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useReducer } from 'react';
-import { Choice, ChronicaState, Fragment, Project } from '@/engine/types';
+import { compileProject } from '@/engine/compiler';
+import { Choice, ChronicaState, Fragment, Project, ValidationError } from '@/engine/types';
 import {
   ChronicaRuntime,
   ChooseResult,
@@ -42,10 +43,15 @@ const EMPTY_SNAPSHOT: RuntimeSnapshot = {
 export function useChronicaRuntime(project: Project | undefined) {
   const [, tick] = useReducer((n: number) => n + 1, 0);
 
-  const runtime = useMemo(() => {
+  const compileResult = useMemo(() => {
     if (!project) return null;
-    return new ChronicaRuntime(project);
-  }, [project?.id]);
+    return compileProject(project);
+  }, [project?.id, project?.updatedAt]);
+
+  const runtime = useMemo(() => {
+    if (!compileResult?.ok) return null;
+    return new ChronicaRuntime(compileResult.game);
+  }, [compileResult]);
 
   const refresh = useCallback(() => tick(), []);
 
@@ -80,9 +86,14 @@ export function useChronicaRuntime(project: Project | undefined) {
   }, [runtime]);
 
   const view = runtime ? snapshot(runtime) : EMPTY_SNAPSHOT;
+  const compileDiagnostics: ValidationError[] = compileResult?.ok
+    ? []
+    : compileResult?.diagnostics ?? [];
 
   return {
     runtime,
+    compileOk: compileResult?.ok ?? false,
+    compileDiagnostics,
     ...view,
     start,
     resume,

@@ -38,7 +38,7 @@ export function normalizeAssetUri(uri: string): string {
  * Fragments store the project asset `name`; this also accepts id, uri, or basename.
  */
 export function resolveAssetUri(
-  assets: ProjectAsset[],
+  assets: readonly ProjectAsset[],
   reference?: string,
 ): string | undefined {
   const ref = reference?.trim();
@@ -75,7 +75,7 @@ export function resolveAssetUri(
  * Resolve fragment.backgroundImage (asset name) to a URI for the player UI.
  */
 export function resolveSceneBackgroundUri(
-  assets: ProjectAsset[],
+  assets: readonly ProjectAsset[],
   backgroundImage?: string,
 ): string | undefined {
   return resolveAssetUri(
@@ -88,7 +88,7 @@ export function resolveSceneBackgroundUri(
  * Resolve fragment.backgroundAudio (asset name) to a URI for playback.
  */
 export function resolveSceneAudioUri(
-  assets: ProjectAsset[],
+  assets: readonly ProjectAsset[],
   backgroundAudio?: string,
 ): string | undefined {
   return resolveAssetUri(

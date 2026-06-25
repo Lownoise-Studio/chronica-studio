@@ -14,6 +14,7 @@ import {
   serializeState,
   deserializeState,
 } from '../engine/chronica-session';
+import { buildCompiledGame } from '../engine/compiler';
 import {
   playerReadabilityStory,
   readabilitySceneIds,
@@ -72,13 +73,10 @@ describe('player readability story fixture', () => {
 });
 
 describe('player readability navigation', () => {
+  const readabilityGame = buildCompiledGame(playerReadabilityStory);
+
   test('moving between scenes updates background resolution', () => {
-    let session = startSession(
-      readabilitySceneIds.long,
-      playerReadabilityStory.fragments,
-      {},
-      {},
-    );
+    let session = startSession(readabilityGame);
     expect(
       resolveSceneBackgroundUri(
         playerReadabilityStory.assets,
@@ -88,7 +86,7 @@ describe('player readability navigation', () => {
 
     session = {
       ...session,
-      ...choose(session.visibleChoices[0], session.state, playerReadabilityStory.fragments),
+      ...choose(session.visibleChoices[0], session.state, readabilityGame),
     };
     expect(session.fragment?.locationId).toBe(readabilitySceneIds.short);
     expect(
@@ -101,7 +99,7 @@ describe('player readability navigation', () => {
     const toPlain = session.visibleChoices.find(c => c.action === 'goto:plain-scene')!;
     session = {
       ...session,
-      ...choose(toPlain, session.state, playerReadabilityStory.fragments),
+      ...choose(toPlain, session.state, readabilityGame),
     };
     expect(session.fragment?.locationId).toBe(readabilitySceneIds.plain);
     expect(
@@ -114,7 +112,7 @@ describe('player readability navigation', () => {
     const backToShort = session.visibleChoices[0];
     session = {
       ...session,
-      ...choose(backToShort, session.state, playerReadabilityStory.fragments),
+      ...choose(backToShort, session.state, readabilityGame),
     };
     expect(
       resolveSceneBackgroundUri(
@@ -126,7 +124,7 @@ describe('player readability navigation', () => {
     const returnLong = session.visibleChoices.find(c => c.action === 'goto:long-scene')!;
     session = {
       ...session,
-      ...choose(returnLong, session.state, playerReadabilityStory.fragments),
+      ...choose(returnLong, session.state, readabilityGame),
     };
     expect(session.fragment?.locationId).toBe(readabilitySceneIds.long);
     expect(
@@ -138,14 +136,13 @@ describe('player readability navigation', () => {
   });
 
   test('save/resume round-trip preserves location for background restore', () => {
-    const started = startSession(
-      readabilitySceneIds.short,
-      playerReadabilityStory.fragments,
-      {},
-      {},
-    );
+    const shortStartGame = buildCompiledGame({
+      ...playerReadabilityStory,
+      startLocation: readabilitySceneIds.short,
+    });
+    const started = startSession(shortStartGame);
     const toPlain = started.visibleChoices.find(c => c.action === 'goto:plain-scene')!;
-    choose(toPlain, started.state, playerReadabilityStory.fragments);
+    choose(toPlain, started.state, shortStartGame);
 
     const json = serializeState(started.state);
     const restored = deserializeState(JSON.parse(json));

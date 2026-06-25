@@ -1,7 +1,7 @@
 import { Fragment, Choice, ChronicaState } from './types';
 import { resolveAction } from './action-resolver';
 import { applyEffect, evaluateCondition } from './expression-evaluator';
-import { getActiveFragment } from './fragment-store';
+import { FragmentIndex, getActiveFragmentFromIndex } from './compiler/fragment-index';
 
 function cloneState(s: ChronicaState): ChronicaState {
   return {
@@ -40,11 +40,11 @@ export function getVisibleChoices(fragment: Fragment, state: ChronicaState): Cho
 export function resolveTurn(
   choice: Choice,
   state: ChronicaState,
-  fragments: Fragment[],
+  fragmentIndex: FragmentIndex,
 ): Fragment | null {
   const working = cloneState(state);
   resolveAction(choice.action, working);
-  const fragment = getActiveFragment(working.location, working, fragments);
+  const fragment = getActiveFragmentFromIndex(working.location, working, fragmentIndex);
   if (!fragment) return null;
   for (const effect of fragment.effects) {
     applyEffect(effect, working);

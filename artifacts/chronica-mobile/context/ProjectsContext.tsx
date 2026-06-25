@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Project, Fragment, ProjectAsset, Choice, VariableValue, ValidationError } from '@/engine/types';
-import { validateProject } from '@/engine/validator';
+import { compileProject } from '@/engine/compiler';
 import { parseChronicaPackage } from '@/storage/chronica-package-io';
 
 const STORAGE_KEY = 'pse_projects_v1';
@@ -280,7 +280,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const getValidationErrors = (id: string): ValidationError[] => {
     const p = getProject(id);
-    return p ? validateProject(p) : [];
+    if (!p) return [];
+    const result = compileProject(p);
+    return result.ok ? [] : result.diagnostics;
   };
 
   return (

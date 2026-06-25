@@ -1,6 +1,5 @@
 export {
   ChronicaRuntime,
-  resolveStartLocation,
   type ChooseResult,
   type HistoryEntry,
   type RuntimeSave,

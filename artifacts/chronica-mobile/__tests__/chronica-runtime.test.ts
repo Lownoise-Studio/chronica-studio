@@ -1,4 +1,5 @@
-import { ChronicaRuntime, resolveStartLocation } from '../runtime/chronica-runtime';
+import { compileProject } from '../engine/compiler';
+import { ChronicaRuntime } from '../runtime/chronica-runtime';
 import { Project, Fragment } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
@@ -16,6 +17,12 @@ function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): P
     fragments,
     ...overrides,
   };
+}
+
+function compileOrThrow(project: Project) {
+  const result = compileProject(project);
+  if (!result.ok) throw new Error('compile failed');
+  return result.game;
 }
 
 const fragments: Fragment[] = [
@@ -41,19 +48,9 @@ const fragments: Fragment[] = [
   },
 ];
 
-describe('resolveStartLocation', () => {
-  test('uses configured start when present', () => {
-    expect(resolveStartLocation(makeProject(fragments))).toBe('intro');
-  });
-
-  test('falls back to first fragment', () => {
-    expect(resolveStartLocation(makeProject(fragments, { startLocation: 'missing' }))).toBe('intro');
-  });
-});
-
 describe('ChronicaRuntime', () => {
   test('start opens first scene with visible choices', () => {
-    const rt = new ChronicaRuntime(makeProject(fragments));
+    const rt = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     expect(rt.start()).toBe(true);
     expect(rt.isStarted).toBe(true);
     expect(rt.currentFragment?.locationId).toBe('intro');
@@ -62,7 +59,7 @@ describe('ChronicaRuntime', () => {
   });
 
   test('choose advances to linked scene', () => {
-    const rt = new ChronicaRuntime(makeProject(fragments));
+    const rt = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     rt.start();
     const result = rt.choose(rt.visibleChoices[0]);
     expect(result.ok).toBe(true);
@@ -71,13 +68,13 @@ describe('ChronicaRuntime', () => {
   });
 
   test('resume restores saved session', () => {
-    const rt = new ChronicaRuntime(makeProject(fragments));
+    const rt = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     rt.start();
     rt.choose(rt.visibleChoices[0]);
     const save = rt.toSave('p1');
     expect(save).not.toBeNull();
 
-    const rt2 = new ChronicaRuntime(makeProject(fragments));
+    const rt2 = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     expect(rt2.resume(save!)).toBe(true);
     expect(rt2.currentFragment?.locationId).toBe('forest');
     expect(rt2.pathHistory).toHaveLength(2);
@@ -101,7 +98,7 @@ describe('ChronicaRuntime', () => {
         importedAt: '',
       }],
     });
-    const rt = new ChronicaRuntime(project);
+    const rt = new ChronicaRuntime(compileOrThrow(project));
     rt.start();
     expect(rt.getBackgroundUri()).toBe('file:///data/bg.jpg');
   });

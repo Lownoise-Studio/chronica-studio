@@ -49,6 +49,8 @@ export default function PlayScreen() {
 
   const project = getProject(projectId!);
   const {
+    compileOk,
+    compileDiagnostics,
     started,
     state: gameState,
     fragment: currentFragment,
@@ -145,6 +147,21 @@ export default function PlayScreen() {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
         <EmptyState icon="alert-circle" title="Project not found" />
+      </View>
+    );
+  }
+
+  if (!compileOk) {
+    return (
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
+        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={() => router.back()}>
+          <Feather name="x" size={20} color={colors.mutedForeground} />
+        </TouchableOpacity>
+        <EmptyState
+          icon="alert-triangle"
+          title="Cannot play this project"
+          message={`Fix ${compileDiagnostics.length} issue${compileDiagnostics.length !== 1 ? 's' : ''} in the editor before playtesting.\n\n${compileDiagnostics.slice(0, 3).map(e => `• ${e.message}`).join('\n')}`}
+        />
       </View>
     );
   }

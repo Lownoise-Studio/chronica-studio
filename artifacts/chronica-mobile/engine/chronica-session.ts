@@ -1,5 +1,6 @@
-import { Fragment, Choice, ChronicaState, VariableValue } from './types';
-import { getActiveFragment } from './fragment-store';
+import { Choice, ChronicaState, Fragment, VariableValue } from './types';
+import { CompiledGame } from './compiler/types';
+import { getActiveFragmentFromIndex } from './compiler/fragment-index';
 import { applyEffect } from './expression-evaluator';
 import { resolveTurn, getVisibleChoices } from './turn-resolver';
 
@@ -19,13 +20,14 @@ export function createInitialState(
 }
 
 export function startSession(
-  startLocation: string,
-  fragments: Fragment[],
-  initialVariables: Record<string, VariableValue> = {},
-  initialMemory: Record<string, VariableValue> = {},
+  game: CompiledGame,
 ): { state: ChronicaState; fragment: Fragment | null; visibleChoices: Choice[] } {
-  const state = createInitialState(startLocation, initialVariables, initialMemory);
-  const fragment = getActiveFragment(startLocation, state, fragments);
+  const state = createInitialState(
+    game.startLocation,
+    game.initialVariables,
+    game.initialMemory,
+  );
+  const fragment = getActiveFragmentFromIndex(game.startLocation, state, game.fragmentIndex);
   if (fragment) {
     for (const effect of fragment.effects) applyEffect(effect, state);
   }
@@ -36,9 +38,9 @@ export function startSession(
 export function choose(
   choice: Choice,
   state: ChronicaState,
-  fragments: Fragment[],
+  game: CompiledGame,
 ): { fragment: Fragment | null; visibleChoices: Choice[] } {
-  const fragment = resolveTurn(choice, state, fragments);
+  const fragment = resolveTurn(choice, state, game.fragmentIndex);
   const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
   return { fragment, visibleChoices };
 }
