@@ -217,9 +217,10 @@ export class ChronicaRuntime {
   }
 
   private applyTurn(state: ChronicaState, fragment: Fragment | null): void {
-    const prevLocation = this.fragment?.locationId;
-    const nextLocation = fragment?.locationId;
-    const resetDialogue = this.fragment != null && prevLocation !== nextLocation;
+    const resetDialogue =
+      this.fragment != null &&
+      (this.fragment.locationId !== fragment?.locationId ||
+        this.fragment.uid !== fragment?.uid);
 
     this.state = {
       ...state,

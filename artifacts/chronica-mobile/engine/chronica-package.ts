@@ -396,6 +396,36 @@ export function hydrateImportedPackageProject(
     }
   }
 
+  for (const character of story.characters ?? []) {
+    for (const ref of [
+      character.defaultPortrait,
+      ...(character.expressions ?? []).map(expression => expression.portrait),
+    ]) {
+      const name = ref?.trim();
+      if (!name || knownNames.has(name.toLowerCase())) continue;
+
+      const localUri = lookupLocalUri(
+        localUriByPackagePath,
+        packageAssetPath(name),
+        packageAssetPath(safeName(name)),
+        safeName(name),
+        name,
+      );
+      if (!localUri) continue;
+
+      assets.push({
+        id: name,
+        name,
+        type: 'image',
+        uri: normalizeAssetUri(localUri),
+        mimeType: '',
+        size: 0,
+        importedAt: new Date().toISOString(),
+      });
+      knownNames.add(name.toLowerCase());
+    }
+  }
+
   return {
     ...story,
     assets,

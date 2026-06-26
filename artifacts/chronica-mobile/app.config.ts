@@ -4,7 +4,7 @@ import appJson from './app.json';
 
 const base = appJson.expo as ExpoConfig;
 
-const EAS_PROJECT_ID = '465f6328-9713-4a7e-9b6a-d1817a57cc85';
+const PLAYER_EAS_PROJECT_ID = '465f6328-9713-4a7e-9b6a-d1817a57cc85';
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
@@ -26,7 +26,9 @@ function mergeExtra(
     chronicaAppMode,
     eas: {
       ...existingEas,
-      projectId: existingEas.projectId ?? EAS_PROJECT_ID,
+      ...(chronicaAppMode === 'player'
+        ? { projectId: existingEas.projectId ?? PLAYER_EAS_PROJECT_ID }
+        : {}),
     },
   };
 }

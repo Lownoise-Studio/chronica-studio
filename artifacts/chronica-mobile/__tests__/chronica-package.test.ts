@@ -145,6 +145,29 @@ describe('asset reference rewriting', () => {
     expect(resolveSceneBackgroundUri(hydrated.assets, 'forest.jpg'))
       .toBe('file:///device/pse_assets/new-id/forest.jpg');
   });
+
+  test('hydrate adds missing character portrait records from extracted files', () => {
+    const story = {
+      ...makeProject(),
+      assets: [],
+      characters: [
+        {
+          uid: 'c1',
+          characterId: 'hero',
+          displayName: 'Hero',
+          defaultPortrait: 'hero.png',
+          expressions: [{ id: 'happy', portrait: 'hero-happy.png' }],
+        },
+      ],
+    };
+    const hydrated = hydrateImportedPackageProject(story, {
+      'assets/hero.png': 'file:///device/pse_assets/new-id/hero.png',
+      'assets/hero-happy.png': 'file:///device/pse_assets/new-id/hero-happy.png',
+    });
+    expect(hydrated.assets.map(asset => asset.name).sort()).toEqual(['hero-happy.png', 'hero.png']);
+    expect(resolveSceneBackgroundUri(hydrated.assets, 'hero.png'))
+      .toBe('file:///device/pse_assets/new-id/hero.png');
+  });
 });
 
 describe('missing asset reporting', () => {
