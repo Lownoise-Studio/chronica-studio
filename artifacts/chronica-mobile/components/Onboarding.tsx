@@ -14,24 +14,24 @@ type Step = {
 
 const STEPS: Step[] = [
   {
-    icon: 'book-open',
+    icon: 'smartphone',
     title: 'Welcome to Chronica Studio',
-    body: "Create branching stories directly on your phone — no coding needed.\n\nYour story is made of scenes: moments your reader moves through, one choice at a time.",
+    body: 'Build state-driven interactive games directly on your phone — no desktop required.\n\nCreate scenes, dialogue, choices, hotspots, and game state in one mobile-first workflow.',
   },
   {
-    icon: 'file-text',
-    title: 'Write Your Scenes',
-    body: "Each scene is a moment in your story. Write what the reader sees, feels, or hears.\n\nGive each scene a name so you can find it easily.",
+    icon: 'layout',
+    title: 'Build Interactive Scenes',
+    body: 'Write scenes, add background art, place tappable hotspots, and connect everything through choices and actions.',
   },
   {
-    icon: 'git-branch',
-    title: 'Connect with Choices',
-    body: "Add choices to let readers steer the story. Each choice links to another scene.\n\nYou can also add unlock requirements — conditions a reader must meet before a choice appears.",
+    icon: 'users',
+    title: 'Add Cast & Dialogue',
+    body: 'Create characters, assign portraits, and write dialogue lines that play like a visual novel or adventure scene.',
   },
   {
-    icon: 'play',
-    title: 'Playtest & Share',
-    body: "Tap Playtest to read through your story and check every path.\n\nWhen you're ready, export your project as a file to back it up or share it with others.",
+    icon: 'package',
+    title: 'Playtest & Package',
+    body: 'Test every path on device, validate your project, then export a .chronica game package for Chronica Player.',
   },
 ];
 
@@ -89,7 +89,7 @@ export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
               onPress={next}
               activeOpacity={0.8}
             >
-              <Text style={styles.navBtnTextLight}>{isLast ? "Start writing" : 'Next'}</Text>
+              <Text style={styles.navBtnTextLight}>{isLast ? 'Start building' : 'Next'}</Text>
               {!isLast && <Feather name="arrow-right" size={16} color="#fff" />}
             </TouchableOpacity>
           </View>
