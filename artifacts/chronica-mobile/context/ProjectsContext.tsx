@@ -12,8 +12,15 @@ import {
   clearProjectAssets,
   clearRuntimeSaves,
 } from '@/storage/dev-reset';
+import {
+  clearAllProjectRecords,
+  deleteProjectRecord,
+  deleteProjectRecords,
+  loadAllProjects,
+  migrateLegacyProjectsBlob,
+  saveProjectRecord,
+} from '@/storage/projects-store';
 
-const STORAGE_KEY = APP_STORAGE_KEYS.projects;
 const ONBOARDED_KEY = APP_STORAGE_KEYS.onboarded;
 
 const nowIso = () => new Date().toISOString();
@@ -122,28 +129,33 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasOnboarded, setHasOnboardedState] = useState(true);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // One debounce timer per project id — editing one project must not
+  // rewrite every other project's storage record.
+  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Load on mount
   useEffect(() => {
-    Promise.all([
-      AsyncStorage.getItem(STORAGE_KEY),
-      AsyncStorage.getItem(ONBOARDED_KEY),
-    ]).then(([json, onboarded]) => {
-      let loaded: Project[] = [];
-      if (json) {
-        try { loaded = JSON.parse(json); } catch {}
+    (async () => {
+      try {
+        const [migrated, onboarded] = await Promise.all([
+          migrateLegacyProjectsBlob(),
+          AsyncStorage.getItem(ONBOARDED_KEY),
+        ]);
+        let loaded = migrated ?? await loadAllProjects();
+        // Migrate: backfill schemaVersion + Fragment.title on old data
+        loaded = loaded.map(migrateProject);
+        // Seed sample project on first launch
+        if (!onboarded && loaded.length === 0) {
+          const sample = makeSampleProject();
+          await saveProjectRecord(sample);
+          loaded = [sample];
+        }
+        setProjects(loaded);
+        setHasOnboardedState(!!onboarded);
+      } finally {
+        setIsLoaded(true);
       }
-      // Migrate: backfill schemaVersion + Fragment.title on old data
-      loaded = loaded.map(migrateProject);
-      // Seed sample project on first launch
-      if (!onboarded && loaded.length === 0) {
-        loaded = [makeSampleProject()];
-      }
-      setProjects(loaded);
-      setHasOnboardedState(!!onboarded);
-      setIsLoaded(true);
-    }).catch(() => setIsLoaded(true));
+    })();
   }, []);
 
   const setHasOnboarded = (v: boolean) => {
@@ -151,26 +163,50 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     AsyncStorage.setItem(ONBOARDED_KEY, v ? '1' : '');
   };
 
-  // Debounced autosave
-  const persist = (next: Project[]) => {
-    setProjects(next);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-    }, 300);
+  const clearSaveTimer = (id: string) => {
+    const timer = saveTimers.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      saveTimers.current.delete(id);
+    }
   };
 
-  const persistImmediate = async (next: Project[]) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
+  /** Debounced per-project save — only the changed project's record is rewritten. */
+  const scheduleSave = (project: Project) => {
+    clearSaveTimer(project.id);
+    const timer = setTimeout(() => {
+      saveTimers.current.delete(project.id);
+      saveProjectRecord(project).catch(() => {});
+    }, 300);
+    saveTimers.current.set(project.id, timer);
+  };
+
+  /** Updates in-memory state and schedules a debounced save for only the listed project ids. */
+  const persist = (next: Project[], changedIds: string[]) => {
     setProjects(next);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    for (const id of changedIds) {
+      const project = next.find(p => p.id === id);
+      if (project) scheduleSave(project);
+    }
+  };
+
+  /** Like `persist`, but saves the changed projects immediately instead of debouncing. */
+  const persistNow = (next: Project[], changedIds: string[]) => {
+    setProjects(next);
+    for (const id of changedIds) {
+      clearSaveTimer(id);
+      const project = next.find(p => p.id === id);
+      if (project) saveProjectRecord(project).catch(() => {});
+    }
   };
 
   const removeProjects = async (predicate: (project: Project) => boolean) => {
     const removed = projects.filter(predicate);
     const remaining = projects.filter(project => !predicate(project));
     const removedIds = removed.map(project => project.id);
-    await persistImmediate(remaining);
+    removedIds.forEach(clearSaveTimer);
+    setProjects(remaining);
+    await deleteProjectRecords(removedIds);
     await clearRuntimeSaves(removedIds);
     await clearProjectAssets(removedIds);
   };
@@ -186,7 +222,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const clearLibrary = async () => {
     const allIds = projects.map(project => project.id);
-    await persistImmediate([]);
+    allIds.forEach(clearSaveTimer);
+    setProjects([]);
+    await clearAllProjectRecords();
     await clearRuntimeSaves(allIds);
     await clearProjectAssets(allIds);
   };
@@ -213,14 +251,14 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       assets: [],
       characters: [],
     };
-    persist([...projects, p]);
+    persistNow([...projects, p], [p.id]);
     return p;
   };
 
   const updateProject = (
     id: string,
     updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory' | 'characters'>>
-  ) => persist(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: nowIso() } : p));
+  ) => persist(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: nowIso() } : p), [id]);
 
   const duplicateProject = (id: string): Project | null => {
     const source = projects.find(p => p.id === id);
@@ -245,11 +283,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         expressions: (c.expressions ?? []).map(e => ({ ...e })),
       })),
     };
-    persist([...projects, copy]);
+    persistNow([...projects, copy], [copy.id]);
     return copy;
   };
 
-  const deleteProject = (id: string) => persist(projects.filter(p => p.id !== id));
+  const deleteProject = (id: string) => {
+    clearSaveTimer(id);
+    setProjects(prev => prev.filter(p => p.id !== id));
+    deleteProjectRecord(id).catch(() => {});
+  };
 
   const addFragment = (projectId: string, fragment: Omit<Fragment, 'uid'>): Fragment => {
     const f: Fragment = { ...fragment, uid: createId() };
@@ -263,27 +305,27 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         startLocation: isFirst ? f.locationId : p.startLocation,
         updatedAt: nowIso(),
       };
-    }));
+    }), [projectId]);
     return f;
   };
 
   const updateFragment = (projectId: string, uid: string, updates: Partial<Fragment>) =>
     persist(projects.map(p => p.id === projectId
       ? { ...p, updatedAt: nowIso(), fragments: p.fragments.map(f => f.uid === uid ? { ...f, ...updates } : f) }
-      : p));
+      : p), [projectId]);
 
   const deleteFragment = (projectId: string, uid: string) =>
     persist(projects.map(p => p.id === projectId
       ? { ...p, updatedAt: nowIso(), fragments: p.fragments.filter(f => f.uid !== uid) }
-      : p));
+      : p), [projectId]);
 
   const addAsset = (projectId: string, asset: ProjectAsset) =>
     persist(projects.map(p => p.id === projectId
-      ? { ...p, assets: [...p.assets, asset], updatedAt: nowIso() } : p));
+      ? { ...p, assets: [...p.assets, asset], updatedAt: nowIso() } : p), [projectId]);
 
   const deleteAsset = (projectId: string, assetId: string) =>
     persist(projects.map(p => p.id === projectId
-      ? { ...p, assets: p.assets.filter(a => a.id !== assetId), updatedAt: nowIso() } : p));
+      ? { ...p, assets: p.assets.filter(a => a.id !== assetId), updatedAt: nowIso() } : p), [projectId]);
 
   const getProject = (id: string) => projects.find(p => p.id === id);
 
@@ -310,7 +352,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       const migrated = migrateProject(data as Project);
       const newInstallId = projects.some(p => p.id === migrated.id) ? createId() : migrated.id;
       const project: Project = { ...migrated, id: newInstallId, updatedAt: nowIso() };
-      persist([...projects, project]);
+      persistNow([...projects, project], [project.id]);
       return { ok: true, project };
     } catch (e: any) {
       return { ok: false, error: e?.message ?? 'Failed to parse file.' };
@@ -327,7 +369,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         return { ok: false, error: result.error, diagnostics: result.diagnostics };
       }
 
-      persist([...projects, result.project]);
+      persistNow([...projects, result.project], [result.project.id]);
       return { ok: true, project: result.project };
     } catch (e: any) {
       return { ok: false, error: e?.message ?? 'Failed to import package.' };
