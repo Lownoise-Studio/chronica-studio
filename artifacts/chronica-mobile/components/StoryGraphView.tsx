@@ -1,19 +1,40 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
-  ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  FlatList, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
-import { Fragment, Project } from '@/engine/types';
+import { Project } from '@/engine/types';
 import {
   buildStoryGraph,
-  getOutgoingEdges,
   groupGraphNodes,
-  resolveLocationTitle,
   type StoryGraphEdge,
   type StoryGraphNode,
+  type StoryGraphSection,
 } from '@/engine/story-graph';
+
+/** Map from fragmentUid to its outgoing edges, built once per graph instead of filtering all edges per node render. */
+function indexEdgesByFragment(edges: StoryGraphEdge[]): Map<string, StoryGraphEdge[]> {
+  const byFragment = new Map<string, StoryGraphEdge[]>();
+  for (const edge of edges) {
+    const bucket = byFragment.get(edge.fromFragmentUid) ?? [];
+    bucket.push(edge);
+    byFragment.set(edge.fromFragmentUid, bucket);
+  }
+  return byFragment;
+}
+
+/** Map from locationId to its fragment title, built once instead of a linear find per edge render. */
+function indexTitlesByLocation(fragments: { locationId: string; title: string }[]): Map<string, string> {
+  const byLocation = new Map<string, string>();
+  for (const fragment of fragments) {
+    if (!byLocation.has(fragment.locationId)) {
+      byLocation.set(fragment.locationId, fragment.title);
+    }
+  }
+  return byLocation;
+}
 
 function EdgeRow({ edge, destinationTitle }: { edge: StoryGraphEdge; destinationTitle: string }) {
   const colors = useColors();
@@ -55,18 +76,18 @@ function EdgeRow({ edge, destinationTitle }: { edge: StoryGraphEdge; destination
 
 function GraphNodeCard({
   node,
-  edges,
-  fragments,
+  edgesByFragment,
+  titlesByLocation,
   onPress,
 }: {
   node: StoryGraphNode;
-  edges: StoryGraphEdge[];
-  fragments: Fragment[];
+  edgesByFragment: Map<string, StoryGraphEdge[]>;
+  titlesByLocation: Map<string, string>;
   onPress: () => void;
 }) {
   const colors = useColors();
   const { advancedMode } = useAdvancedMode();
-  const outgoing = getOutgoingEdges(edges, node.fragmentUid);
+  const outgoing = edgesByFragment.get(node.fragmentUid) ?? [];
 
   return (
     <TouchableOpacity
@@ -132,7 +153,7 @@ function GraphNodeCard({
             <EdgeRow
               key={edge.id}
               edge={edge}
-              destinationTitle={resolveLocationTitle(fragments, edge.toLocationId)}
+              destinationTitle={titlesByLocation.get(edge.toLocationId) ?? edge.toLocationId}
             />
           ))}
         </View>
@@ -140,6 +161,52 @@ function GraphNodeCard({
         <Text style={[styles.noEdges, { color: colors.mutedForeground }]}>No choices yet</Text>
       )}
     </TouchableOpacity>
+  );
+}
+
+function GraphSectionRow({
+  section,
+  edgesByFragment,
+  titlesByLocation,
+  onNodePress,
+}: {
+  section: StoryGraphSection;
+  edgesByFragment: Map<string, StoryGraphEdge[]>;
+  titlesByLocation: Map<string, string>;
+  onNodePress: (fragmentUid: string) => void;
+}) {
+  const colors = useColors();
+
+  const renderNode = useCallback(
+    ({ item }: { item: StoryGraphNode }) => (
+      <GraphNodeCard
+        node={item}
+        edgesByFragment={edgesByFragment}
+        titlesByLocation={titlesByLocation}
+        onPress={() => onNodePress(item.fragmentUid)}
+      />
+    ),
+    [edgesByFragment, titlesByLocation, onNodePress],
+  );
+
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
+        {section.title}
+      </Text>
+      <FlatList
+        horizontal
+        data={section.nodes}
+        keyExtractor={node => node.fragmentUid}
+        renderItem={renderNode}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.sectionRow}
+        windowSize={5}
+        maxToRenderPerBatch={8}
+        initialNumToRender={6}
+        removeClippedSubviews
+      />
+    </View>
   );
 }
 
@@ -155,9 +222,23 @@ export function StoryGraphView({
   const colors = useColors();
   const graph = useMemo(() => buildStoryGraph(project), [project]);
   const sections = useMemo(() => groupGraphNodes(graph.nodes), [graph.nodes]);
+  const edgesByFragment = useMemo(() => indexEdgesByFragment(graph.edges), [graph.edges]);
+  const titlesByLocation = useMemo(() => indexTitlesByLocation(project.fragments), [project.fragments]);
 
   const brokenCount = graph.edges.filter(e => e.broken).length;
   const lockedCount = graph.nodes.filter(n => n.hasUnlockRequirements).length;
+
+  const renderSection = useCallback(
+    ({ item }: { item: StoryGraphSection }) => (
+      <GraphSectionRow
+        section={item}
+        edgesByFragment={edgesByFragment}
+        titlesByLocation={titlesByLocation}
+        onNodePress={onNodePress}
+      />
+    ),
+    [edgesByFragment, titlesByLocation, onNodePress],
+  );
 
   if (project.fragments.length === 0) {
     return (
@@ -172,59 +253,44 @@ export function StoryGraphView({
   }
 
   return (
-    <ScrollView
+    <FlatList
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={[styles.content, { paddingBottom: contentPaddingBottom }]}
       showsVerticalScrollIndicator={false}
-    >
-      <View style={[styles.legend, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.legendTitle, { color: colors.foreground }]}>Story map</Text>
-        <Text style={[styles.legendHint, { color: colors.mutedForeground }]}>
-          Read-only view — tap a scene to edit it.
-        </Text>
-        <View style={styles.legendRow}>
-          <Text style={[styles.legendStat, { color: colors.mutedForeground }]}>
-            {graph.nodes.length} scene{graph.nodes.length !== 1 ? 's' : ''}
+      data={sections}
+      keyExtractor={section => section.title}
+      renderItem={renderSection}
+      windowSize={5}
+      maxToRenderPerBatch={4}
+      initialNumToRender={3}
+      removeClippedSubviews
+      ListHeaderComponent={
+        <View style={[styles.legend, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.legendTitle, { color: colors.foreground }]}>Story map</Text>
+          <Text style={[styles.legendHint, { color: colors.mutedForeground }]}>
+            Read-only view — tap a scene to edit it.
           </Text>
-          <Text style={[styles.legendStat, { color: colors.mutedForeground }]}>
-            {graph.edges.length} link{graph.edges.length !== 1 ? 's' : ''}
-          </Text>
-          {lockedCount > 0 && (
-            <Text style={[styles.legendStat, { color: colors.accent }]}>
-              {lockedCount} locked
+          <View style={styles.legendRow}>
+            <Text style={[styles.legendStat, { color: colors.mutedForeground }]}>
+              {graph.nodes.length} scene{graph.nodes.length !== 1 ? 's' : ''}
             </Text>
-          )}
-          {brokenCount > 0 && (
-            <Text style={[styles.legendStat, { color: colors.destructive }]}>
-              {brokenCount} broken
+            <Text style={[styles.legendStat, { color: colors.mutedForeground }]}>
+              {graph.edges.length} link{graph.edges.length !== 1 ? 's' : ''}
             </Text>
-          )}
+            {lockedCount > 0 && (
+              <Text style={[styles.legendStat, { color: colors.accent }]}>
+                {lockedCount} locked
+              </Text>
+            )}
+            {brokenCount > 0 && (
+              <Text style={[styles.legendStat, { color: colors.destructive }]}>
+                {brokenCount} broken
+              </Text>
+            )}
+          </View>
         </View>
-      </View>
-
-      {sections.map(section => (
-        <View key={section.title} style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>
-            {section.title}
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.sectionRow}
-          >
-            {section.nodes.map(node => (
-              <GraphNodeCard
-                key={node.fragmentUid}
-                node={node}
-                edges={graph.edges}
-                fragments={project.fragments}
-                onPress={() => onNodePress(node.fragmentUid)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ))}
-    </ScrollView>
+      }
+    />
   );
 }
 
