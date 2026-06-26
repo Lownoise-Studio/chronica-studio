@@ -254,6 +254,8 @@ export default function FragmentEditorScreen() {
         hotspots={hotspots}
         onChange={setHotspots}
         fragments={project.fragments}
+        backgroundImage={bgImage}
+        assets={project.assets}
       />
 
       <TouchableOpacity
