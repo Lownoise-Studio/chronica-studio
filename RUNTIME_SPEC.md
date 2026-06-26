@@ -233,11 +233,11 @@ New game systems must be designed **against the runtime boundary** from the star
 | Future system | Runtime-facing design |
 |---------------|----------------------|
 | **Hotspots** | ✅ Shippable `SceneHotspot` on fragments; compiled `hotspotActions`; `activateHotspot` on runtime; `SceneHotspotOverlay` for presentation |
-| **Character portraits** | Shippable character catalog + expression keys; runtime resolves sprite URI per dialogue line |
-| **Audio layers** | BGM/SFX triggers as scene or choice data; runtime owns playback lifecycle |
-| **Inventory** | Items in `ChronicaState` or shippable item defs; runtime `useItem` / `hasItem` API |
-| **Quests / objectives** | State flags + shippable quest graph; runtime tracks progress, editor authors defs |
-| **RPG systems** | Stats and checks as variables/effects today; future typed modules still serialize into runtime state |
+| **Character portraits** | ✅ Shippable character catalog + expression keys; runtime resolves sprite URI per dialogue line |
+| **Audio layers** | BGM/SFX triggers should remain scene or choice data; runtime owns playback lifecycle |
+| **Inventory** | Future gameplay model: items in `ChronicaState` or shippable item defs; runtime `useItem` / `hasItem` API |
+| **Quests / objectives** | Future gameplay model: state flags + shippable quest graph; runtime tracks progress, editor authors defs |
+| **RPG systems** | Stats and checks can be modeled as variables/effects today; future typed modules still serialize into runtime state |
 
 **Rule:** If a player needs it mid-game, it must be representable in **package + runtime state + session API**. If only a creator needs it while editing, it stays in the **editor**.
 

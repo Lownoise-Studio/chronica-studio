@@ -1,6 +1,53 @@
 # Chronica Studio Engine
 
-**Chronica Studio** is a mobile-first game engine for building, playtesting, and shipping scene-based narrative games on phone and tablet. The narrative editor shipping today is Phase 1 of the engine—not the whole product.
+**Chronica Studio** is a mobile-first game engine for building, playtesting, and shipping state-driven interactive games on phone and tablet. The narrative workflow shipping today is Phase 1 of the engine—not the whole product.
+
+## Project Status
+
+Chronica Studio is under active development. The engine foundation is stabilizing, and the core architecture—compiler, runtime, package format, and state model—is becoming stable. Gameplay models will continue to expand over time, and breaking changes may occur before the first stable release.
+
+## Current Scope
+
+Chronica Studio currently focuses on:
+
+- State-driven interactive games
+- Branching narrative
+- Visual novel experiences
+- Light adventure experiences
+
+Real-time gameplay, physics, and 3D are outside the current scope. Chronica is focused on deterministic state transitions, authored gameplay models, and mobile-first presentation rather than frame-based simulation or general-purpose rendering.
+
+## Current Capabilities
+
+Implemented capabilities in the current mobile app include:
+
+- Mobile-first editor
+- Scene editor
+- Dialogue system
+- Character/cast system
+- Hotspots
+- Variables and state
+- Conditional branching
+- Asset library
+- ZIP asset import
+- Compiler & validation
+- Playtest runtime
+- `.chronica` package export/import
+- Chronica Player
+- Save/resume
+- Showcase demo
+
+## Road to v1
+
+The next major milestones are focused on:
+
+- Engine stabilization
+- Additional gameplay models
+- Presentation improvements
+- Standalone player polish
+- Public creator release
+
+No release dates are promised yet; the priority is a stable, portable foundation for creators and players.
 
 ## What’s in this repo
 
@@ -18,7 +65,7 @@
 
 See [ENGINE_SPEC.md](ENGINE_SPEC.md) and [RUNTIME_SPEC.md](RUNTIME_SPEC.md) for the full contract.
 
-## Ship format: `.chronica`
+## Ship format: `.chronica` packages
 
 A `.chronica` file is a ZIP package containing:
 

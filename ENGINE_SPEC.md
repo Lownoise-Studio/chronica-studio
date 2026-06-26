@@ -18,7 +18,7 @@ For product vision and phased delivery, see [VISION.md](./VISION.md) and [ROADMA
 
 ### What the narrative module is
 
-The current scene/fragment editor, choice graph, variables, and playtest player are the **first gameplay model** (Phase 1 narrative module). They prove that the engine primitives—compiler, runtime, state, assets, packages—work on mobile. Future models—characters, hotspots, inventory, quests—compose on the same core rather than replacing it.
+The current scene editor, dialogue tools, character/cast system, hotspots, variables, and playtest player are early **gameplay models** on the Phase 1 foundation. They prove that the engine primitives—compiler, runtime, state, assets, and `.chronica` packages—work on mobile. Additional models—such as inventory, quests, and challenge systems—compose on the same core rather than replacing it.
 
 ### Engine design principles
 
@@ -163,17 +163,17 @@ These are commitments the engine core must uphold. Violations are bugs.
 
 ---
 
-## 4. Current supported game type
+## 4. Current supported scope
 
-Phase 1 targets **scene-based narrative games**:
+Phase 1 targets **state-driven interactive games** with branching narrative and light adventure structures:
 
 - **Visual-novel-lite** — full-screen background images, scene text, branching choices, optional BGM per scene.
 - **Branching fiction** — location graph, gated scenes (conditions), state mutations (effects), variables and memory flags.
-- **Hidden-object / point-and-click potential** — the fragment/location model and asset system are intentionally compatible with per-scene hotspots and clickable regions; hotspot authoring and hit-testing are **not yet engine features** but fit the same scene + asset + action model.
+- **Light adventure interactions** — per-scene hotspots and clickable regions trigger compiled actions through the same scene + asset + state model.
 
-Not yet supported as first-class engine features: character portraits, dialogue boxes, inventory UI, world maps, real-time input, or physics.
+Not yet supported as first-class engine features: inventory UI, world maps, real-time input, physics, or 3D.
 
-**Hotspots** (tap regions on scene backgrounds with compiled actions) are ✅ — the first gameplay model beyond narrative choices.
+**Hotspots** (tap regions on scene backgrounds with compiled actions), dialogue, and character/cast data are ✅ gameplay models beyond narrative choices.
 
 ---
 
