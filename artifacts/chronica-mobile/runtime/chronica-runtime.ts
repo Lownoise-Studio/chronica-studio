@@ -1,14 +1,15 @@
 import {
   choose as engineChoose,
+  activateHotspot as engineActivateHotspot,
   deserializeState,
   serializeState,
   startSession,
 } from '@/engine/chronica-session';
 import { resolveSceneAudioUri, resolveSceneBackgroundUri } from '@/engine/asset-resolver';
 import { getActiveFragmentFromIndex } from '@/engine/compiler/fragment-index';
-import { getVisibleChoices } from '@/engine/turn-resolver';
+import { getVisibleChoices, getVisibleHotspots } from '@/engine/turn-resolver';
 import { CompiledGame } from '@/engine/compiler/types';
-import { Choice, ChronicaState, Fragment } from '@/engine/types';
+import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { ResumeResult, validateRuntimeSave } from './validate-runtime-save';
 
 export type HistoryEntry = { locationId: string; title: string };
@@ -36,6 +37,7 @@ export class ChronicaRuntime {
   private state: ChronicaState | null = null;
   private fragment: Fragment | null = null;
   private _visibleChoices: Choice[] = [];
+  private _visibleHotspots: SceneHotspot[] = [];
   private history: HistoryEntry[] = [];
   private started = false;
 
@@ -59,6 +61,10 @@ export class ChronicaRuntime {
     return this._visibleChoices;
   }
 
+  get visibleHotspots(): SceneHotspot[] {
+    return this._visibleHotspots;
+  }
+
   get pathHistory(): HistoryEntry[] {
     return this.history;
   }
@@ -77,7 +83,7 @@ export class ChronicaRuntime {
     this.history = result.fragment
       ? [{ locationId: result.fragment.locationId, title: result.fragment.title || result.fragment.locationId }]
       : [];
-    this.applyTurn(result.state, result.fragment, result.visibleChoices);
+    this.applyTurn(result.state, result.fragment, result.visibleChoices, result.visibleHotspots);
     this.started = true;
     return true;
   }
@@ -91,8 +97,9 @@ export class ChronicaRuntime {
 
     const fragment = getActiveFragmentFromIndex(state.location, state, this.game.fragmentIndex);
     const choices = fragment ? getVisibleChoices(fragment, state) : [];
+    const hotspots = fragment ? getVisibleHotspots(fragment, state) : [];
     this.history = save.history ?? [];
-    this.applyTurn(state, fragment, choices);
+    this.applyTurn(state, fragment, choices, hotspots);
     this.started = true;
     return { ok: true };
   }
@@ -116,15 +123,38 @@ export class ChronicaRuntime {
         title: result.fragment.title || result.fragment.locationId,
       },
     ];
-    this.applyTurn(this.state, result.fragment, result.visibleChoices);
+    this.applyTurn(this.state, result.fragment, result.visibleChoices, result.visibleHotspots);
     return { ok: true };
   }
 
-  /** Advanced debug: replace runtime state and refresh visible choices. */
+  activateHotspot(hotspot: SceneHotspot): ChooseResult {
+    if (!this.started || !this.state) {
+      return { ok: false, reason: 'not-started' };
+    }
+    const result = engineActivateHotspot(hotspot, this.state, this.game);
+    if (!result.fragment) {
+      return { ok: false, reason: 'dead-end' };
+    }
+    const locationChanged = result.fragment.locationId !== this.fragment?.locationId;
+    if (locationChanged) {
+      this.history = [
+        ...this.history,
+        {
+          locationId: result.fragment.locationId,
+          title: result.fragment.title || result.fragment.locationId,
+        },
+      ];
+    }
+    this.applyTurn(this.state, result.fragment, result.visibleChoices, result.visibleHotspots);
+    return { ok: true };
+  }
+
+  /** Advanced debug: replace runtime state and refresh visible interactions. */
   setRuntimeState(next: ChronicaState): void {
     this.state = { ...next };
     if (this.fragment) {
       this._visibleChoices = getVisibleChoices(this.fragment, this.state);
+      this._visibleHotspots = getVisibleHotspots(this.fragment, this.state);
     }
   }
 
@@ -140,9 +170,15 @@ export class ChronicaRuntime {
     };
   }
 
-  private applyTurn(state: ChronicaState, fragment: Fragment | null, choices: Choice[]): void {
+  private applyTurn(
+    state: ChronicaState,
+    fragment: Fragment | null,
+    choices: Choice[],
+    hotspots: SceneHotspot[],
+  ): void {
     this.state = { ...state };
     this.fragment = fragment;
     this._visibleChoices = choices;
+    this._visibleHotspots = hotspots;
   }
 }

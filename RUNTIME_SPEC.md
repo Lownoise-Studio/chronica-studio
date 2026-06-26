@@ -159,7 +159,8 @@ Import validates `manifest.gameId === story.gameId` and, when present, `manifest
 |-----|--------|----------------------------------|
 | `PlayerHost.choose(choice)` | Apply compiled choice actions, advance state | `ChronicaRuntime.choose()` → `engine/chronica-session.ts` |
 | `getCurrentScene()` | Active fragment for current location/state | `snapshot().fragment` via `getActiveFragmentFromIndex()` |
-| `getVisibleChoices()` | Choices passing condition checks on current fragment | `snapshot().visibleChoices` via `getVisibleChoices()` |
+| `PlayerHost.activateHotspot(hotspot)` | Apply compiled hotspot actions, advance state | `ChronicaRuntime.activateHotspot()` |
+| `getVisibleHotspots()` | Hotspots passing condition checks on current fragment | `snapshot().visibleHotspots` |
 
 ### Presentation inputs (runtime host, not game rules)
 
@@ -171,6 +172,7 @@ The engine returns **data**; the host **renders** it:
 | Background image URI | `resolveSceneBackgroundUri(assets, fragment.backgroundImage)` |
 | Background audio URI | `resolveSceneAudioUri(assets, fragment.backgroundAudio)` |
 | Choice labels | `visibleChoices[].label` |
+| Hotspot regions | `visibleHotspots[]` (normalized bounds + label); presentation hit-tests and calls `activateHotspot` |
 
 Future APIs (`getHotspots()`, `getPortrait()`, `getInventory()`) should follow the same pattern: engine resolves shippable data; host draws it.
 
@@ -230,7 +232,7 @@ New game systems must be designed **against the runtime boundary** from the star
 
 | Future system | Runtime-facing design |
 |---------------|----------------------|
-| **Hotspots** | Shippable region definitions on scenes (id, bounds, action, conditions); runtime hit-testing and `activateHotspot(id)` |
+| **Hotspots** | ✅ Shippable `SceneHotspot` on fragments; compiled `hotspotActions`; `activateHotspot` on runtime; `SceneHotspotOverlay` for presentation |
 | **Character portraits** | Shippable character catalog + expression keys; runtime resolves sprite URI per dialogue line |
 | **Audio layers** | BGM/SFX triggers as scene or choice data; runtime owns playback lifecycle |
 | **Inventory** | Items in `ChronicaState` or shippable item defs; runtime `useItem` / `hasItem` API |

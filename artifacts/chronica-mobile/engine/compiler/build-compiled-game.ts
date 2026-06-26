@@ -52,6 +52,20 @@ function buildChoiceActions(project: Project): Record<string, ActionStep[]> {
   return choiceActions;
 }
 
+function buildHotspotActions(project: Project): Record<string, ActionStep[]> {
+  const hotspotActions: Record<string, ActionStep[]> = {};
+  for (const frag of project.fragments) {
+    for (const hotspot of frag.hotspots ?? []) {
+      const parsed = parseActionString(hotspot.action ?? '');
+      if (!parsed.ok) {
+        throw new Error(`buildCompiledGame: invalid action for hotspot ${hotspot.uid}: ${parsed.error}`);
+      }
+      hotspotActions[hotspot.uid] = [...parsed.steps];
+    }
+  }
+  return hotspotActions;
+}
+
 /**
  * Build a CompiledGame from a Project without running validation.
  * Use compileProject() at product boundaries; this is for tests and internal reuse.
@@ -64,6 +78,10 @@ export function buildCompiledGame(project: Project): CompiledGame {
     choices: (f.choices ?? []).map(c => ({
       ...c,
       conditions: [...(c.conditions ?? [])],
+    })),
+    hotspots: (f.hotspots ?? []).map(h => ({
+      ...h,
+      conditions: [...(h.conditions ?? [])],
     })),
   }));
 
@@ -82,5 +100,6 @@ export function buildCompiledGame(project: Project): CompiledGame {
     assets: project.assets.map(a => ({ ...a })),
     fragmentIndex: buildFragmentIndex(fragments),
     choiceActions: buildChoiceActions(project),
+    hotspotActions: buildHotspotActions(project),
   };
 }

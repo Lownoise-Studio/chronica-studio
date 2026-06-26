@@ -7,7 +7,7 @@ Phases map to **gameplay models** on the core engine (compiler, runtime, state, 
 | Layer | Phases |
 |-------|--------|
 | **Core** | Phase 1 (compiler, runtime, packages, identity, persistence) |
-| **Gameplay models** | Phase 1 narrative · Phase 2 dialogue · Phase 3 inventory/quests |
+| **Gameplay models** | Phase 1 narrative + hotspots · Phase 2 dialogue · Phase 3 inventory/quests |
 | **Presentation** | Phase 2 VN · future adventure/top-down/hidden-object renderers |
 | **Distribution** | Phase 4 export/APK · Phase 5 marketplace |
 
@@ -21,7 +21,7 @@ Phases map to **gameplay models** on the core engine (compiler, runtime, state, 
 |------|--------|
 | Local mobile app runs (Expo Go / device) | ✅ |
 | Project list and sample story seed | ✅ |
-| Scene editor (text, name, conditions, effects, choices) | ✅ |
+| Scene editor (text, name, conditions, effects, choices, hotspots) | ✅ |
 | Choice linking with scene picker | ✅ |
 | Variable unlock chips (tap-to-insert conditions from story state) | ✅ |
 | Playtest / in-app player | ✅ |

@@ -3,6 +3,7 @@ import { isValidCondition, isValidEffect } from './expression-evaluator';
 import { findAssetByName } from './chronica-package';
 import { getGotoTargetsFromAction } from './actions/parse-action';
 import { validateProjectActions } from './actions/validate-actions';
+import { isValidHotspotBounds } from './hotspots';
 
 function assetExists(assets: ProjectAsset[], name: string): boolean {
   const asset = findAssetByName(assets, name);
@@ -31,6 +32,24 @@ export function validateFragment(fragment: Fragment): ValidationError[] {
     for (const cond of (choice.conditions ?? [])) {
       if (!isValidCondition(cond)) {
         errors.push({ ...meta, type: 'invalid-condition', message: `Choice "${choice.label}" — invalid condition: "${cond}"` });
+      }
+    }
+  }
+  for (const hotspot of fragment.hotspots ?? []) {
+    if (!isValidHotspotBounds(hotspot)) {
+      errors.push({
+        ...meta,
+        type: 'invalid-hotspot',
+        message: `Hotspot "${hotspot.label || '(unnamed)'}" has invalid bounds (use 0–1 coordinates)`,
+      });
+    }
+    for (const cond of (hotspot.conditions ?? [])) {
+      if (!isValidCondition(cond)) {
+        errors.push({
+          ...meta,
+          type: 'invalid-condition',
+          message: `Hotspot "${hotspot.label}" — invalid condition: "${cond}"`,
+        });
       }
     }
   }
@@ -106,6 +125,11 @@ export function findOrphanScenes(project: Project): ValidationError[] {
   for (const frag of project.fragments) {
     for (const choice of frag.choices) {
       for (const target of getGotoTargetsFromAction(choice.action)) {
+        if (target) targets.add(target);
+      }
+    }
+    for (const hotspot of frag.hotspots ?? []) {
+      for (const target of getGotoTargetsFromAction(hotspot.action)) {
         if (target) targets.add(target);
       }
     }

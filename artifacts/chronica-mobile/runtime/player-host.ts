@@ -1,6 +1,6 @@
 import { CompiledGame } from '@/engine/compiler/types';
 import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
-import { Choice, ChronicaState, Fragment } from '@/engine/types';
+import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { ChronicaRuntime, ChooseResult, HistoryEntry, RuntimeSave } from './chronica-runtime';
 import { ResumeResult } from './validate-runtime-save';
 
@@ -9,6 +9,7 @@ export type PlayerSnapshot = {
   state: ChronicaState | null;
   fragment: Fragment | null;
   visibleChoices: Choice[];
+  visibleHotspots: SceneHotspot[];
   history: HistoryEntry[];
   backgroundUri: string | undefined;
   audioUri: string | undefined;
@@ -45,6 +46,10 @@ export class PlayerHost {
     return this.runtime.choose(choice);
   }
 
+  activateHotspot(hotspot: SceneHotspot): ChooseResult {
+    return this.runtime.activateHotspot(hotspot);
+  }
+
   setRuntimeState(next: ChronicaState): void {
     this.runtime.setRuntimeState(next);
   }
@@ -65,6 +70,7 @@ export class PlayerHost {
       state: this.runtime.runtimeState,
       fragment,
       visibleChoices: this.runtime.visibleChoices,
+      visibleHotspots: this.runtime.visibleHotspots,
       history: this.runtime.pathHistory,
       backgroundUri: this.runtime.getBackgroundUri(),
       audioUri: this.runtime.getAudioUri(),

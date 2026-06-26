@@ -66,6 +66,10 @@ function migrateFragmentFields(f: Fragment): Fragment {
       ...c,
       conditions: c.conditions ?? [],
     })),
+    hotspots: (f.hotspots ?? []).map(h => ({
+      ...h,
+      conditions: h.conditions ?? [],
+    })),
   };
 }
 
@@ -79,6 +83,10 @@ export function migrateProject(p: Project): Project {
     choices: f.choices.map(c => ({
       ...c,
       action: migrateChoiceAction(c.action ?? '', fragments),
+    })),
+    hotspots: (f.hotspots ?? []).map(h => ({
+      ...h,
+      action: migrateChoiceAction(h.action ?? '', fragments),
     })),
   }));
 

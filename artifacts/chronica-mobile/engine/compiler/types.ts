@@ -28,6 +28,8 @@ export interface CompiledGame {
   fragmentIndex: FragmentIndex;
   /** Compiled action steps keyed by choice.uid */
   choiceActions: Readonly<Record<string, readonly ActionStep[]>>;
+  /** Compiled action steps keyed by hotspot.uid */
+  hotspotActions: Readonly<Record<string, readonly ActionStep[]>>;
 }
 
 export type CompileResult =

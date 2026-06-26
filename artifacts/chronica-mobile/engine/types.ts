@@ -9,6 +9,19 @@ export interface Choice {
   conditions: string[];
 }
 
+/** Normalized tap region on a scene background (0–1 coordinates). */
+export interface SceneHotspot {
+  uid: string;
+  label: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** Same action grammar as choices — compiled to ActionStep[] at build time. */
+  action: string;
+  conditions: string[];
+}
+
 export interface Fragment {
   uid: string;
   /** human-readable name, shown in the editor list */
@@ -20,6 +33,7 @@ export interface Fragment {
   effects: string[];
   text: string;
   choices: Choice[];
+  hotspots?: SceneHotspot[];
   backgroundImage?: string;
   backgroundAudio?: string;
 }
@@ -69,6 +83,6 @@ export interface GameSave {
 export interface ValidationError {
   fragmentUid: string;
   fragmentTitle: string;
-  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene' | 'invalid-action';
+  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'invalid-action' | 'invalid-hotspot' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene';
   message: string;
 }

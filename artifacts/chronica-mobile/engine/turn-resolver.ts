@@ -1,8 +1,12 @@
-import { Fragment, Choice, ChronicaState } from './types';
+import { Fragment, Choice, ChronicaState, SceneHotspot } from './types';
 import { CompiledGame } from './compiler/types';
+import { ActionStep } from './actions/types';
 import { resolveActionSteps } from './actions/resolve-action';
 import { applyEffect, evaluateCondition } from './expression-evaluator';
 import { getActiveFragmentFromIndex } from './compiler/fragment-index';
+import { getVisibleHotspots } from './hotspots';
+
+export { getVisibleHotspots } from './hotspots';
 
 function cloneState(s: ChronicaState): ChronicaState {
   return {
@@ -35,6 +39,26 @@ export function getVisibleChoices(fragment: Fragment, state: ChronicaState): Cho
 }
 
 /**
+ * Applies compiled action steps, resolves the next fragment, applies entry effects,
+ * and commits the mutated state.
+ */
+export function applyCompiledInteraction(
+  steps: readonly ActionStep[],
+  state: ChronicaState,
+  game: CompiledGame,
+): Fragment | null {
+  const working = cloneState(state);
+  resolveActionSteps(steps, working);
+  const fragment = getActiveFragmentFromIndex(working.location, working, game.fragmentIndex);
+  if (!fragment) return null;
+  for (const effect of fragment.effects) {
+    applyEffect(effect, working);
+  }
+  commitState(state, working);
+  return fragment;
+}
+
+/**
  * Applies a choice's compiled action steps, resolves the next fragment, applies
  * that fragment's effects, and commits the mutated state.
  */
@@ -45,14 +69,16 @@ export function resolveTurn(
 ): Fragment | null {
   const steps = game.choiceActions[choice.uid];
   if (!steps) return null;
+  return applyCompiledInteraction(steps, state, game);
+}
 
-  const working = cloneState(state);
-  resolveActionSteps(steps, working);
-  const fragment = getActiveFragmentFromIndex(working.location, working, game.fragmentIndex);
-  if (!fragment) return null;
-  for (const effect of fragment.effects) {
-    applyEffect(effect, working);
-  }
-  commitState(state, working);
-  return fragment;
+/** Applies a hotspot's compiled action steps — same execution path as choices. */
+export function resolveHotspotActivation(
+  hotspot: SceneHotspot,
+  state: ChronicaState,
+  game: CompiledGame,
+): Fragment | null {
+  const steps = game.hotspotActions[hotspot.uid];
+  if (!steps) return null;
+  return applyCompiledInteraction(steps, state, game);
 }

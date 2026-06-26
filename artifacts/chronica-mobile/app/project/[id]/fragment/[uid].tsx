@@ -10,7 +10,8 @@ import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { ArrayEditor, ArrayEditorSuggestion } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
-import { Choice } from '@/engine/types';
+import { HotspotEditor } from '@/components/HotspotEditor';
+import { Choice, SceneHotspot } from '@/engine/types';
 import { isValidCondition, isValidEffect } from '@/engine/expression-evaluator';
 import {
   buildUnlockCondition,
@@ -35,6 +36,7 @@ export default function FragmentEditorScreen() {
   const [conditions, setConditions] = useState<string[]>([]);
   const [effects, setEffects] = useState<string[]>([]);
   const [choices, setChoices] = useState<Choice[]>([]);
+  const [hotspots, setHotspots] = useState<SceneHotspot[]>([]);
   const [bgImage, setBgImage] = useState('');
 
   useEffect(() => {
@@ -46,6 +48,7 @@ export default function FragmentEditorScreen() {
       setConditions([...fragment.conditions]);
       setEffects([...fragment.effects]);
       setChoices([...fragment.choices]);
+      setHotspots([...(fragment.hotspots ?? [])]);
       setBgImage(fragment.backgroundImage ?? '');
     }
   }, [fragment?.uid]);
@@ -73,6 +76,7 @@ export default function FragmentEditorScreen() {
       conditions,
       effects,
       choices,
+      hotspots,
       backgroundImage: bgImage.trim() || undefined,
     });
     router.back();
@@ -87,7 +91,7 @@ export default function FragmentEditorScreen() {
         </TouchableOpacity>
       ),
     });
-  }, [title, locationId, priority, text, conditions, effects, choices, bgImage]);
+  }, [title, locationId, priority, text, conditions, effects, choices, hotspots, bgImage]);
 
   if (!project || !fragment) {
     return (
@@ -243,6 +247,14 @@ export default function FragmentEditorScreen() {
           ))}
         </ScrollView>
       )}
+
+      <View style={[styles.div, { backgroundColor: colors.border }]} />
+
+      <HotspotEditor
+        hotspots={hotspots}
+        onChange={setHotspots}
+        fragments={project.fragments}
+      />
 
       <TouchableOpacity
         style={[styles.saveBtn, { backgroundColor: colors.primary }]}

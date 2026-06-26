@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer } from 'react';
 import { compileProject } from '@/engine/compiler';
-import { Choice, ChronicaState, Project, ValidationError } from '@/engine/types';
+import { Choice, ChronicaState, Project, SceneHotspot, ValidationError } from '@/engine/types';
 import {
   PlayerHost,
   ChooseResult,
@@ -13,6 +13,7 @@ const EMPTY_SNAPSHOT = {
   state: null as ChronicaState | null,
   fragment: null,
   visibleChoices: [] as Choice[],
+  visibleHotspots: [] as SceneHotspot[],
   history: [] as ReturnType<PlayerHost['snapshot']>['history'],
   backgroundUri: undefined as string | undefined,
   audioUri: undefined as string | undefined,
@@ -59,6 +60,13 @@ export function useChronicaRuntime(project: Project | undefined) {
     return result;
   }, [host, refresh]);
 
+  const activateHotspot = useCallback((hotspot: SceneHotspot): ChooseResult => {
+    if (!host) return { ok: false, reason: 'not-started' };
+    const result = host.activateHotspot(hotspot);
+    refresh();
+    return result;
+  }, [host, refresh]);
+
   const setRuntimeState = useCallback((next: ChronicaState) => {
     host?.setRuntimeState(next);
     refresh();
@@ -83,6 +91,7 @@ export function useChronicaRuntime(project: Project | undefined) {
     resume,
     tryResume,
     choose,
+    activateHotspot,
     setRuntimeState,
     toSave,
   };

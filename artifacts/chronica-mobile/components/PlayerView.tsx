@@ -5,9 +5,10 @@ import {
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Choice, ChronicaState, Fragment } from '@/engine/types';
+import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { HistoryEntry } from '@/runtime';
 import { EmptyState } from '@/components/EmptyState';
+import { SceneHotspotOverlay } from '@/components/player/SceneHotspotOverlay';
 import {
   BACKGROUND_OVERLAY_OPACITY,
   CONTENT_PANEL_BG,
@@ -35,6 +36,7 @@ export type PlayerViewProps = {
   advancedMode: boolean;
   fragment: Fragment | null;
   visibleChoices: Choice[];
+  visibleHotspots?: SceneHotspot[];
   history: HistoryEntry[];
   gameState: ChronicaState | null;
   backgroundUri: string | undefined;
@@ -44,6 +46,7 @@ export type PlayerViewProps = {
   onRestart: () => void;
   onSave: () => void;
   onChoose: (choice: Choice) => void;
+  onActivateHotspot?: (hotspot: SceneHotspot) => void;
   debugPanel?: React.ReactNode;
 };
 
@@ -52,6 +55,7 @@ export function PlayerView({
   advancedMode,
   fragment: currentFragment,
   visibleChoices,
+  visibleHotspots = [],
   history,
   gameState,
   backgroundUri: bgUri,
@@ -61,6 +65,7 @@ export function PlayerView({
   onRestart,
   onSave,
   onChoose,
+  onActivateHotspot,
   debugPanel,
 }: PlayerViewProps) {
   const insets = useSafeAreaInsets();
@@ -99,6 +104,9 @@ export function PlayerView({
             { backgroundColor: getBackgroundOverlayColor(BACKGROUND_OVERLAY_OPACITY) },
           ]}
         />
+      )}
+      {showBackground && visibleHotspots.length > 0 && onActivateHotspot && (
+        <SceneHotspotOverlay hotspots={visibleHotspots} onActivate={onActivateHotspot} />
       )}
 
       <View style={[styles.gameHeader, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16) }]}>
@@ -203,7 +211,7 @@ export function PlayerView({
                     </TouchableOpacity>
                   ))}
                 </View>
-              ) : (
+              ) : visibleHotspots.length === 0 ? (
                 <View
                   style={[
                     styles.endCard,
@@ -225,7 +233,7 @@ export function PlayerView({
                     <Text style={styles.restartBtnText}>Restart</Text>
                   </TouchableOpacity>
                 </View>
-              )}
+              ) : null}
 
               {debugPanel}
             </>

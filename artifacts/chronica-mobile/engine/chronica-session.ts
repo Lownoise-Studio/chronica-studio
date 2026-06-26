@@ -1,8 +1,8 @@
-import { Choice, ChronicaState, Fragment, VariableValue } from './types';
+import { Choice, ChronicaState, Fragment, SceneHotspot, VariableValue } from './types';
 import { CompiledGame } from './compiler/types';
 import { getActiveFragmentFromIndex } from './compiler/fragment-index';
 import { applyEffect } from './expression-evaluator';
-import { resolveTurn, getVisibleChoices } from './turn-resolver';
+import { resolveTurn, resolveHotspotActivation, getVisibleChoices, getVisibleHotspots } from './turn-resolver';
 
 export function createInitialState(
   startLocation: string,
@@ -21,7 +21,7 @@ export function createInitialState(
 
 export function startSession(
   game: CompiledGame,
-): { state: ChronicaState; fragment: Fragment | null; visibleChoices: Choice[] } {
+): { state: ChronicaState; fragment: Fragment | null; visibleChoices: Choice[]; visibleHotspots: SceneHotspot[] } {
   const state = createInitialState(
     game.startLocation,
     game.initialVariables,
@@ -32,17 +32,30 @@ export function startSession(
     for (const effect of fragment.effects) applyEffect(effect, state);
   }
   const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
-  return { state, fragment, visibleChoices };
+  const visibleHotspots = fragment ? getVisibleHotspots(fragment, state) : [];
+  return { state, fragment, visibleChoices, visibleHotspots };
 }
 
 export function choose(
   choice: Choice,
   state: ChronicaState,
   game: CompiledGame,
-): { fragment: Fragment | null; visibleChoices: Choice[] } {
+): { fragment: Fragment | null; visibleChoices: Choice[]; visibleHotspots: SceneHotspot[] } {
   const fragment = resolveTurn(choice, state, game);
   const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
-  return { fragment, visibleChoices };
+  const visibleHotspots = fragment ? getVisibleHotspots(fragment, state) : [];
+  return { fragment, visibleChoices, visibleHotspots };
+}
+
+export function activateHotspot(
+  hotspot: SceneHotspot,
+  state: ChronicaState,
+  game: CompiledGame,
+): { fragment: Fragment | null; visibleChoices: Choice[]; visibleHotspots: SceneHotspot[] } {
+  const fragment = resolveHotspotActivation(hotspot, state, game);
+  const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
+  const visibleHotspots = fragment ? getVisibleHotspots(fragment, state) : [];
+  return { fragment, visibleChoices, visibleHotspots };
 }
 
 export function serializeState(state: ChronicaState): string {

@@ -13,7 +13,7 @@ import { useChronicaRuntime } from '@/hooks/useChronicaRuntime';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
-import { Choice } from '@/engine';
+import { Choice, SceneHotspot } from '@/engine';
 import { loadRuntimeSave, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
 
 export default function PlayScreen() {
@@ -31,6 +31,7 @@ export default function PlayScreen() {
     state: gameState,
     fragment: currentFragment,
     visibleChoices,
+    visibleHotspots,
     history,
     backgroundUri: bgUri,
     audioUri,
@@ -38,6 +39,7 @@ export default function PlayScreen() {
     start,
     tryResume,
     choose,
+    activateHotspot,
     setRuntimeState,
     toSave,
   } = useChronicaRuntime(project);
@@ -104,6 +106,19 @@ export default function PlayScreen() {
     }
   };
 
+  const handleHotspot = (hotspot: SceneHotspot) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = activateHotspot(hotspot);
+    if (!result.ok && result.reason === 'dead-end') {
+      Alert.alert(
+        'Invalid Hotspot',
+        advancedMode
+          ? 'Hotspot action did not resolve to a valid scene.\nCheck action steps and conditions.'
+          : 'This hotspot has no valid action yet. Check the scene link.',
+      );
+    }
+  };
+
   if (!project) {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -165,6 +180,7 @@ export default function PlayScreen() {
       advancedMode={advancedMode}
       fragment={currentFragment}
       visibleChoices={visibleChoices}
+      visibleHotspots={visibleHotspots}
       history={history}
       gameState={gameState}
       backgroundUri={bgUri}
@@ -174,6 +190,7 @@ export default function PlayScreen() {
       onRestart={resetGame}
       onSave={saveGame}
       onChoose={handleChoice}
+      onActivateHotspot={handleHotspot}
       debugPanel={
         advancedMode && gameState && currentFragment ? (
           <View style={{ marginTop: 8, gap: 8 }}>

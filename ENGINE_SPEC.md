@@ -69,7 +69,8 @@ Pure TypeScript. No React, no Expo, no file-system imports. All modules are unit
 | `types.ts` | Project, Fragment (scene), Choice, ChronicaState, ProjectAsset, schema version |
 | `chronica-session.ts` | Runtime session: initial state, start, choice resolution, serialize/deserialize |
 | `fragment-store.ts` | Active fragment selection by location, priority, and conditions |
-| `turn-resolver.ts` | Choice actions (`goto:`, effects) and turn advancement |
+| `turn-resolver.ts` | Choice and hotspot actions, turn advancement, `applyCompiledInteraction` |
+| `hotspots.ts` | Hotspot bounds validation and visibility filtering |
 | `action-resolver.ts` | Parsing and execution of choice action strings |
 | `expression-evaluator.ts` | Conditions and effects over variables, memory, instability |
 | `validator.ts` | Project compiler/validator: broken links, invalid expressions, start location |
@@ -172,6 +173,8 @@ Phase 1 targets **scene-based narrative games**:
 
 Not yet supported as first-class engine features: character portraits, dialogue boxes, inventory UI, world maps, real-time input, or physics.
 
+**Hotspots** (tap regions on scene backgrounds with compiled actions) are ✅ — the first gameplay model beyond narrative choices.
+
 ---
 
 ## 5. Near-term engine priorities
@@ -182,7 +185,7 @@ Ordered by foundation impact. These are engine-layer efforts (not app polish alo
 2. **Runtime / player separation** — ✅ `PlayerHost` + `PlayerView` over `CompiledGame`; save gate validates `gameId` + `contentHash` on resume; playtest and Load Game share the same host contract.
 3. **Project compiler / validator** — ✅ `compileProject` → `CompiledGame` with fragment index, validation gate on play/export.
 4. **Event / action system** — ✅ typed `ActionStep` AST, `parseActionString`, compile-time action validation, runtime executes `choiceActions` only.
-5. **Scene object / hotspot system** — typed interactables on scenes (regions, props) with conditions and actions, still scene-centric.
+5. **Scene object / hotspot system** — ✅ typed `SceneHotspot` on fragments, compiled `hotspotActions`, `activateHotspot` on runtime; presentation via `SceneHotspotOverlay`.
 6. **Character / audio layer** — speaker definitions, portrait slots, layered BGM/SFX triggers as engine data, not hard-coded UI.
 
 ---
