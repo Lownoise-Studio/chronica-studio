@@ -25,4 +25,11 @@ export {
   type RuntimeWarning,
   type RuntimeWarningCode,
 } from './player-action-result';
-export { loadRuntimeSave, persistRuntimeSave } from './save-store';
+export {
+  loadRuntimeSave,
+  loadRuntimeSaveResult,
+  loadSaveFailureMessage,
+  persistRuntimeSave,
+  type LoadSaveReason,
+  type LoadSaveResult,
+} from './save-store';

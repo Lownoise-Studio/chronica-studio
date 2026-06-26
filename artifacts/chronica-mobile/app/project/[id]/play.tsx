@@ -16,7 +16,7 @@ import { PlayerView } from '@/components/PlayerView';
 import { Choice, SceneHotspot } from '@/engine';
 import { getSceneOptions } from '@/engine/editor-helpers';
 import { isPlayerApp, getAppHomeHref } from '@/config/app-mode';
-import { loadRuntimeSave, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
+import { loadRuntimeSaveResult, loadSaveFailureMessage, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
 
 export default function PlayScreen() {
   const { id: projectId, loaded } = useLocalSearchParams<{ id: string; loaded?: string }>();
@@ -82,12 +82,21 @@ export default function PlayScreen() {
   };
 
   const loadSave = async () => {
-    const save = await loadRuntimeSave(projectId!);
-    if (!save) {
-      Alert.alert('No Save Found', playerMode ? 'Start a new game first.' : 'Start a new playtest first.');
+    const loaded = await loadRuntimeSaveResult(projectId!);
+    if (!loaded.ok) {
+      if (loaded.reason === 'no-save') {
+        Alert.alert('No Save Found', playerMode ? 'Start a new game first.' : 'Start a new playtest first.');
+        return;
+      }
+      // A save exists but is unreadable (corrupt/invalid/storage) — explain and offer a clean start.
+      Alert.alert('Could Not Restore Progress', `${loadSaveFailureMessage(loaded.reason)} You can start fresh instead.`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Start Fresh', onPress: start },
+      ]);
       return;
     }
-    const result = tryResume(save);
+
+    const result = tryResume(loaded.save);
     if (result.ok) return;
 
     const message = resumeRejectionMessage(result.reason);
