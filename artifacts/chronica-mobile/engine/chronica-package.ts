@@ -111,6 +111,12 @@ export function collectReferencedAssetNames(project: Project): string[] {
     if (frag.backgroundImage?.trim()) names.add(frag.backgroundImage.trim());
     if (frag.backgroundAudio?.trim()) names.add(frag.backgroundAudio.trim());
   }
+  for (const character of project.characters ?? []) {
+    if (character.defaultPortrait?.trim()) names.add(character.defaultPortrait.trim());
+    for (const expression of character.expressions ?? []) {
+      if (expression.portrait?.trim()) names.add(expression.portrait.trim());
+    }
+  }
   return [...names];
 }
 
@@ -261,6 +267,16 @@ export function findMissingPackageAssets(
       }
       if (frag.backgroundAudio?.trim() === name) {
         refs.push(`${frag.title || frag.locationId} (audio)`);
+      }
+    }
+    for (const character of project.characters ?? []) {
+      if (character.defaultPortrait?.trim() === name) {
+        refs.push(`${character.displayName} (portrait)`);
+      }
+      for (const expression of character.expressions ?? []) {
+        if (expression.portrait?.trim() === name) {
+          refs.push(`${character.displayName} (${expression.id})`);
+        }
       }
     }
 

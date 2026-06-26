@@ -87,6 +87,35 @@ describe('asset reference rewriting', () => {
     expect(plan.assetFiles[0].packagePath).toBe('assets/forest.jpg');
   });
 
+  test('includes character portrait assets in package plan', () => {
+    const project = makeProject({
+      assets: [
+        ...makeProject().assets,
+        {
+          id: 'a2',
+          name: 'hero.png',
+          type: 'image',
+          uri: 'file:///device/pse_assets/story-1/hero.png',
+          mimeType: 'image/png',
+          size: 512,
+          importedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      characters: [
+        {
+          uid: 'c1',
+          characterId: 'hero',
+          displayName: 'Hero',
+          defaultPortrait: 'hero.png',
+        },
+      ],
+    });
+    const plan = planChronicaPackage(project, () => true, '2026-01-01T00:00:00.000Z');
+    expect(plan.assetFiles.map(file => file.packagePath)).toEqual(
+      expect.arrayContaining(['assets/forest.jpg', 'assets/hero.png']),
+    );
+  });
+
   test('hydrate restores local URIs for playtest', () => {
     const story = buildPackageStory(makeProject(), [
       {

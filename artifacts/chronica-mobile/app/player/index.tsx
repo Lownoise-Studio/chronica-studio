@@ -142,7 +142,7 @@ export default function PlayerHomeScreen() {
                 {loadingDemo && <ActivityIndicator size="small" color={colors.primary} />}
               </View>
               <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
-                Play The Crossroads — a bundled sample game with backgrounds and branching paths.
+                Play Engine Showcase — dialogue, portraits, hotspots, and branching state in one bundled .chronica game.
               </Text>
             </TouchableOpacity>
 

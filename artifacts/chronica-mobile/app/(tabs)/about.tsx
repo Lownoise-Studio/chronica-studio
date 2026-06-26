@@ -4,6 +4,8 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
+import { DeveloperMenu } from '@/components/DeveloperMenu';
+import { isStudioApp } from '@/config/app-mode';
 
 const features = [
   ['smartphone', 'Mobile-first game editor'],
@@ -106,6 +108,8 @@ export default function AboutScreen() {
           </Text>
         </View>
       )}
+
+      {isStudioApp() && (__DEV__ || advancedMode) && <DeveloperMenu />}
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>Credits</Text>

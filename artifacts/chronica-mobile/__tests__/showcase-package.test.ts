@@ -1,7 +1,22 @@
-import { resolveSceneBackgroundUri } from '../engine/asset-resolver';
-import { isChronicaPackageBytes } from '../engine/chronica-package';
-import { buildShowcasePackageBytes } from '../demo/showcase-package';
+import { compileProject } from '../engine/compiler';
+import {
+  isChronicaPackageBytes,
+  verifyPackageAssetsManifest,
+  validatePackageManifest,
+  validatePackageStory,
+  MANIFEST_PATH,
+  STORY_PATH,
+} from '../engine/chronica-package';
+import { migrateProject } from '../engine/project-migration';
+import {
+  buildShowcasePackageBytes,
+  validateShowcasePackageBytes,
+} from '../demo/showcase-package';
+import { getShowcaseProject } from '../demo/showcase-project';
 import { parseChronicaPackage } from '../storage/chronica-package-io';
+import { ChronicaRuntime } from '../runtime/chronica-runtime';
+import { PlayerHost } from '../runtime/player-host';
+import { decodeZip, getZipTextFile, zipEntryMap } from '../storage/zip-store';
 
 jest.mock('@/storage/fileSystem', () => ({
   assetDir: (id: string) => `/data/mock/pse_assets/${id}/`,
@@ -13,20 +28,133 @@ jest.mock('@/storage/fileSystem', () => ({
   documentDirectory: '/data/mock/',
 }));
 
+async function importShowcaseGame() {
+  const bytes = buildShowcasePackageBytes('2026-06-22T12:00:00.000Z');
+  const result = await parseChronicaPackage(bytes, 'demo-import');
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw new Error(result.error);
+  return result.project;
+}
+
 describe('showcase demo package', () => {
-  test('builds valid .chronica with backgrounds and imports for play', async () => {
+  test('builds valid .chronica with cast, dialogue assets, and integrity checks', async () => {
     const bytes = buildShowcasePackageBytes('2026-06-22T12:00:00.000Z');
     expect(isChronicaPackageBytes(bytes)).toBe(true);
 
-    const result = await parseChronicaPackage(bytes, 'demo-import');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    const { manifest, story, assets } = validateShowcasePackageBytes(bytes);
+    expect(manifest.ok).toBe(true);
+    expect(story.ok).toBe(true);
+    expect(assets.ok).toBe(true);
 
-    expect(result.project.fragments.length).toBe(4);
-    expect(result.project.assets.length).toBeGreaterThanOrEqual(3);
-    expect(
-      resolveSceneBackgroundUri(result.project.assets, result.project.fragments[0].backgroundImage),
-    ).toContain('file://');
-    expect(result.project.fragments[0].choices.length).toBe(3);
+    const project = await importShowcaseGame();
+    expect(project.characters).toHaveLength(1);
+    expect(project.characters[0]?.displayName).toBe('Elena');
+    expect(project.fragments).toHaveLength(3);
+    expect(project.fragments[0]?.dialogue?.length).toBeGreaterThanOrEqual(2);
+    expect(project.fragments[1]?.hotspots?.length).toBe(1);
+    expect(project.assets.length).toBeGreaterThanOrEqual(5);
+  });
+
+  test('compiles cleanly after package import', async () => {
+    const project = await importShowcaseGame();
+    const compiled = compileProject(migrateProject(project));
+    expect(compiled.ok).toBe(true);
+  });
+
+  test('manifest and story inside zip pass validation', () => {
+    const bytes = buildShowcasePackageBytes('2026-06-22T12:00:00.000Z');
+    const map = zipEntryMap(decodeZip(bytes));
+    const manifest = validatePackageManifest(JSON.parse(getZipTextFile(map, MANIFEST_PATH)!));
+    const story = validatePackageStory(JSON.parse(getZipTextFile(map, STORY_PATH)!));
+    expect(manifest.ok).toBe(true);
+    expect(story.ok).toBe(true);
+    if (!manifest.ok) return;
+
+    const assets = verifyPackageAssetsManifest(
+      path => map.get(path),
+      manifest.manifest.assetsManifest ?? [],
+    );
+    expect(assets.ok).toBe(true);
+  });
+});
+
+describe('showcase demo gameplay', () => {
+  async function startRuntime() {
+    const project = await importShowcaseGame();
+    const compiled = compileProject(migrateProject(project));
+    if (!compiled.ok) throw new Error('compile failed');
+    const rt = new ChronicaRuntime(compiled.game);
+    rt.start();
+    return rt;
+  }
+
+  test('dialogue advances before choices appear', async () => {
+    const rt = await startRuntime();
+    expect(rt.currentFragment?.locationId).toBe('briefing');
+    expect(rt.visibleChoices).toHaveLength(0);
+    expect(rt.getDialoguePresentation()?.canAdvance).toBe(true);
+
+    rt.advanceDialogue();
+    expect(rt.getDialoguePresentation()?.exhausted).toBe(true);
+    expect(rt.visibleChoices).toHaveLength(1);
+  });
+
+  test('hotspot sets variable and reveals gated choice on the bridge', async () => {
+    const rt = await startRuntime();
+    rt.advanceDialogue();
+    rt.choose(rt.visibleChoices[0]!);
+    expect(rt.currentFragment?.locationId).toBe('bridge');
+
+    rt.advanceDialogue();
+    expect(rt.visibleHotspots).toHaveLength(1);
+    expect(rt.visibleChoices).toHaveLength(0);
+
+    const console = rt.visibleHotspots[0]!;
+    rt.activateHotspot(console);
+    expect(rt.runtimeState?.variables.console_inspected).toBe(true);
+    expect(rt.visibleHotspots).toHaveLength(0);
+    expect(rt.visibleChoices).toHaveLength(1);
+    expect(rt.visibleChoices[0]?.label).toBe('Open the hidden route');
+  });
+
+  test('gated route reaches the final vault scene', async () => {
+    const rt = await startRuntime();
+    rt.advanceDialogue();
+    rt.choose(rt.visibleChoices[0]!);
+    rt.advanceDialogue();
+    rt.activateHotspot(rt.visibleHotspots[0]!);
+    rt.choose(rt.visibleChoices[0]!);
+
+    expect(rt.currentFragment?.locationId).toBe('vault');
+    expect(rt.getDialoguePresentation()?.speakerName).toBeUndefined();
+    rt.advanceDialogue();
+    expect(rt.getDialoguePresentation()?.speakerName).toBe('Elena');
+  });
+
+  test('save/resume preserves dialogue progress', async () => {
+    const project = await importShowcaseGame();
+    const compiled = compileProject(migrateProject(project));
+    if (!compiled.ok) throw new Error('compile failed');
+
+    const host = PlayerHost.create(compiled.game);
+    host.startNew();
+    host.advanceDialogue();
+    expect(host.snapshot().state?.dialogueLineIndex).toBe(1);
+
+    const save = host.toSave(project.id);
+    expect(save).not.toBeNull();
+
+    const resumed = PlayerHost.create(compiled.game);
+    const result = resumed.tryResume(save!);
+    expect(result.ok).toBe(true);
+    expect(resumed.snapshot().state?.dialogueLineIndex).toBe(1);
+    expect(resumed.snapshot().dialogue?.lineIndex).toBe(1);
+  });
+});
+
+describe('showcase source project', () => {
+  test('raw showcase project compiles without import', () => {
+    const result = compileProject(getShowcaseProject());
+    expect(result.ok).toBe(true);
   });
 });

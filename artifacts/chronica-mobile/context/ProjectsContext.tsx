@@ -5,12 +5,16 @@ import { compileProject } from '@/engine/compiler';
 import { createId } from '@/engine/identity';
 import { migrateProject, PROJECT_SCHEMA_VERSION } from '@/engine/project-migration';
 import { parseChronicaPackage } from '@/storage/chronica-package-io';
+import { isBundledDemoProject, SAMPLE_GAME_ID } from '@/demo/bundled-demos';
+import {
+  APP_STORAGE_KEYS,
+  clearAdvancedModePreference,
+  clearProjectAssets,
+  clearRuntimeSaves,
+} from '@/storage/dev-reset';
 
-const STORAGE_KEY = 'pse_projects_v1';
-const ONBOARDED_KEY = 'pse_onboarded_v1';
-
-/** Stable gameId for the seeded sample story (install id remains local). */
-const SAMPLE_GAME_ID = 'c1000001-0000-4000-8000-000000000001';
+const STORAGE_KEY = APP_STORAGE_KEYS.projects;
+const ONBOARDED_KEY = APP_STORAGE_KEYS.onboarded;
 
 const nowIso = () => new Date().toISOString();
 
@@ -103,6 +107,10 @@ interface ProjectsContextType {
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
   importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project; diagnostics?: ValidationError[] }>;
   getValidationErrors: (id: string) => ValidationError[];
+  resetOnboarding: () => Promise<void>;
+  removeDemoProjects: () => Promise<void>;
+  clearLibrary: () => Promise<void>;
+  resetAppState: () => Promise<void>;
 }
 
 const ProjectsContext = createContext<ProjectsContextType | null>(null);
@@ -152,6 +160,43 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     }, 300);
   };
 
+  const persistImmediate = async (next: Project[]) => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setProjects(next);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const removeProjects = async (predicate: (project: Project) => boolean) => {
+    const removed = projects.filter(predicate);
+    const remaining = projects.filter(project => !predicate(project));
+    const removedIds = removed.map(project => project.id);
+    await persistImmediate(remaining);
+    await clearRuntimeSaves(removedIds);
+    await clearProjectAssets(removedIds);
+  };
+
+  const resetOnboarding = async () => {
+    setHasOnboardedState(false);
+    await AsyncStorage.removeItem(ONBOARDED_KEY);
+  };
+
+  const removeDemoProjects = async () => {
+    await removeProjects(isBundledDemoProject);
+  };
+
+  const clearLibrary = async () => {
+    const allIds = projects.map(project => project.id);
+    await persistImmediate([]);
+    await clearRuntimeSaves(allIds);
+    await clearProjectAssets(allIds);
+  };
+
+  const resetAppState = async () => {
+    await clearLibrary();
+    await resetOnboarding();
+    await clearAdvancedModePreference();
+  };
+
   const createProject = (title: string, description: string): Project => {
     const p: Project = {
       schemaVersion: PROJECT_SCHEMA_VERSION,
@@ -165,9 +210,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
       fragments: [],
-    assets: [],
-    characters: [],
-  };
+      assets: [],
+      characters: [],
+    };
     persist([...projects, p]);
     return p;
   };
@@ -303,6 +348,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       addFragment, updateFragment, deleteFragment,
       addAsset, deleteAsset, getProject,
       exportProject, importProject, importProjectPackage, getValidationErrors,
+      resetOnboarding, removeDemoProjects, clearLibrary, resetAppState,
     }}>
       {children}
     </ProjectsContext.Provider>

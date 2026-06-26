@@ -3,8 +3,11 @@ import {
   STORY_PATH,
   buildAssetsManifest,
   planChronicaPackage,
+  validatePackageManifest,
+  validatePackageStory,
+  verifyPackageAssetsManifest,
 } from '@/engine/chronica-package';
-import { encodeZip } from '@/storage/zip-store';
+import { decodeZip, encodeZip, getZipTextFile, zipEntryMap } from '@/storage/zip-store';
 import { DEMO_PNG_BYTES, getShowcaseProject } from './showcase-project';
 
 /** Build an in-memory .chronica package for the bundled showcase demo. */
@@ -36,4 +39,16 @@ export function buildShowcasePackageBytes(exportedAt = new Date().toISOString())
   ];
 
   return encodeZip(entries);
+}
+
+/** Validate manifest/story/asset integrity for the bundled showcase package. */
+export function validateShowcasePackageBytes(bytes: Uint8Array) {
+  const map = zipEntryMap(decodeZip(bytes));
+  const manifest = validatePackageManifest(JSON.parse(getZipTextFile(map, MANIFEST_PATH)!));
+  const story = validatePackageStory(JSON.parse(getZipTextFile(map, STORY_PATH)!));
+  const assets = manifest.ok
+    ? verifyPackageAssetsManifest(path => map.get(path), manifest.manifest.assetsManifest ?? [])
+    : { ok: false as const, code: 'invalid-manifest' as const, message: 'Invalid manifest.' };
+
+  return { manifest, story, assets, map };
 }
