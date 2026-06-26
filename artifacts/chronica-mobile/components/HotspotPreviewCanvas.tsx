@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   LayoutChangeEvent,
   Pressable,
@@ -9,6 +9,13 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SceneHotspot } from '@/engine/types';
+import {
+  getHotspotDisplayLabel,
+  normalizeTapToHotspot,
+  resolveSceneTitleFromOptions,
+  summarizeHotspotAction,
+} from '@/engine/hotspot-helpers';
+import type { SceneOption } from '@/engine/editor-helpers';
 
 export type HotspotCanvasMode = 'play' | 'edit';
 
@@ -16,9 +23,9 @@ type HotspotPreviewCanvasProps = {
   backgroundUri?: string;
   hotspots: SceneHotspot[];
   mode: HotspotCanvasMode;
-  /** When true, only draw tap regions (parent provides the background image). */
   regionsOnly?: boolean;
   selectedUid?: string | null;
+  sceneOptions?: SceneOption[];
   onSelect?: (uid: string) => void;
   onActivate?: (hotspot: SceneHotspot) => void;
   onPlace?: (x: number, y: number) => void;
@@ -26,19 +33,77 @@ type HotspotPreviewCanvasProps = {
   emptyMessage?: string;
 };
 
-const DEFAULT_HOTSPOT_SIZE = 0.18;
+export { normalizeTapToHotspot };
 
-export function normalizeTapToHotspot(
-  locationX: number,
-  locationY: number,
-  width: number,
-  height: number,
-  size = DEFAULT_HOTSPOT_SIZE,
-): { x: number; y: number; width: number; height: number } {
-  const half = size / 2;
-  const x = Math.min(1 - size, Math.max(0, locationX / width - half));
-  const y = Math.min(1 - size, Math.max(0, locationY / height - half));
-  return { x, y, width: size, height: size };
+function resolveSceneTitle(sceneOptions: SceneOption[] | undefined, locationId: string): string | undefined {
+  if (!sceneOptions?.length) return undefined;
+  return resolveSceneTitleFromOptions(locationId, sceneOptions);
+}
+
+function HotspotRegion({
+  hotspot,
+  ordinal,
+  selected,
+  mode,
+  pixelBounds,
+  sceneOptions,
+  onSelect,
+  onActivate,
+}: {
+  hotspot: SceneHotspot;
+  ordinal: number;
+  selected: boolean;
+  mode: HotspotCanvasMode;
+  pixelBounds: { left: number; top: number; width: number; height: number };
+  sceneOptions?: SceneOption[];
+  onSelect?: (uid: string) => void;
+  onActivate?: (hotspot: SceneHotspot) => void;
+}) {
+  const displayLabel = getHotspotDisplayLabel(hotspot, ordinal);
+  const actionSummary = summarizeHotspotAction(hotspot.action, id =>
+    resolveSceneTitle(sceneOptions, id),
+  );
+  const showSummary = pixelBounds.height >= 36;
+  const isPlay = mode === 'play';
+
+  return (
+    <Pressable
+      style={[
+        styles.region,
+        isPlay ? styles.regionPlay : styles.regionEdit,
+        selected && (isPlay ? styles.regionPlaySelected : styles.regionEditSelected),
+        pixelBounds,
+      ]}
+      onPress={e => {
+        e.stopPropagation();
+        if (mode === 'edit') {
+          onSelect?.(hotspot.uid);
+        } else {
+          onActivate?.(hotspot);
+        }
+      }}
+    >
+      <View style={[styles.labelStack, showSummary ? styles.labelStackInside : styles.labelStackAbove]} pointerEvents="none">
+        <View style={[styles.labelBadge, selected && styles.labelBadgeSelected]}>
+          <Text style={styles.labelText} numberOfLines={1}>
+            {displayLabel}
+          </Text>
+          {showSummary && (
+            <Text style={styles.summaryText} numberOfLines={1}>
+              {actionSummary}
+            </Text>
+          )}
+        </View>
+      </View>
+      {!showSummary && (
+        <View style={styles.summaryPill} pointerEvents="none">
+          <Text style={styles.summaryPillText} numberOfLines={1}>
+            {actionSummary}
+          </Text>
+        </View>
+      )}
+    </Pressable>
+  );
 }
 
 export function HotspotPreviewCanvas({
@@ -47,6 +112,7 @@ export function HotspotPreviewCanvas({
   mode,
   regionsOnly = false,
   selectedUid = null,
+  sceneOptions,
   onSelect,
   onActivate,
   onPlace,
@@ -55,19 +121,21 @@ export function HotspotPreviewCanvas({
 }: HotspotPreviewCanvasProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
 
+  const ordinalByUid = useMemo(() => {
+    const map = new Map<string, number>();
+    hotspots.forEach((h, i) => map.set(h.uid, i + 1));
+    return map;
+  }, [hotspots]);
+
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     setSize({ width, height });
   }, []);
 
   const handleStagePress = (locationX: number, locationY: number) => {
-    if (!size.width || !size.height) return;
-
-    if (mode === 'edit' && onPlace) {
-      const bounds = normalizeTapToHotspot(locationX, locationY, size.width, size.height);
-      onPlace(bounds.x, bounds.y);
-      return;
-    }
+    if (!size.width || !size.height || mode !== 'edit' || !onPlace) return;
+    const bounds = normalizeTapToHotspot(locationX, locationY, size.width, size.height);
+    onPlace(bounds.x, bounds.y);
   };
 
   if (!regionsOnly && !backgroundUri) {
@@ -86,45 +154,30 @@ export function HotspotPreviewCanvas({
       {!regionsOnly && <View style={styles.stageTint} pointerEvents="none" />}
 
       {size.width > 0 && hotspots.map(hotspot => {
-        const selected = hotspot.uid === selectedUid;
-        const left = hotspot.x * size.width;
-        const top = hotspot.y * size.height;
-        const width = hotspot.width * size.width;
-        const height = hotspot.height * size.height;
-
+        const ordinal = ordinalByUid.get(hotspot.uid) ?? 1;
         return (
-          <Pressable
+          <HotspotRegion
             key={hotspot.uid}
-            style={[
-              styles.region,
-              selected && styles.regionSelected,
-              { left, top, width, height },
-            ]}
-            onPress={e => {
-              e.stopPropagation();
-              if (mode === 'edit') {
-                onSelect?.(hotspot.uid);
-              } else {
-                onActivate?.(hotspot);
-              }
+            hotspot={hotspot}
+            ordinal={ordinal}
+            selected={hotspot.uid === selectedUid}
+            mode={mode}
+            sceneOptions={sceneOptions}
+            pixelBounds={{
+              left: hotspot.x * size.width,
+              top: hotspot.y * size.height,
+              width: hotspot.width * size.width,
+              height: hotspot.height * size.height,
             }}
-          >
-            {hotspot.label ? (
-              <View style={styles.labelBadge}>
-                <Text style={styles.labelText} numberOfLines={1}>
-                  {hotspot.label}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.dot} />
-            )}
-          </Pressable>
+            onSelect={onSelect}
+            onActivate={onActivate}
+          />
         );
       })}
 
       {mode === 'edit' && !regionsOnly && (
         <View style={styles.hintBar} pointerEvents="none">
-          <Text style={styles.hintText}>Tap the image to place a hotspot</Text>
+          <Text style={styles.hintText}>Tap the image to place a hotspot region</Text>
         </View>
       )}
     </>
@@ -142,15 +195,19 @@ export function HotspotPreviewCanvas({
     <Pressable
       style={[styles.stage, style]}
       onLayout={onLayout}
-      onPress={e => {
-        if (mode !== 'edit' || !onPlace) return;
-        handleStagePress(e.nativeEvent.locationX, e.nativeEvent.locationY);
-      }}
+      onPress={e => handleStagePress(e.nativeEvent.locationX, e.nativeEvent.locationY)}
     >
       {stageContent}
     </Pressable>
   );
 }
+
+const PURPLE_FILL = 'rgba(139, 92, 246, 0.32)';
+const PURPLE_FILL_SELECTED = 'rgba(167, 139, 250, 0.42)';
+const PURPLE_BORDER = '#8b5cf6';
+const PURPLE_BORDER_SELECTED = '#c4b5fd';
+const PLAY_FILL = 'rgba(139, 92, 246, 0.22)';
+const PLAY_FILL_SELECTED = 'rgba(167, 139, 250, 0.3)';
 
 const styles = StyleSheet.create({
   stage: {
@@ -161,6 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a24',
   },
   emptyStage: {
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
@@ -177,41 +235,86 @@ const styles = StyleSheet.create({
   },
   stageTint: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   region: {
     position: 'absolute',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.7)',
-    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 8,
     justifyContent: 'flex-end',
     padding: 4,
   },
-  regionSelected: {
-    borderColor: '#a78bfa',
-    backgroundColor: 'rgba(167,139,250,0.28)',
+  regionEdit: {
+    borderColor: PURPLE_BORDER,
+    backgroundColor: PURPLE_FILL,
+  },
+  regionEditSelected: {
+    borderColor: PURPLE_BORDER_SELECTED,
+    backgroundColor: PURPLE_FILL_SELECTED,
+    borderWidth: 2.5,
+  },
+  regionPlay: {
+    borderColor: 'rgba(196, 181, 253, 0.75)',
+    backgroundColor: PLAY_FILL,
+  },
+  regionPlaySelected: {
+    borderColor: PURPLE_BORDER_SELECTED,
+    backgroundColor: PLAY_FILL_SELECTED,
+  },
+  labelStack: {
+    maxWidth: '100%',
+  },
+  labelStackAbove: {
+    position: 'absolute',
+    top: -4,
+    left: 0,
+    transform: [{ translateY: -22 }],
+  },
+  labelStackInside: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
   },
   labelBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: 'rgba(15, 10, 30, 0.82)',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.55)',
+    maxWidth: '100%',
+  },
+  labelBadgeSelected: {
+    borderColor: PURPLE_BORDER_SELECTED,
+    backgroundColor: 'rgba(30, 20, 55, 0.92)',
+  },
+  labelText: {
+    color: '#f5f3ff',
+    fontSize: 11,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  summaryText: {
+    color: 'rgba(196, 181, 253, 0.95)',
+    fontSize: 9,
+    fontFamily: 'Inter_400Regular',
+    marginTop: 1,
+  },
+  summaryPill: {
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15, 10, 30, 0.72)',
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    maxWidth: '100%',
+    marginBottom: 2,
+    maxWidth: '95%',
   },
-  labelText: {
-    color: '#fff',
-    fontSize: 10,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    alignSelf: 'center',
-    margin: 'auto',
+  summaryPillText: {
+    color: 'rgba(196, 181, 253, 0.9)',
+    fontSize: 9,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
   },
   hintBar: {
     position: 'absolute',

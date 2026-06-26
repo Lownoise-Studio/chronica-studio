@@ -9,6 +9,8 @@ import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { HistoryEntry } from '@/runtime';
 import { EmptyState } from '@/components/EmptyState';
 import { SceneHotspotOverlay } from '@/components/player/SceneHotspotOverlay';
+import { getHotspotDisplayLabel, summarizeHotspotAction } from '@/engine/hotspot-helpers';
+import type { SceneOption } from '@/engine/editor-helpers';
 import {
   BACKGROUND_OVERLAY_OPACITY,
   CONTENT_PANEL_BG,
@@ -47,6 +49,7 @@ export type PlayerViewProps = {
   onSave: () => void;
   onChoose: (choice: Choice) => void;
   onActivateHotspot?: (hotspot: SceneHotspot) => void;
+  sceneOptions?: SceneOption[];
   debugPanel?: React.ReactNode;
 };
 
@@ -66,6 +69,7 @@ export function PlayerView({
   onSave,
   onChoose,
   onActivateHotspot,
+  sceneOptions = [],
   debugPanel,
 }: PlayerViewProps) {
   const insets = useSafeAreaInsets();
@@ -125,7 +129,7 @@ export function PlayerView({
               <Text style={[styles.hotspotHint, { color: colors.mutedForeground }]}>
                 Tap on the scene above, or choose:
               </Text>
-              {visibleHotspots.map(hotspot => (
+              {visibleHotspots.map((hotspot, i) => (
                 <TouchableOpacity
                   key={hotspot.uid}
                   style={[styles.hotspotChip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
@@ -133,9 +137,16 @@ export function PlayerView({
                   activeOpacity={0.8}
                 >
                   <Feather name="crosshair" size={14} color={colors.primary} />
-                  <Text style={[styles.hotspotChipText, { color: colors.foreground }]}>
-                    {hotspot.label || 'Hotspot'}
-                  </Text>
+                  <View style={styles.hotspotChipBody}>
+                    <Text style={[styles.hotspotChipText, { color: colors.foreground }]}>
+                      {getHotspotDisplayLabel(hotspot, i + 1)}
+                    </Text>
+                    <Text style={[styles.hotspotChipSummary, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {summarizeHotspotAction(hotspot.action, id =>
+                        sceneOptions.find(s => s.locationId === id)?.title,
+                      )}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -240,7 +251,11 @@ export function PlayerView({
             onError={() => setBgLoadFailed(true)}
           />
           {visibleHotspots.length > 0 && onActivateHotspot && (
-            <SceneHotspotOverlay hotspots={visibleHotspots} onActivate={onActivateHotspot} />
+            <SceneHotspotOverlay
+              hotspots={visibleHotspots}
+              sceneOptions={sceneOptions}
+              onActivate={onActivateHotspot}
+            />
           )}
         </View>
 
@@ -407,7 +422,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12,
   },
-  hotspotChipText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },
+  hotspotChipBody: { flex: 1, gap: 2 },
+  hotspotChipText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  hotspotChipSummary: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   choiceList: { gap: 10 },
   choiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, borderWidth: 1, padding: 14 },
   choiceText: { flex: 1, fontSize: 14, fontFamily: 'Inter_500Medium' },

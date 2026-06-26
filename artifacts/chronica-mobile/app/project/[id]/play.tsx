@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Alert, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -14,6 +14,7 @@ import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
 import { Choice, SceneHotspot } from '@/engine';
+import { getSceneOptions } from '@/engine/editor-helpers';
 import { loadRuntimeSave, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
 
 export default function PlayScreen() {
@@ -24,6 +25,10 @@ export default function PlayScreen() {
   const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
+  const sceneOptions = useMemo(
+    () => (project ? getSceneOptions(project.fragments) : []),
+    [project?.id, project?.updatedAt],
+  );
   const {
     compileOk,
     compileDiagnostics,
@@ -191,6 +196,7 @@ export default function PlayScreen() {
       onSave={saveGame}
       onChoose={handleChoice}
       onActivateHotspot={handleHotspot}
+      sceneOptions={sceneOptions}
       debugPanel={
         advancedMode && gameState && currentFragment ? (
           <View style={{ marginTop: 8, gap: 8 }}>

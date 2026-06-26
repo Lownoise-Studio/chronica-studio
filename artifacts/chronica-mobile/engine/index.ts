@@ -14,5 +14,6 @@ export * from './story-graph';
 export * from './asset-resolver';
 export * from './player-presentation';
 export * from './chronica-package';
+export * from './hotspot-helpers';
 export * from './hotspots';
 export * from './load-game';

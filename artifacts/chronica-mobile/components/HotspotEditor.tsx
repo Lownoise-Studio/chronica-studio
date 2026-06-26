@@ -12,10 +12,17 @@ import {
   isValidDestination,
   type SceneOption,
 } from '@/engine/editor-helpers';
+import {
+  DEFAULT_HOTSPOT_SIZE,
+  getHotspotDisplayLabel,
+  HOTSPOT_NUDGE_STEP,
+  nudgeHotspot,
+  resizeHotspot,
+  summarizeHotspotAction,
+  type HotspotResizeDirection,
+} from '@/engine/hotspot-helpers';
 import { ArrayEditor } from './ArrayEditor';
 import { HotspotPreviewCanvas } from './HotspotPreviewCanvas';
-
-const DEFAULT_SIZE = 0.18;
 
 function ScenePicker({
   scenes,
@@ -31,9 +38,7 @@ function ScenePicker({
 
   return (
     <View style={styles.scenePicker}>
-      <Text style={[styles.scenePickerTitle, { color: colors.mutedForeground }]}>
-        Link to scene:
-      </Text>
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Quick link to scene</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
         {scenes.map(scene => {
           const selected = selectedLocationId === scene.locationId;
@@ -65,6 +70,25 @@ function ScenePicker({
   );
 }
 
+function ResizeButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <TouchableOpacity
+      style={[styles.resizeBtn, { borderColor: colors.border, backgroundColor: colors.muted }]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.resizeBtnText, { color: colors.foreground }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 function HotspotCard({
   hotspot,
   index,
@@ -86,15 +110,23 @@ function HotspotCard({
   const { advancedMode } = useAdvancedMode();
   const [showConditions, setShowConditions] = useState((hotspot.conditions?.length ?? 0) > 0);
 
+  const ordinal = index + 1;
+  const displayLabel = getHotspotDisplayLabel(hotspot, ordinal);
   const gotoTarget = getGotoTarget(hotspot.action);
   const knownLocations = scenes.map(s => s.locationId);
   const isBrokenLink = gotoTarget !== null && !isValidDestination(gotoTarget, knownLocations);
+  const actionSummary = summarizeHotspotAction(hotspot.action, id =>
+    scenes.find(s => s.locationId === id)?.title,
+  );
+
+  const applyBounds = (patch: Partial<SceneHotspot>) => onChange(patch);
 
   const nudge = (dx: number, dy: number) => {
-    onChange({
-      x: Math.min(1 - hotspot.width, Math.max(0, hotspot.x + dx)),
-      y: Math.min(1 - hotspot.height, Math.max(0, hotspot.y + dy)),
-    });
+    applyBounds(nudgeHotspot(hotspot, dx, dy));
+  };
+
+  const resize = (direction: HotspotResizeDirection) => {
+    applyBounds(resizeHotspot(hotspot, direction));
   };
 
   return (
@@ -110,13 +142,13 @@ function HotspotCard({
       ]}
     >
       <View style={styles.cardHeader}>
-        <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-          {hotspot.label.trim() || `Hotspot ${index + 1}`}
-        </Text>
+        <Text style={[styles.cardTitle, { color: colors.foreground }]}>{displayLabel}</Text>
         <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="trash-2" size={15} color={colors.destructive} />
         </TouchableOpacity>
       </View>
+
+      <Text style={[styles.actionSummary, { color: colors.mutedForeground }]}>{actionSummary}</Text>
 
       <View style={styles.field}>
         <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Label</Text>
@@ -124,27 +156,36 @@ function HotspotCard({
           style={[styles.fieldInput, { color: colors.foreground, borderColor: colors.border }]}
           value={hotspot.label}
           onChangeText={label => onChange({ label })}
-          placeholder="e.g. Lantern"
+          placeholder={`Hotspot ${ordinal}`}
           placeholderTextColor={colors.mutedForeground}
         />
       </View>
 
       <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Position</Text>
       <View style={styles.nudgeRow}>
-        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(-0.05, 0)}>
+        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(-HOTSPOT_NUDGE_STEP, 0)}>
           <Feather name="arrow-left" size={14} color={colors.foreground} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(0, -0.05)}>
+        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(0, -HOTSPOT_NUDGE_STEP)}>
           <Feather name="arrow-up" size={14} color={colors.foreground} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(0, 0.05)}>
+        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(0, HOTSPOT_NUDGE_STEP)}>
           <Feather name="arrow-down" size={14} color={colors.foreground} />
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(0.05, 0)}>
+        <TouchableOpacity style={[styles.nudgeBtn, { borderColor: colors.border }]} onPress={() => nudge(HOTSPOT_NUDGE_STEP, 0)}>
           <Feather name="arrow-right" size={14} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Size</Text>
+      <View style={styles.resizeRow}>
+        <ResizeButton label="Wider" onPress={() => resize('wider')} />
+        <ResizeButton label="Narrower" onPress={() => resize('narrower')} />
+        <ResizeButton label="Taller" onPress={() => resize('taller')} />
+        <ResizeButton label="Shorter" onPress={() => resize('shorter')} />
+      </View>
+
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Tap action</Text>
       <ScenePicker
         scenes={scenes}
         selectedLocationId={gotoTarget}
@@ -157,16 +198,19 @@ function HotspotCard({
       )}
 
       {advancedMode && (
-        <TextInput
-          style={[styles.actionInput, { color: colors.foreground, borderColor: colors.border }]}
-          value={hotspot.action}
-          onChangeText={action => onChange({ action })}
-          placeholder="goto:scene; variables.found = true"
-          placeholderTextColor={colors.mutedForeground}
-          autoCorrect={false}
-          spellCheck={false}
-          autoCapitalize="none"
-        />
+        <>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Action string</Text>
+          <TextInput
+            style={[styles.actionInput, { color: colors.foreground, borderColor: colors.border }]}
+            value={hotspot.action}
+            onChangeText={action => onChange({ action })}
+            placeholder="goto:scene; variables.found = true"
+            placeholderTextColor={colors.mutedForeground}
+            autoCorrect={false}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+        </>
       )}
 
       <TouchableOpacity onPress={() => setShowConditions(!showConditions)} style={styles.toggleRow}>
@@ -215,12 +259,15 @@ export function HotspotEditor({
   };
 
   const placeHotspot = (x: number, y: number) => {
-    const bounds = { x, y, width: DEFAULT_SIZE, height: DEFAULT_SIZE };
+    const ordinal = hotspots.length + 1;
     const uid = createId();
     const next: SceneHotspot = {
       uid,
-      label: '',
-      ...bounds,
+      label: `Hotspot ${ordinal}`,
+      x,
+      y,
+      width: DEFAULT_HOTSPOT_SIZE,
+      height: DEFAULT_HOTSPOT_SIZE,
       action: '',
       conditions: [],
     };
@@ -235,7 +282,7 @@ export function HotspotEditor({
     <View style={styles.container}>
       <Text style={[styles.label, { color: colors.mutedForeground }]}>INTERACTIVE HOTSPOTS</Text>
       <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-        Tap the scene preview to place hotspots. Players tap these regions during playtest.
+        Tap the preview to place a region. Drag-style resize uses the size buttons below.
       </Text>
 
       <HotspotPreviewCanvas
@@ -243,6 +290,7 @@ export function HotspotEditor({
         hotspots={hotspots}
         mode="edit"
         selectedUid={selectedUid}
+        sceneOptions={scenes}
         onSelect={setSelectedUid}
         onPlace={placeHotspot}
       />
@@ -264,7 +312,7 @@ export function HotspotEditor({
                 onPress={() => setSelectedUid(hotspot.uid)}
               >
                 <Text style={[styles.hotspotTabText, { color: active ? colors.primary : colors.foreground }]}>
-                  {hotspot.label.trim() || `Hotspot ${i + 1}`}
+                  {getHotspotDisplayLabel(hotspot, i + 1)}
                 </Text>
               </TouchableOpacity>
             );
@@ -284,7 +332,7 @@ export function HotspotEditor({
         />
       ) : hotspots.length > 0 ? (
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-          Select a hotspot above to edit label, position, and action.
+          Select a hotspot tab or tap a region to edit label, size, and tap action.
         </Text>
       ) : null}
     </View>
@@ -296,6 +344,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.8 },
   hint: { fontSize: 11, fontFamily: 'Inter_400Regular', marginTop: -6 },
   errorText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
+  actionSummary: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: -4 },
   card: { borderRadius: 10, borderWidth: 1, padding: 12, gap: 10 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
@@ -326,8 +375,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  resizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  resizeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  resizeBtnText: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   scenePicker: { gap: 6 },
-  scenePickerTitle: { fontSize: 10, fontFamily: 'Inter_500Medium', textTransform: 'uppercase', letterSpacing: 0.6 },
   chipsRow: { gap: 6, paddingVertical: 2 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1 },
   chipText: { fontSize: 12, fontFamily: 'Inter_400Regular', maxWidth: 120 },
