@@ -1,4 +1,5 @@
 import { Fragment, Project, VariableValue } from './types';
+import { parseActionString } from './actions/parse-action';
 
 export type VariableType = 'boolean' | 'number' | 'string' | 'unknown';
 
@@ -81,9 +82,14 @@ export function extractProjectVariables(
       if (parsed) record(parsed.name, parsed.rawValue);
     }
     for (const choice of frag.choices) {
-      for (const step of choice.action.split(';').map(s => s.trim()).filter(Boolean)) {
-        const parsed = extractVariableFromEffect(step);
-        if (parsed) record(parsed.name, parsed.rawValue);
+      const parsed = parseActionString(choice.action ?? '');
+      if (!parsed.ok) continue;
+      for (const step of parsed.steps) {
+        if (step.kind === 'assign' && step.path.startsWith('variables.')) {
+          record(step.path.slice('variables.'.length), step.rawValue);
+        } else if (step.kind === 'increment' && step.path.startsWith('variables.')) {
+          record(step.path.slice('variables.'.length), String(step.amount));
+        }
       }
     }
   }
@@ -103,12 +109,7 @@ export function getSceneOptions(fragments: Fragment[]): SceneOption[] {
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
-export function getGotoTarget(action: string): string | null {
-  for (const step of action.split(';').map(s => s.trim()).filter(Boolean)) {
-    if (step.startsWith('goto:')) return step.slice(5).trim();
-  }
-  return null;
-}
+export { getGotoTarget } from './actions/parse-action';
 
 export function setGotoInAction(action: string, locationId: string): string {
   const steps = action.split(';').map(s => s.trim()).filter(Boolean);

@@ -1,7 +1,8 @@
 import { Fragment, ProjectAsset, ValidationError, VariableValue } from '../types';
+import type { ActionStep } from '../actions/types';
 import type { FragmentIndex } from './fragment-index';
 
-export const COMPILED_GAME_VERSION = 1;
+export const COMPILED_GAME_VERSION = 2;
 
 /**
  * Immutable runtime input produced by the compiler.
@@ -20,6 +21,8 @@ export interface CompiledGame {
   fragments: readonly Fragment[];
   assets: readonly ProjectAsset[];
   fragmentIndex: FragmentIndex;
+  /** Compiled action steps keyed by choice.uid */
+  choiceActions: Readonly<Record<string, readonly ActionStep[]>>;
 }
 
 export type CompileResult =

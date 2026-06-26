@@ -40,7 +40,7 @@ export function choose(
   state: ChronicaState,
   game: CompiledGame,
 ): { fragment: Fragment | null; visibleChoices: Choice[] } {
-  const fragment = resolveTurn(choice, state, game.fragmentIndex);
+  const fragment = resolveTurn(choice, state, game);
   const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
   return { fragment, visibleChoices };
 }

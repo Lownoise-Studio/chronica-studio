@@ -1,10 +1,8 @@
 import { Project, Fragment, ValidationError, ProjectAsset } from './types';
 import { isValidCondition, isValidEffect } from './expression-evaluator';
 import { findAssetByName } from './chronica-package';
-
-function extractGotoTarget(action: string): string[] {
-  return action.split(';').map(s => s.trim()).filter(s => s.startsWith('goto:')).map(s => s.slice(5).trim());
-}
+import { getGotoTargetsFromAction } from './actions/parse-action';
+import { validateProjectActions } from './actions/validate-actions';
 
 function assetExists(assets: ProjectAsset[], name: string): boolean {
   const asset = findAssetByName(assets, name);
@@ -41,6 +39,7 @@ export function validateFragment(fragment: Fragment): ValidationError[] {
 
 /**
  * Find all choices whose goto target doesn't match any fragment's locationId.
+ * @deprecated Prefer validateProjectActions — kept for direct unit tests.
  */
 export function findBrokenLinks(project: Project): ValidationError[] {
   const known = new Set(project.fragments.map(f => f.locationId));
@@ -48,7 +47,7 @@ export function findBrokenLinks(project: Project): ValidationError[] {
   for (const frag of project.fragments) {
     const meta = { fragmentUid: frag.uid, fragmentTitle: frag.title || frag.locationId };
     for (const choice of frag.choices) {
-      for (const target of extractGotoTarget(choice.action)) {
+      for (const target of getGotoTargetsFromAction(choice.action)) {
         if (target && !known.has(target)) {
           errors.push({ ...meta, type: 'broken-link', message: `Choice "${choice.label}" → "${target}" has no matching fragment` });
         }
@@ -106,7 +105,7 @@ export function findOrphanScenes(project: Project): ValidationError[] {
   const targets = new Set<string>();
   for (const frag of project.fragments) {
     for (const choice of frag.choices) {
-      for (const target of extractGotoTarget(choice.action)) {
+      for (const target of getGotoTargetsFromAction(choice.action)) {
         if (target) targets.add(target);
       }
     }
@@ -128,13 +127,12 @@ export function findOrphanScenes(project: Project): ValidationError[] {
 }
 
 /**
- * Full project validation: start location, expression syntax, broken links.
+ * Full project validation: start location, expression syntax, actions, links.
  */
 export function validateProject(project: Project): ValidationError[] {
   const errors: ValidationError[] = [];
   const known = new Set(project.fragments.map(f => f.locationId));
 
-  // Check start location exists
   if (project.startLocation && !known.has(project.startLocation)) {
     errors.push({
       fragmentUid: '',
@@ -148,7 +146,7 @@ export function validateProject(project: Project): ValidationError[] {
     errors.push(...validateFragment(frag));
   }
 
-  errors.push(...findBrokenLinks(project));
+  errors.push(...validateProjectActions(project));
   errors.push(...findDuplicateLocations(project));
   errors.push(...findMissingAssetRefs(project));
   errors.push(...findOrphanScenes(project));

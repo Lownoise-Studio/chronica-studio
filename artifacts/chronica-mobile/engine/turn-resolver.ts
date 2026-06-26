@@ -1,7 +1,8 @@
 import { Fragment, Choice, ChronicaState } from './types';
-import { resolveAction } from './action-resolver';
+import { CompiledGame } from './compiler/types';
+import { resolveActionSteps } from './actions/resolve-action';
 import { applyEffect, evaluateCondition } from './expression-evaluator';
-import { FragmentIndex, getActiveFragmentFromIndex } from './compiler/fragment-index';
+import { getActiveFragmentFromIndex } from './compiler/fragment-index';
 
 function cloneState(s: ChronicaState): ChronicaState {
   return {
@@ -34,17 +35,20 @@ export function getVisibleChoices(fragment: Fragment, state: ChronicaState): Cho
 }
 
 /**
- * Applies a choice's action, resolves the next fragment, applies that fragment's
- * effects, and commits the mutated state. Returns the next fragment or null.
+ * Applies a choice's compiled action steps, resolves the next fragment, applies
+ * that fragment's effects, and commits the mutated state.
  */
 export function resolveTurn(
   choice: Choice,
   state: ChronicaState,
-  fragmentIndex: FragmentIndex,
+  game: CompiledGame,
 ): Fragment | null {
+  const steps = game.choiceActions[choice.uid];
+  if (!steps) return null;
+
   const working = cloneState(state);
-  resolveAction(choice.action, working);
-  const fragment = getActiveFragmentFromIndex(working.location, working, fragmentIndex);
+  resolveActionSteps(steps, working);
+  const fragment = getActiveFragmentFromIndex(working.location, working, game.fragmentIndex);
   if (!fragment) return null;
   for (const effect of fragment.effects) {
     applyEffect(effect, working);

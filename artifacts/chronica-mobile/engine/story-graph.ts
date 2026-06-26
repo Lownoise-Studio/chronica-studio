@@ -1,5 +1,6 @@
 import { Fragment, Project } from './types';
-import { getGotoTarget, isValidDestination } from './editor-helpers';
+import { getGotoTargetsFromAction } from './actions/parse-action';
+import { isValidDestination } from './editor-helpers';
 
 export interface StoryGraphNode {
   fragmentUid: string;
@@ -38,26 +39,13 @@ export interface StoryGraphSection {
   nodes: StoryGraphNode[];
 }
 
-function extractGotoTargets(action: string): string[] {
-  return action
-    .split(';')
-    .map(s => s.trim())
-    .filter(s => s.startsWith('goto:'))
-    .map(s => s.slice(5).trim())
-    .filter(Boolean);
-}
-
 export function buildStoryGraph(project: Pick<Project, 'fragments' | 'startLocation'>): StoryGraph {
   const knownLocations = new Set(project.fragments.map(f => f.locationId));
   const edges: StoryGraphEdge[] = [];
 
   for (const fragment of project.fragments) {
     for (const choice of fragment.choices) {
-      const targets = extractGotoTargets(choice.action);
-      if (targets.length === 0) {
-        const fallback = getGotoTarget(choice.action);
-        if (fallback) targets.push(fallback);
-      }
+      const targets = getGotoTargetsFromAction(choice.action);
       for (const toLocationId of targets) {
         edges.push({
           id: `${fragment.uid}:${choice.uid}:${toLocationId}`,

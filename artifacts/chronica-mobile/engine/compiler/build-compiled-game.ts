@@ -1,4 +1,6 @@
 import { Project } from '../types';
+import { parseActionString } from '../actions/parse-action';
+import { ActionStep } from '../actions/types';
 import { COMPILED_GAME_VERSION, CompiledGame } from './types';
 import { buildFragmentIndex } from './fragment-index';
 
@@ -34,6 +36,20 @@ function computeContentHash(project: Project): string {
   return Math.abs(hash).toString(36);
 }
 
+function buildChoiceActions(project: Project): Record<string, ActionStep[]> {
+  const choiceActions: Record<string, ActionStep[]> = {};
+  for (const frag of project.fragments) {
+    for (const choice of frag.choices) {
+      const parsed = parseActionString(choice.action ?? '');
+      if (!parsed.ok) {
+        throw new Error(`buildCompiledGame: invalid action for choice ${choice.uid}: ${parsed.error}`);
+      }
+      choiceActions[choice.uid] = [...parsed.steps];
+    }
+  }
+  return choiceActions;
+}
+
 /**
  * Build a CompiledGame from a Project without running validation.
  * Use compileProject() at product boundaries; this is for tests and internal reuse.
@@ -61,5 +77,6 @@ export function buildCompiledGame(project: Project): CompiledGame {
     fragments,
     assets: project.assets.map(a => ({ ...a })),
     fragmentIndex: buildFragmentIndex(fragments),
+    choiceActions: buildChoiceActions(project),
   };
 }

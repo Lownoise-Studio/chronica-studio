@@ -3,6 +3,7 @@ import {
   buildCompiledGame,
   resolveCompileStartLocation,
   getActiveFragmentFromIndex,
+  COMPILED_GAME_VERSION,
 } from '../engine/compiler';
 import { Project, Fragment } from '../engine/types';
 
@@ -65,6 +66,36 @@ describe('compileProject', () => {
     expect(result.game.startLocation).toBe('intro');
     expect(result.game.fragmentIndex.byLocation.intro).toHaveLength(1);
     expect(result.game.contentHash).toBeTruthy();
+    expect(result.game.version).toBe(COMPILED_GAME_VERSION);
+    expect(result.game.choiceActions.c1).toEqual([{ kind: 'goto', locationId: 'forest' }]);
+  });
+
+  test('fails for invalid action syntax', () => {
+    const bad = makeProject([
+      {
+        ...fragments[0],
+        choices: [{ uid: 'c1', label: 'Bad', action: 'jump:nowhere', conditions: [] }],
+      },
+      fragments[1],
+    ]);
+    const result = compileProject(bad);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics.some(d => d.type === 'invalid-action')).toBe(true);
+  });
+
+  test('fails for labeled choice with empty action', () => {
+    const bad = makeProject([
+      {
+        ...fragments[0],
+        choices: [{ uid: 'c1', label: 'Go nowhere', action: '', conditions: [] }],
+      },
+      fragments[1],
+    ]);
+    const result = compileProject(bad);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.diagnostics.some(d => d.type === 'invalid-action')).toBe(true);
   });
 
   test('fails for broken links', () => {

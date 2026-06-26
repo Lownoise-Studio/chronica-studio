@@ -162,9 +162,9 @@ Not yet supported as first-class engine features: character portraits, dialogue 
 Ordered by foundation impact. These are engine-layer efforts (not app polish alone).
 
 1. **Asset package reliability** — round-trip `.chronica` export/import with verified binary integrity, missing-asset reporting, and consistent URI hydration on Android and iOS.
-2. **Runtime / player separation** — extract a player runtime module that consumes `Project` + session API without editor imports; single contract for playtest and future standalone builds.
-3. **Project compiler / validator** — expand validation to asset reference checks, orphan scenes, duplicate locationIds, and export-time diagnostics.
-4. **Event / action system** — formalize choice actions and scene entry effects beyond ad hoc strings; align with Godot Chronica action vocabulary where practical.
+2. **Runtime / player separation** — extract a player runtime module that consumes `CompiledGame` without editor imports; single contract for playtest and future standalone builds.
+3. **Project compiler / validator** — ✅ `compileProject` → `CompiledGame` with fragment index, validation gate on play/export.
+4. **Event / action system** — ✅ typed `ActionStep` AST, `parseActionString`, compile-time action validation, runtime executes `choiceActions` only.
 5. **Scene object / hotspot system** — typed interactables on scenes (regions, props) with conditions and actions, still scene-centric.
 6. **Character / audio layer** — speaker definitions, portrait slots, layered BGM/SFX triggers as engine data, not hard-coded UI.
 

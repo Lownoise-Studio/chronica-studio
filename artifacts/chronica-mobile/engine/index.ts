@@ -1,5 +1,6 @@
 export * from './types';
 export * from './compiler';
+export * from './actions';
 export * from './expression-evaluator';
 export * from './action-resolver';
 export * from './fragment-store';
