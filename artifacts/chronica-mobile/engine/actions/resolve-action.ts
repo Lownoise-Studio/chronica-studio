@@ -6,6 +6,10 @@ function applyIncrement(path: string, amount: number, state: ChronicaState): voi
   applyEffect(`${path} += ${amount}`, state);
 }
 
+function applyDecrement(path: string, amount: number, state: ChronicaState): void {
+  applyEffect(`${path} -= ${amount}`, state);
+}
+
 function applyAssign(path: string, rawValue: string, state: ChronicaState): void {
   applyEffect(`${path} = ${rawValue}`, state);
 }
@@ -26,6 +30,9 @@ function applyStep(step: ActionStep, state: ChronicaState): void {
       break;
     case 'increment':
       applyIncrement(step.path, step.amount, state);
+      break;
+    case 'decrement':
+      applyDecrement(step.path, step.amount, state);
       break;
   }
 }

@@ -1,6 +1,7 @@
 import { createId } from '../engine/identity';
-import { migrateProject, PROJECT_SCHEMA_VERSION } from '../engine/project-migration';
+import { migrateProject, PROJECT_SCHEMA_VERSION, resolveStartLocation } from '../engine/project-migration';
 import { compileProject, buildCompiledGame } from '../engine/compiler';
+import { validateProject } from '../engine/validator';
 import { createPackageManifest, validatePackageManifest } from '../engine/chronica-package';
 import { parseChronicaPackage } from '../storage/chronica-package-io';
 import { buildChronicaPackageBytes } from '../storage/chronica-package-io';
@@ -78,6 +79,65 @@ describe('migrateProject', () => {
     const migrated = migrateProject(legacy);
     expect(migrated.gameId).toBeTruthy();
     expect(migrated.gameId).toMatch(/-/);
+  });
+
+  test('maps legacy startLocation title to canonical locationId', () => {
+    const legacy = {
+      schemaVersion: 1,
+      id: 'old-install',
+      title: 'Legacy Story',
+      description: '',
+      startLocation: 'The Crossroads',
+      initialVariables: {},
+      initialMemory: {},
+      createdAt: '',
+      updatedAt: '',
+      fragments: [
+        {
+          uid: 'f1',
+          title: 'The Crossroads',
+          locationId: 'intro',
+          priority: 0,
+          conditions: [],
+          effects: [],
+          text: 'Start here',
+          choices: [{ uid: 'c1', label: 'Go', action: 'goto:Forest Path', conditions: [] }],
+        },
+        {
+          uid: 'f2',
+          title: 'Forest Path',
+          locationId: 'forest',
+          priority: 0,
+          conditions: [],
+          effects: [],
+          text: 'Trees',
+          choices: [],
+        },
+      ],
+      assets: [],
+    } as Omit<Project, 'gameId'> as Project;
+
+    const migrated = migrateProject(legacy);
+    expect(migrated.startLocation).toBe('intro');
+    expect(migrated.fragments[0].choices[0].action).toBe('goto:forest');
+
+    const validation = validateProject(migrated);
+    expect(validation.filter(e => e.type === 'missing-start')).toHaveLength(0);
+    expect(validation.filter(e => e.type === 'broken-link')).toHaveLength(0);
+
+    const compiled = compileProject(migrated);
+    expect(compiled.ok).toBe(true);
+    if (compiled.ok) {
+      expect(compiled.game.startLocation).toBe('intro');
+    }
+  });
+
+  test('resolveStartLocation keeps canonical ids', () => {
+    const fragments = [
+      { uid: 'f1', title: 'Intro Scene', locationId: 'intro', priority: 0, conditions: [], effects: [], text: '', choices: [] },
+    ] as Fragment[];
+    expect(resolveStartLocation(fragments, 'intro')).toBe('intro');
+    expect(resolveStartLocation(fragments, 'Intro Scene')).toBe('intro');
   });
 });
 

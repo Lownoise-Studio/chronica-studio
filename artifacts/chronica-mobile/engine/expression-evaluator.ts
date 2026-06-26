@@ -2,6 +2,7 @@ import { ChronicaState, VariableValue } from './types';
 
 const conditionRegex = /^\s*(\w+(?:\.\w+)?)\s*(>=|<=|==|!=|>|<)\s*(.+?)\s*$/;
 const incrementRegex = /^\s*(\w+(?:\.\w+)?)\s*\+=\s*(-?\d+)\s*$/;
+const decrementRegex = /^\s*(\w+(?:\.\w+)?)\s*-=\s*(-?\d+)\s*$/;
 const assignmentRegex = /^\s*(\w+(?:\.\w+)?)\s*=\s*(.+?)\s*$/;
 
 function parseValue(raw: string): VariableValue {
@@ -112,6 +113,11 @@ export function applyEffect(expression: string, state: ChronicaState): void {
     applyIncrement(incrMatch[1], parseInt(incrMatch[2], 10), state);
     return;
   }
+  const decrMatch = t.match(decrementRegex);
+  if (decrMatch) {
+    applyIncrement(decrMatch[1], -parseInt(decrMatch[2], 10), state);
+    return;
+  }
   const assignMatch = t.match(assignmentRegex);
   if (assignMatch) {
     applyAssignment(assignMatch[1], parseValue(assignMatch[2]), state);
@@ -125,5 +131,5 @@ export function isValidCondition(expression: string): boolean {
 
 export function isValidEffect(expression: string): boolean {
   const t = expression.trim();
-  return !t || incrementRegex.test(t) || assignmentRegex.test(t);
+  return !t || incrementRegex.test(t) || decrementRegex.test(t) || assignmentRegex.test(t);
 }

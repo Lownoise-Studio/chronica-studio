@@ -89,6 +89,8 @@ export function extractProjectVariables(
           record(step.path.slice('variables.'.length), step.rawValue);
         } else if (step.kind === 'increment' && step.path.startsWith('variables.')) {
           record(step.path.slice('variables.'.length), String(step.amount));
+        } else if (step.kind === 'decrement' && step.path.startsWith('variables.')) {
+          record(step.path.slice('variables.'.length), String(-step.amount));
         }
       }
     }

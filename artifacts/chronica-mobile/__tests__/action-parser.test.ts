@@ -41,6 +41,17 @@ describe('parseActionString', () => {
       ok: true,
       steps: [{ kind: 'increment', path: 'instability', amount: -2 }],
     });
+    expect(parseActionString('variables.trust -= 1')).toEqual({
+      ok: true,
+      steps: [{ kind: 'decrement', path: 'variables.trust', amount: 1 }],
+    });
+    expect(parseActionString('variables.trust -= 2; goto:forest')).toEqual({
+      ok: true,
+      steps: [
+        { kind: 'decrement', path: 'variables.trust', amount: 2 },
+        { kind: 'goto', locationId: 'forest' },
+      ],
+    });
   });
 
   test('multi-step semicolon chain', () => {

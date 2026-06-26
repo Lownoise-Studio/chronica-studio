@@ -88,6 +88,12 @@ describe('applyEffect', () => {
     expect(s.variables.trust).toBe(3);
   });
 
+  test('decrement custom variable', () => {
+    const s = makeState({ variables: { trust: 5 } });
+    applyEffect('variables.trust -= 2', s);
+    expect(s.variables.trust).toBe(3);
+  });
+
   test('set memory flag', () => {
     const s = makeState();
     applyEffect('memory.visited = true', s);
@@ -128,6 +134,11 @@ describe('isValidEffect', () => {
   test('accepts increment', () => {
     expect(isValidEffect('instability += 1')).toBe(true);
     expect(isValidEffect('variables.trust += -1')).toBe(true);
+  });
+
+  test('accepts decrement', () => {
+    expect(isValidEffect('variables.trust -= 1')).toBe(true);
+    expect(isValidEffect('instability -= 2')).toBe(true);
   });
 
   test('accepts assignment', () => {

@@ -28,14 +28,15 @@ describe('resolveActionSteps', () => {
     expect(state.memory.key_found).toBe(false);
   });
 
-  test('assign and increment variables', () => {
+  test('assign, increment, and decrement variables', () => {
     const state = makeState();
     const steps: ActionStep[] = [
-      { kind: 'assign', path: 'variables.trust', rawValue: '3' },
+      { kind: 'assign', path: 'variables.trust', rawValue: '5' },
       { kind: 'increment', path: 'variables.trust', amount: 2 },
+      { kind: 'decrement', path: 'variables.trust', amount: 1 },
     ];
     resolveActionSteps(steps, state);
-    expect(state.variables.trust).toBe(5);
+    expect(state.variables.trust).toBe(6);
   });
 
   test('multi-step chain applies in order', () => {

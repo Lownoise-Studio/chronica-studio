@@ -3,7 +3,8 @@ export type ActionStep =
   | { kind: 'set'; flag: string }
   | { kind: 'clear'; flag: string }
   | { kind: 'assign'; path: string; rawValue: string }
-  | { kind: 'increment'; path: string; amount: number };
+  | { kind: 'increment'; path: string; amount: number }
+  | { kind: 'decrement'; path: string; amount: number };
 
 export type ParseActionResult =
   | { ok: true; steps: ActionStep[] }

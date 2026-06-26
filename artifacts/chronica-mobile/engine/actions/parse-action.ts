@@ -2,6 +2,7 @@ import { isValidEffect } from '../expression-evaluator';
 import { ActionStep, ParseActionResult } from './types';
 
 const incrementRegex = /^\s*(\w+(?:\.\w+)?)\s*\+=\s*(-?\d+)\s*$/;
+const decrementRegex = /^\s*(\w+(?:\.\w+)?)\s*-=\s*(-?\d+)\s*$/;
 const assignmentRegex = /^\s*(\w+(?:\.\w+)?)\s*=\s*(.+?)\s*$/;
 
 function parseSingleStep(step: string): ParseActionResult {
@@ -39,6 +40,14 @@ function parseSingleStep(step: string): ParseActionResult {
     return {
       ok: true,
       steps: [{ kind: 'increment', path: incrMatch[1], amount: parseInt(incrMatch[2], 10) }],
+    };
+  }
+
+  const decrMatch = t.match(decrementRegex);
+  if (decrMatch) {
+    return {
+      ok: true,
+      steps: [{ kind: 'decrement', path: decrMatch[1], amount: parseInt(decrMatch[2], 10) }],
     };
   }
 
