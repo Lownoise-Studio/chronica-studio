@@ -27,6 +27,19 @@
         "buildType": "app-bundle"
       },
       "ios": {}
+    },
+    "player": {
+      "distribution": "internal",
+      "env": {
+        "CHRONICA_APP_MODE": "player",
+        "EXPO_PUBLIC_CHRONICA_APP_MODE": "player"
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "distribution": "internal"
+      }
     }
   },
   "submit": {

@@ -8,7 +8,9 @@
     "build": "node scripts/build.js",
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "start:player": "CHRONICA_APP_MODE=player EXPO_PUBLIC_CHRONICA_APP_MODE=player pnpm exec expo start",
+    "build:player:android": "eas build --profile player --platform android"
   },
   "jest": {
     "testEnvironment": "node",
@@ -20,6 +22,7 @@
     },
     "moduleNameMapper": {
       "^@/(.*)$": "<rootDir>/$1",
+      "^expo-constants$": "<rootDir>/__mocks__/expo-constants.js",
       "^expo-file-system/build/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js",
       "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js"
     },

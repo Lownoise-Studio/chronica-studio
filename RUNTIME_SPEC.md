@@ -19,7 +19,7 @@ The **Chronica Runtime** (also called the **Player**) is responsible for:
 
 The runtime **must not depend** on editor routes, scene editors, graph layout, validation panels, or project-management UI. It consumes **shippable project data + local asset files** and exposes a small session API. Presentation (React Native views, Expo Image, audio playback) wraps that API; it does not replace it.
 
-Today, playtest (`app/project/[id]/play.tsx`) is an **editor-hosted runtime shell**: it calls engine session functions directly. The long-term direction is a clearer **Runtime Host** layer that could serve playtest, Load Game, and future standalone player builds with the same contract.
+Today, playtest (`app/project/[id]/play.tsx`) is an **editor-hosted runtime shell**, and **Chronica Player** (`app/player/index.tsx`, `EXPO_PUBLIC_CHRONICA_APP_MODE=player`) is the standalone shell—both call the same `PlayerHost` / `PlayerView` stack. See [docs/runtime-integration.md](./docs/runtime-integration.md).
 
 ---
 

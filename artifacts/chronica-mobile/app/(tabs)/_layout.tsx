@@ -7,6 +7,9 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
+import { Redirect } from "expo-router";
+
+import { isPlayerApp } from "@/config/app-mode";
 import { useColors } from "@/hooks/useColors";
 
 function NativeTabLayout() {
@@ -81,6 +84,10 @@ function ClassicTabLayout() {
 }
 
 export default function TabLayout() {
+  if (isPlayerApp()) {
+    return <Redirect href="/player" />;
+  }
+
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }

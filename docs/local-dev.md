@@ -49,6 +49,21 @@ pnpm --filter @workspace/chronica-mobile typecheck
 pnpm --filter @workspace/chronica-mobile test
 ```
 
+## Chronica Player (standalone shell)
+
+The same codebase builds a **play-only** app when `EXPO_PUBLIC_CHRONICA_APP_MODE=player`:
+
+```bash
+cd "/path/to/Chronica-Studio-Engine/artifacts/chronica-mobile"
+pnpm start:player
+```
+
+This opens `/player` (Open Game, Try Demo, library) instead of the editor. See [runtime-integration.md](./runtime-integration.md) for the load → compile → play pipeline and EAS build steps.
+
+```bash
+pnpm build:player:android   # EAS profile: internal APK
+```
+
 ## expo-file-system import path
 
 Native file storage uses the legacy API via a thin adapter:

@@ -13,80 +13,30 @@ import { ProjectCard } from '@/components/ProjectCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Onboarding } from '@/components/Onboarding';
 import { Project } from '@/engine/types';
-import { pickAndLoadGame } from '@/storage/load-game';
-import { buildShowcasePackageBytes } from '@/demo/showcase-package';
+import { navigateToPlay, useLoadGameActions } from '@/hooks/useLoadGameActions';
 
 type Sheet = { kind: 'create' } | { kind: 'rename'; project: Project } | null;
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { projects, createProject, deleteProject, duplicateProject, updateProject, importProject, importProjectPackage, isLoaded, hasOnboarded, setHasOnboarded } = useProjects();
+  const { projects, createProject, deleteProject, duplicateProject, updateProject, isLoaded, hasOnboarded, setHasOnboarded } = useProjects();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [titleInput, setTitleInput] = useState('');
   const [descInput, setDescInput] = useState('');
-  const [loadingGame, setLoadingGame] = useState(false);
-  const [loadingDemo, setLoadingDemo] = useState(false);
+  const { loadingGame, loadingDemo, handleLoadGame, handleTryDemo } = useLoadGameActions();
+
+  const onLoadGame = async () => {
+    const nav = await handleLoadGame();
+    if (nav) navigateToPlay(router, nav);
+  };
+
+  const onTryDemo = async () => {
+    const nav = await handleTryDemo();
+    if (nav) navigateToPlay(router, nav);
+  };
 
   const openCreate = () => { setTitleInput(''); setDescInput(''); setSheet({ kind: 'create' }); };
-
-  const handleLoadGame = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Load Game is not available in the web preview. Use the iOS or Android app.');
-      return;
-    }
-    setLoadingGame(true);
-    try {
-      const result = await pickAndLoadGame({ importProject, importProjectPackage });
-      if (!result.ok) {
-        if (result.cancelled) return;
-        const detail = result.diagnostics?.length
-          ? `${result.error}\n\n${result.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
-          : result.error;
-        Alert.alert('Could not load game', detail ?? 'Import failed.');
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push({
-        pathname: `/project/${result.project.id}/play`,
-        params: { loaded: '1' },
-      } as any);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not load game.';
-      Alert.alert('Could not load game', msg);
-    } finally {
-      setLoadingGame(false);
-    }
-  };
-
-  const handleTryDemo = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Try Demo is not available in the web preview. Use the iOS or Android app.');
-      return;
-    }
-    setLoadingDemo(true);
-    try {
-      const bytes = buildShowcasePackageBytes();
-      const outcome = await importProjectPackage(bytes);
-      if (!outcome.ok || !outcome.project) {
-        const detail = outcome.diagnostics?.length
-          ? `${outcome.error ?? 'Demo package failed.'}\n\n${outcome.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
-          : (outcome.error ?? 'Demo package failed.');
-        Alert.alert('Could not load demo', detail);
-        return;
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push({
-        pathname: `/project/${outcome.project.id}/play`,
-        params: { loaded: '1' },
-      } as any);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Could not load demo.';
-      Alert.alert('Could not load demo', msg);
-    } finally {
-      setLoadingDemo(false);
-    }
-  };
 
   const openRename = (p: Project) => { setTitleInput(p.title); setDescInput(p.description); setSheet({ kind: 'rename', project: p }); };
 
@@ -156,7 +106,7 @@ export default function HomeScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.loadBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={handleLoadGame}
+            onPress={onLoadGame}
             disabled={loadingGame}
             activeOpacity={0.8}
           >
@@ -197,7 +147,7 @@ export default function HomeScreen() {
         ListHeaderComponent={
           <TouchableOpacity
             style={[styles.demoCard, { backgroundColor: colors.card, borderColor: colors.primary + '44' }]}
-            onPress={handleTryDemo}
+            onPress={onTryDemo}
             disabled={loadingDemo || loadingGame}
             activeOpacity={0.85}
           >
@@ -220,7 +170,7 @@ export default function HomeScreen() {
               actionLabel="New Story"
               onAction={openCreate}
               secondaryActionLabel="Load Game"
-              onSecondaryAction={handleLoadGame}
+              onSecondaryAction={onLoadGame}
             />
           ) : null
         }

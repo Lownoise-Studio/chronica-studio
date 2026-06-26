@@ -81,8 +81,10 @@ Phases map to **gameplay models** on the core engine (compiler, runtime, state, 
 
 **Goal:** Creators can ship playable builds, not just packages.
 
-- [ ] Standalone Android APK/AAB via EAS
-- [ ] Embedded player runtime (no Expo Go required)
+- [x] Chronica Player shell (`EXPO_PUBLIC_CHRONICA_APP_MODE=player`, `/player` home, play-only routes)
+- [x] EAS `player` profile for standalone Android APK (`pnpm build:player:android`)
+- [ ] Player APK verified on physical device
+- [ ] Embedded player runtime (no Expo Go required) — player builds are standalone; dev still uses Expo
 - [ ] Custom app icon and splash per project (optional white-label)
 - [ ] Share project via file, link, or cloud backup
 - [ ] API server sync (`artifacts/api-server` scaffold exists; not wired to mobile)

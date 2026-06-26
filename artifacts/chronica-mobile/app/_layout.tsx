@@ -32,7 +32,9 @@ function RootLayoutNav() {
         contentStyle: { backgroundColor: "#0a0a0f" },
       }}
     >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="player/index" options={{ headerShown: false }} />
       <Stack.Screen name="project/[id]/index" options={{ title: "Project" }} />
       <Stack.Screen name="project/[id]/graph" options={{ title: "Story Graph" }} />
       <Stack.Screen name="project/[id]/fragment/[uid]" options={{ title: "Scene" }} />

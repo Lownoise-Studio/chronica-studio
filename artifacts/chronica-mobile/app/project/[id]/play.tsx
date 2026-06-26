@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
 import { Choice, SceneHotspot } from '@/engine';
 import { getSceneOptions } from '@/engine/editor-helpers';
+import { isPlayerApp, getAppHomeHref } from '@/config/app-mode';
 import { loadRuntimeSave, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
 
 export default function PlayScreen() {
@@ -49,6 +50,15 @@ export default function PlayScreen() {
     toSave,
   } = useChronicaRuntime(project);
 
+  const playerMode = isPlayerApp();
+  const exitPlay = () => {
+    if (playerMode) {
+      router.replace(getAppHomeHref());
+      return;
+    }
+    router.back();
+  };
+
   const [showLoadedBanner, setShowLoadedBanner] = useState(loaded === '1');
 
   useEffect(() => {
@@ -72,7 +82,7 @@ export default function PlayScreen() {
   const loadSave = async () => {
     const save = await loadRuntimeSave(projectId!);
     if (!save) {
-      Alert.alert('No Save Found', 'Start a new playtest first.');
+      Alert.alert('No Save Found', playerMode ? 'Start a new game first.' : 'Start a new playtest first.');
       return;
     }
     const result = tryResume(save);
@@ -135,13 +145,13 @@ export default function PlayScreen() {
   if (!compileOk) {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
-        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={exitPlay}>
           <Feather name="x" size={20} color={colors.mutedForeground} />
         </TouchableOpacity>
         <EmptyState
           icon="alert-triangle"
-          title="Cannot play this project"
-          message={`Fix ${compileDiagnostics.length} issue${compileDiagnostics.length !== 1 ? 's' : ''} in the editor before playtesting.\n\n${compileDiagnostics.slice(0, 3).map(e => `• ${e.message}`).join('\n')}`}
+          title="Cannot play this game"
+          message={`Fix ${compileDiagnostics.length} issue${compileDiagnostics.length !== 1 ? 's' : ''} ${playerMode ? 'in Chronica Studio before exporting.' : 'in the editor before playtesting.'}\n\n${compileDiagnostics.slice(0, 3).map(e => `• ${e.message}`).join('\n')}`}
         />
       </View>
     );
@@ -150,7 +160,7 @@ export default function PlayScreen() {
   if (!started) {
     return (
       <View style={[styles.fill, styles.startScreen, { backgroundColor: colors.background }]}>
-        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 16 }]} onPress={exitPlay}>
           <Feather name="x" size={20} color={colors.mutedForeground} />
         </TouchableOpacity>
         <Feather name="play-circle" size={56} color={colors.primary} />
@@ -158,16 +168,18 @@ export default function PlayScreen() {
         {!!project.description && (
           <Text style={[styles.projectDesc, { color: colors.mutedForeground }]}>{project.description}</Text>
         )}
-        <Text style={[styles.modeBadge, { color: colors.accent }]}>Playtest Mode</Text>
+        {!playerMode && (
+          <Text style={[styles.modeBadge, { color: colors.accent }]}>Playtest Mode</Text>
+        )}
         {project.fragments.length === 0 ? (
           <Text style={[styles.noFrags, { color: colors.destructive }]}>
-            Add scenes to your project before playtesting
+            {playerMode ? 'This game has no playable scenes.' : 'Add scenes to your project before playtesting'}
           </Text>
         ) : (
           <View style={styles.startBtns}>
             <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.primary }]} onPress={start} activeOpacity={0.8}>
               <Feather name="play" size={17} color="#fff" />
-              <Text style={styles.startBtnText}>Start Playtest</Text>
+              <Text style={styles.startBtnText}>{playerMode ? 'Start Game' : 'Start Playtest'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.startBtn, { backgroundColor: colors.secondary }]} onPress={loadSave} activeOpacity={0.8}>
               <Feather name="download" size={17} color={colors.foreground} />
@@ -191,7 +203,7 @@ export default function PlayScreen() {
       backgroundUri={bgUri}
       audioUri={audioUri}
       showLoadedBanner={showLoadedBanner}
-      onBack={() => router.back()}
+      onBack={exitPlay}
       onRestart={resetGame}
       onSave={saveGame}
       onChoose={handleChoice}
