@@ -64,6 +64,8 @@ This opens `/player` (Open Game, Try Demo, library) instead of the editor. See [
 pnpm build:player:android   # EAS profile: internal APK
 ```
 
+For TestFlight / App Store submit later, add real Apple credentials under `submit.production.ios` in `eas.json` (`appleId`, `ascAppId`, `appleTeamId`). Empty placeholders are invalid and will block EAS config validation.
+
 ## expo-file-system import path
 
 Native file storage uses the legacy API via a thin adapter:

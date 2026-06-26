@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest",
     "start:player": "CHRONICA_APP_MODE=player EXPO_PUBLIC_CHRONICA_APP_MODE=player pnpm exec expo start",
-    "build:player:android": "eas build --profile player --platform android"
+    "build:player:android": "pnpm exec eas build --profile player --platform android"
   },
   "jest": {
     "testEnvironment": "node",
@@ -33,6 +33,7 @@
     "@expo-google-fonts/inter": "^0.4.0",
     "@expo/cli": "54.0.23",
     "@expo/ngrok": "^4.1.0",
+    "eas-cli": "^16.0.0",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@stardazed/streams-text-encoding": "^1.0.2",
