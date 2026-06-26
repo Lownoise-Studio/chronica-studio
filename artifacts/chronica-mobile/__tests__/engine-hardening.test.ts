@@ -244,6 +244,28 @@ describe('engine hardening', () => {
     expect(rt.getDialoguePresentation()?.text).toBe('After inspect.');
   });
 
+  test('re-entrant advanceDialogue after exhaustion is a no-op', () => {
+    const project = makeProject([
+      {
+        uid: 'f1',
+        title: 'Room',
+        locationId: 'room',
+        priority: 0,
+        conditions: [],
+        effects: [],
+        text: 'Single line.',
+        choices: [],
+      },
+    ]);
+
+    const game = buildCompiledGame(project);
+    const rt = new ChronicaRuntime(game);
+    rt.start();
+    expect(rt.advanceDialogue()).toEqual({ ok: true, advanced: false });
+    expect(rt.advanceDialogue()).toEqual({ ok: true, advanced: false });
+    expect(rt.runtimeState?.dialogueLineIndex).toBe(0);
+  });
+
   test('hotspot-only action keeps session on same fragment via chronica-session', () => {
     const project = makeProject([
       {

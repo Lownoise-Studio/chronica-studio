@@ -73,7 +73,7 @@ describe('showcase demo package', () => {
 
     const assets = verifyPackageAssetsManifest(
       path => map.get(path),
-      manifest.manifest.assetsManifest ?? [],
+      manifest.manifest.assetsManifest,
     );
     expect(assets.ok).toBe(true);
   });

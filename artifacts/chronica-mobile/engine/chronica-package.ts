@@ -5,6 +5,10 @@ import { Project, ProjectAsset } from './types';
 
 export const CHRONICA_PACKAGE_FORMAT = 'chronica-package';
 export const CHRONICA_PACKAGE_VERSION = 1;
+/** Lowest package format version this build can import. */
+export const CHRONICA_PACKAGE_VERSION_MIN = 1;
+/** Highest package format version this build can import without migration. */
+export const CHRONICA_PACKAGE_VERSION_MAX = 1;
 export const CHRONICA_PACKAGE_APP = 'Chronica Studio';
 
 export const MANIFEST_PATH = 'manifest.json';
@@ -24,10 +28,10 @@ export interface ChronicaPackageManifest {
   exportedAt: string;
   title: string;
   gameId: string;
-  /** Hash of authored story content at export time; optional for legacy packages. */
-  storyContentHash?: string;
-  /** Per-asset integrity entries for embedded assets/* files; optional for legacy packages. */
-  assetsManifest?: PackageAssetManifestEntry[];
+  /** Hash of authored story content at export time. */
+  storyContentHash: string;
+  /** Per-asset integrity entries for embedded assets/* files. */
+  assetsManifest: PackageAssetManifestEntry[];
   assetCount: number;
   storySchemaVersion: number;
 }
@@ -169,9 +173,35 @@ export function createPackageManifest(
     title: project.title,
     gameId: project.gameId,
     storyContentHash: computeProjectContentHash(project),
+    assetsManifest: [],
     assetCount,
     storySchemaVersion: project.schemaVersion,
   };
+}
+
+/** Apply forward migrations for supported legacy package versions. */
+export function migratePackageManifest(manifest: ChronicaPackageManifest): ChronicaPackageManifest {
+  // v1 is current — chain future version steps here.
+  return manifest;
+}
+
+export function assertSupportedPackageVersion(version: number): { ok: true } | { ok: false; error: string } {
+  if (version < CHRONICA_PACKAGE_VERSION_MIN || version > CHRONICA_PACKAGE_VERSION_MAX) {
+    return { ok: false, error: `Unsupported package version: ${version}` };
+  }
+  return { ok: true };
+}
+
+/** Referenced assets that could not be resolved to a loadable URI after import hydration. */
+export function findUnresolvedImportAssets(project: Project): string[] {
+  const unresolved: string[] = [];
+  for (const name of collectReferencedAssetNames(project)) {
+    const asset = findAssetByName(project.assets, name);
+    if (!asset?.uri?.trim()) {
+      unresolved.push(name);
+    }
+  }
+  return unresolved;
 }
 
 export function validatePackageManifest(data: unknown): { ok: true; manifest: ChronicaPackageManifest } | { ok: false; error: string } {
@@ -182,9 +212,11 @@ export function validatePackageManifest(data: unknown): { ok: true; manifest: Ch
   if (m.format !== CHRONICA_PACKAGE_FORMAT) {
     return { ok: false, error: 'manifest.json has invalid format.' };
   }
-  if (m.version !== CHRONICA_PACKAGE_VERSION) {
-    return { ok: false, error: `Unsupported package version: ${m.version}` };
+  if (typeof m.version !== 'number') {
+    return { ok: false, error: 'manifest.json missing version.' };
   }
+  const versionCheck = assertSupportedPackageVersion(m.version);
+  if (!versionCheck.ok) return versionCheck;
   if (m.app !== CHRONICA_PACKAGE_APP) {
     return { ok: false, error: 'manifest.json app field is not Chronica Studio.' };
   }
@@ -203,30 +235,35 @@ export function validatePackageManifest(data: unknown): { ok: true; manifest: Ch
   if (typeof m.storySchemaVersion !== 'number') {
     return { ok: false, error: 'manifest.json missing storySchemaVersion.' };
   }
-  if (m.storyContentHash !== undefined && typeof m.storyContentHash !== 'string') {
-    return { ok: false, error: 'manifest.json storyContentHash must be a string.' };
+  if (typeof m.storyContentHash !== 'string' || !m.storyContentHash.trim()) {
+    return { ok: false, error: 'manifest.json missing storyContentHash.' };
   }
-  if (m.assetsManifest !== undefined) {
-    if (!Array.isArray(m.assetsManifest)) {
-      return { ok: false, error: 'manifest.json assetsManifest must be an array.' };
+  if (!Array.isArray(m.assetsManifest)) {
+    return { ok: false, error: 'manifest.json missing assetsManifest.' };
+  }
+  for (const item of m.assetsManifest) {
+    if (!item || typeof item !== 'object') {
+      return { ok: false, error: 'manifest.json assetsManifest has invalid entry.' };
     }
-    for (const item of m.assetsManifest) {
-      if (!item || typeof item !== 'object') {
-        return { ok: false, error: 'manifest.json assetsManifest has invalid entry.' };
-      }
-      const entry = item as Record<string, unknown>;
-      if (typeof entry.path !== 'string' || !entry.path) {
-        return { ok: false, error: 'manifest.json assetsManifest entry missing path.' };
-      }
-      if (typeof entry.size !== 'number' || entry.size < 0) {
-        return { ok: false, error: `manifest.json assetsManifest entry invalid size for ${entry.path}.` };
-      }
-      if (typeof entry.crc32 !== 'number') {
-        return { ok: false, error: `manifest.json assetsManifest entry missing crc32 for ${entry.path}.` };
-      }
+    const entry = item as Record<string, unknown>;
+    if (typeof entry.path !== 'string' || !entry.path) {
+      return { ok: false, error: 'manifest.json assetsManifest entry missing path.' };
+    }
+    if (typeof entry.size !== 'number' || entry.size < 0) {
+      return { ok: false, error: `manifest.json assetsManifest entry invalid size for ${entry.path}.` };
+    }
+    if (typeof entry.crc32 !== 'number') {
+      return { ok: false, error: `manifest.json assetsManifest entry missing crc32 for ${entry.path}.` };
     }
   }
-  return { ok: true, manifest: m as unknown as ChronicaPackageManifest };
+  if (m.assetCount !== m.assetsManifest.length) {
+    return {
+      ok: false,
+      error: 'manifest.json assetCount does not match assetsManifest length.',
+    };
+  }
+  const manifest = migratePackageManifest(m as unknown as ChronicaPackageManifest);
+  return { ok: true, manifest };
 }
 
 export function validatePackageStory(data: unknown): { ok: true; story: Project } | { ok: false; error: string } {

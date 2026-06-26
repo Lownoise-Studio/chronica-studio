@@ -8,8 +8,9 @@ import {
   buildAssetsManifest,
   planChronicaPackage,
 } from '../engine/chronica-package';
-import { buildChronicaPackageBytes, parseChronicaPackage } from '../storage/chronica-package-io';
-import { encodeZip } from '../storage/zip-store';
+import { buildChronicaPackageBytes, extractPackageAssets, parseChronicaPackage } from '../storage/chronica-package-io';
+import { ChronicaRuntime } from '../runtime/chronica-runtime';
+import { decodeZip, encodeZip, zipEntryMap } from '../storage/zip-store';
 import { readBytes, fileExists } from '../storage/fileSystem';
 import type { Project } from '../engine/types';
 
@@ -136,11 +137,53 @@ describe('parseChronicaPackage', () => {
     ]);
 
     const result = await parseChronicaPackage(bytes, 'imported-2');
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('storyContentHash');
+  });
 
-    expect(resolveSceneBackgroundUri(result.project.assets, 'forest.jpg'))
-      .toBe('file:///data/mock/pse_assets/imported-2/forest.jpg');
+  test('rejects package with referenced asset missing from zip', async () => {
+    const project = makeProject();
+    const plan = planChronicaPackage(project, () => true, '2026-06-22T12:00:00.000Z');
+    const manifest = {
+      ...plan.manifest,
+      assetsManifest: buildAssetsManifest([{ path: 'assets/forest.jpg', data: PNG_BYTES }]),
+      assetCount: 1,
+      storyContentHash: computeProjectContentHash(plan.story),
+    };
+    const bytes = encodeZip([
+      { path: MANIFEST_PATH, data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: STORY_PATH, data: new TextEncoder().encode(JSON.stringify(plan.story)) },
+    ]);
+
+    const result = await parseChronicaPackage(bytes, 'imported-missing-asset');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('missing asset file');
+  });
+
+  test('zip-slip path entries write only to sanitized basename', async () => {
+    const project = makeProject();
+    const plan = planChronicaPackage(project, () => true, '2026-06-22T12:00:00.000Z');
+    const manifest = {
+      ...plan.manifest,
+      assetsManifest: buildAssetsManifest([{ path: 'assets/forest.jpg', data: PNG_BYTES }]),
+      assetCount: 1,
+      storyContentHash: computeProjectContentHash(plan.story),
+    };
+    const bytes = encodeZip([
+      { path: MANIFEST_PATH, data: new TextEncoder().encode(JSON.stringify(manifest)) },
+      { path: STORY_PATH, data: new TextEncoder().encode(JSON.stringify(plan.story)) },
+      { path: 'assets/../../../etc/passwd', data: PNG_BYTES },
+      { path: 'assets/forest.jpg', data: PNG_BYTES },
+    ]);
+
+    const map = zipEntryMap(decodeZip(bytes));
+    const local = await extractPackageAssets(map, 'zip-slip-test');
+    for (const destUri of mockWritten.keys()) {
+      expect(destUri).toMatch(/^file:\/\/\/data\/mock\/pse_assets\/zip-slip-test\//);
+    }
+    expect(local['assets/forest.jpg']).toBe('file:///data/mock/pse_assets/zip-slip-test/forest.jpg');
   });
 
   test('rejects asset checksum mismatch when assetsManifest present', async () => {
@@ -199,10 +242,33 @@ describe('buildChronicaPackageBytes', () => {
     expect(built.ok).toBe(true);
     if (!built.ok) return;
     expect(built.plan.manifest.assetsManifest).toHaveLength(1);
-    expect(built.plan.manifest.assetsManifest![0].path).toBe('assets/forest.jpg');
+    expect(built.plan.manifest.assetsManifest[0].path).toBe('assets/forest.jpg');
 
     const imported = await parseChronicaPackage(built.bytes, 'round-trip-1');
     expect(imported.ok).toBe(true);
+  });
+
+  test('full player path: build import runtime save resume', async () => {
+    const built = await buildChronicaPackageBytes(makeProject());
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    const imported = await parseChronicaPackage(built.bytes, 'player-path-1');
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) return;
+
+    const compiled = compileProject(imported.project);
+    expect(compiled.ok).toBe(true);
+    if (!compiled.ok) return;
+
+    const rt = new ChronicaRuntime(compiled.game);
+    rt.start();
+    rt.advanceDialogue();
+    const save = rt.toSave(imported.project.id)!;
+
+    const rt2 = new ChronicaRuntime(compiled.game);
+    expect(rt2.tryResume(save)).toEqual({ ok: true });
+    expect(rt2.runtimeState?.location).toBe(save.state.location as string);
   });
 
   test('blocks export when referenced asset is missing from library', async () => {

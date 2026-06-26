@@ -8,6 +8,7 @@ import {
   buildPackageStory,
   createPackageManifest,
   findMissingPackageAssets,
+  findUnresolvedImportAssets,
   hydrateImportedPackageProject,
   isChronicaPackageBytes,
   planChronicaPackage,
@@ -204,8 +205,17 @@ describe('package validation', () => {
     expect(validatePackageManifest(manifest).ok).toBe(true);
   });
 
+  test('rejects manifest missing integrity fields', () => {
+    const base = createPackageManifest(makeProject(), 0, '2026-01-01T00:00:00.000Z');
+    expect(validatePackageManifest({ ...base, storyContentHash: '' }).ok).toBe(false);
+    expect(validatePackageManifest({ ...base, assetsManifest: undefined }).ok).toBe(false);
+  });
+
   test('validates manifest', () => {
-    const manifest = createPackageManifest(makeProject(), 1, '2026-01-01T00:00:00.000Z');
+    const manifest = {
+      ...createPackageManifest(makeProject(), 1, '2026-01-01T00:00:00.000Z'),
+      assetsManifest: buildAssetsManifest([{ path: 'assets/forest.jpg', data: PNG_BYTES }]),
+    };
     expect(validatePackageManifest(manifest).ok).toBe(true);
     expect(validatePackageManifest({ format: 'wrong' }).ok).toBe(false);
   });
@@ -238,12 +248,25 @@ describe('verifyPackageAssetsManifest', () => {
   });
 });
 
+describe('findUnresolvedImportAssets', () => {
+  test('flags referenced assets with empty uri after hydration', () => {
+    const story = buildPackageStory(makeProject(), []);
+    story.assets = [{ ...makeProject().assets[0], uri: '' }];
+    expect(findUnresolvedImportAssets(story)).toEqual(['forest.jpg']);
+  });
+});
+
 describe('zip package round-trip', () => {
   test('encodes and decodes .chronica archive with manifest, story, and assets', () => {
     const project = makeProject();
     const plan = planChronicaPackage(project, () => true, '2026-06-22T12:00:00.000Z');
+    const manifest = {
+      ...plan.manifest,
+      assetsManifest: buildAssetsManifest([{ path: 'assets/forest.jpg', data: PNG_BYTES }]),
+      assetCount: 1,
+    };
     const bytes = encodeZip([
-      { path: MANIFEST_PATH, data: new TextEncoder().encode(JSON.stringify(plan.manifest)) },
+      { path: MANIFEST_PATH, data: new TextEncoder().encode(JSON.stringify(manifest)) },
       { path: STORY_PATH, data: new TextEncoder().encode(JSON.stringify(plan.story)) },
       { path: 'assets/forest.jpg', data: PNG_BYTES },
     ]);
@@ -251,11 +274,11 @@ describe('zip package round-trip', () => {
     expect(isChronicaPackageBytes(bytes)).toBe(true);
 
     const map = zipEntryMap(decodeZip(bytes));
-    const manifest = validatePackageManifest(JSON.parse(getZipTextFile(map, MANIFEST_PATH)!));
+    const manifestResult = validatePackageManifest(JSON.parse(getZipTextFile(map, MANIFEST_PATH)!));
     const storyResult = validatePackageStory(JSON.parse(getZipTextFile(map, STORY_PATH)!));
-    expect(manifest.ok).toBe(true);
+    expect(manifestResult.ok).toBe(true);
     expect(storyResult.ok).toBe(true);
-    if (!manifest.ok || !storyResult.ok) return;
+    if (!manifestResult.ok || !storyResult.ok) return;
     expect(map.get('assets/forest.jpg')).toEqual(PNG_BYTES);
 
     const hydrated = hydrateImportedPackageProject(storyResult.story, {

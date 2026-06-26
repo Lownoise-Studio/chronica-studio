@@ -4,6 +4,7 @@ import {
   MANIFEST_PATH,
   STORY_PATH,
   buildAssetsManifest,
+  findUnresolvedImportAssets,
   hydrateImportedPackageProject,
   missingAssetsToDiagnostics,
   packageAssetPath,
@@ -208,25 +209,30 @@ export async function parseChronicaPackage(
   if (storyResult.story.gameId !== manifest.gameId) {
     return { ok: false, error: 'Package story gameId does not match manifest.' };
   }
-  if (manifest.storyContentHash) {
-    const storyHash = computeProjectContentHash(storyResult.story);
-    if (storyHash !== manifest.storyContentHash) {
-      return { ok: false, error: 'Package story content does not match manifest hash.' };
-    }
+
+  const storyHash = computeProjectContentHash(storyResult.story);
+  if (storyHash !== manifest.storyContentHash) {
+    return { ok: false, error: 'Package story content does not match manifest hash.' };
   }
 
-  if (manifest.assetsManifest?.length) {
-    const assetCheck = verifyPackageAssetsManifest(
-      path => getZipBinaryFile(map, path),
-      manifest.assetsManifest,
-    );
-    if (!assetCheck.ok) {
-      return { ok: false, error: assetCheck.error };
-    }
+  const assetCheck = verifyPackageAssetsManifest(
+    path => getZipBinaryFile(map, path),
+    manifest.assetsManifest,
+  );
+  if (!assetCheck.ok) {
+    return { ok: false, error: assetCheck.error };
   }
 
   const localUriByPackagePath = await extractPackageAssets(map, targetProjectId);
   const hydrated = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);
+  const unresolvedAssets = findUnresolvedImportAssets(hydrated);
+  if (unresolvedAssets.length > 0) {
+    return {
+      ok: false,
+      error: `Package is missing referenced asset(s): ${unresolvedAssets.join(', ')}`,
+    };
+  }
+
   const project = migrateProject({
     ...hydrated,
     id: targetProjectId,

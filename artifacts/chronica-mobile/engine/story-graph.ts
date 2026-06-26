@@ -62,12 +62,17 @@ export function buildStoryGraph(project: Pick<Project, 'fragments' | 'startLocat
   }
 
   const incomingCount = new Map<string, number>();
+  const fragmentsByLocation = new Map<string, Fragment[]>();
+  for (const fragment of project.fragments) {
+    const bucket = fragmentsByLocation.get(fragment.locationId) ?? [];
+    bucket.push(fragment);
+    fragmentsByLocation.set(fragment.locationId, bucket);
+  }
   for (const edge of edges) {
     if (edge.broken) continue;
-    for (const fragment of project.fragments) {
-      if (fragment.locationId === edge.toLocationId) {
-        incomingCount.set(fragment.uid, (incomingCount.get(fragment.uid) ?? 0) + 1);
-      }
+    const targets = fragmentsByLocation.get(edge.toLocationId) ?? [];
+    for (const fragment of targets) {
+      incomingCount.set(fragment.uid, (incomingCount.get(fragment.uid) ?? 0) + 1);
     }
   }
 

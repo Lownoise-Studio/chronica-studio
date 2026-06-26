@@ -47,7 +47,7 @@ export function validateShowcasePackageBytes(bytes: Uint8Array) {
   const manifest = validatePackageManifest(JSON.parse(getZipTextFile(map, MANIFEST_PATH)!));
   const story = validatePackageStory(JSON.parse(getZipTextFile(map, STORY_PATH)!));
   const assets = manifest.ok
-    ? verifyPackageAssetsManifest(path => map.get(path), manifest.manifest.assetsManifest ?? [])
+    ? verifyPackageAssetsManifest(path => map.get(path), manifest.manifest.assetsManifest)
     : { ok: false as const, code: 'invalid-manifest' as const, message: 'Invalid manifest.' };
 
   return { manifest, story, assets, map };
