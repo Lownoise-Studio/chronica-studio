@@ -12,14 +12,28 @@ import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { FragmentListItem } from '@/components/FragmentListItem';
 import { EmptyState } from '@/components/EmptyState';
-import { Fragment } from '@/engine/types';
+import { Fragment, ValidationError } from '@/engine/types';
+
+/** Friendly, non-technical label for a non-blocking warning. */
+function friendlyWarningLabel(type: ValidationError['type']): string {
+  switch (type) {
+    case 'unknown-path':
+      return 'Possible typo';
+    case 'unreachable-target':
+      return 'This path may not be reachable';
+    case 'type-mismatch':
+      return 'This condition may never work';
+    default:
+      return 'Suggestion';
+  }
+}
 
 export default function ProjectScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { getProject, addFragment, deleteFragment, getValidationErrors } = useProjects();
+  const { getProject, addFragment, deleteFragment, getValidationErrors, getValidationWarnings } = useProjects();
   const { advancedMode } = useAdvancedMode();
   const [search, setSearch] = useState('');
 
@@ -58,6 +72,8 @@ export default function ProjectScreen() {
 
   const validationErrors = useMemo(() => getValidationErrors(id!), [project]);
   const errorCount = validationErrors.length;
+  const validationWarnings = useMemo(() => getValidationWarnings(id!), [project]);
+  const warningCount = validationWarnings.length;
 
   if (!project) {
     return (
@@ -178,6 +194,30 @@ export default function ProjectScreen() {
           <Feather name="alert-triangle" size={13} color={colors.destructive} />
           <Text style={[styles.warnText, { color: colors.destructive }]}>
             {errorCount} issue{errorCount !== 1 ? 's' : ''} — tap to review
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Non-blocking suggestions — never block play or export */}
+      {warningCount > 0 && (
+        <TouchableOpacity
+          style={[styles.warnBanner, { backgroundColor: colors.accent + '22', borderBottomColor: colors.accent + '55' }]}
+          onPress={() => {
+            const msgs = validationWarnings.slice(0, 6).map(w => {
+              const label = friendlyWarningLabel(w.type);
+              // Advanced Mode reveals the raw variable/action detail behind each hint.
+              return advancedMode ? `• ${label}\n  ${w.message}` : `• ${label} — ${w.fragmentTitle}`;
+            }).join('\n');
+            Alert.alert(
+              `${warningCount} suggestion${warningCount > 1 ? 's' : ''}`,
+              `${msgs}\n\nThese won't stop you from playing or exporting.`,
+            );
+          }}
+          activeOpacity={0.8}
+        >
+          <Feather name="info" size={13} color={colors.accent} />
+          <Text style={[styles.warnText, { color: colors.accent }]}>
+            {warningCount} suggestion{warningCount !== 1 ? 's' : ''} — tap to review
           </Text>
         </TouchableOpacity>
       )}

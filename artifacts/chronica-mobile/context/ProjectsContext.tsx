@@ -114,6 +114,8 @@ interface ProjectsContextType {
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
   importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project; diagnostics?: ValidationError[] }>;
   getValidationErrors: (id: string) => ValidationError[];
+  /** Non-blocking semantic warnings (typos, unreachable targets, etc.). */
+  getValidationWarnings: (id: string) => ValidationError[];
   resetOnboarding: () => Promise<void>;
   removeDemoProjects: () => Promise<void>;
   clearLibrary: () => Promise<void>;
@@ -383,13 +385,20 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     return result.ok ? [] : result.diagnostics;
   };
 
+  const getValidationWarnings = (id: string): ValidationError[] => {
+    const p = getProject(id);
+    if (!p) return [];
+    const result = compileProject(p);
+    return result.ok ? result.warnings : [];
+  };
+
   return (
     <ProjectsContext.Provider value={{
       projects, isLoaded, hasOnboarded, setHasOnboarded,
       createProject, updateProject, duplicateProject, deleteProject,
       addFragment, updateFragment, deleteFragment,
       addAsset, deleteAsset, getProject,
-      exportProject, importProject, importProjectPackage, getValidationErrors,
+      exportProject, importProject, importProjectPackage, getValidationErrors, getValidationWarnings,
       resetOnboarding, removeDemoProjects, clearLibrary, resetAppState,
     }}>
       {children}
