@@ -33,7 +33,7 @@ export async function pickAndLoadGame(importFns: LoadGameImportFns): Promise<Loa
   if (Platform.OS === 'web') {
     return {
       ok: false,
-      error: 'Load Game is not available in the web preview. Use the iOS or Android app.',
+      error: 'Load Game is not available in the web preview. Use the native mobile app.',
     };
   }
 

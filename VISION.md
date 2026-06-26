@@ -58,4 +58,4 @@ Conceptual capabilities (state engine, action engine, execution engine) belong i
 
 ## Success looks like
 
-A creator opens Chronica Studio on Android, builds a branching game with unlockable paths, playtests it immediately, exports the project, and eventually publishes a playable build—without leaving their phone.
+A creator opens Chronica Studio on their phone or tablet, builds a branching game with unlockable paths, playtests it immediately, exports the project, and eventually publishes a playable build—without leaving their mobile workflow. Android is the first shipping target, while the product remains mobile-first.

@@ -65,8 +65,8 @@ export default function AboutScreen() {
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>What is this?</Text>
         <Text style={[styles.cardBody, { color: colors.mutedForeground }]}>
-          Chronica Studio is a mobile-first game engine for building state-driven interactive games on Android.
-          Create scenes, choices, dialogue, characters, hotspots, variables, assets, and branching paths directly from your phone.
+          Chronica Studio is a mobile-first game engine for building state-driven interactive games on phone and tablet.
+          Create scenes, choices, dialogue, characters, hotspots, variables, assets, and branching paths directly from your mobile device.
         </Text>
       </View>
 

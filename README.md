@@ -38,7 +38,7 @@ pnpm test
 pnpm exec expo start
 ```
 
-See [docs/local-dev.md](docs/local-dev.md) for macOS/Android details.
+See [docs/local-dev.md](docs/local-dev.md) for local development and platform build details.
 
 ## Docs
 

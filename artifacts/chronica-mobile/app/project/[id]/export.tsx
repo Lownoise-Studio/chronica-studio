@@ -51,7 +51,7 @@ async function writeAndShareJson(filename: string, content: string): Promise<voi
 
 async function writeAndSharePackage(filename: string, bytes: Uint8Array): Promise<void> {
   if (Platform.OS === 'web') {
-    Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the iOS or Android app.');
+    Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the native mobile app.');
     return;
   }
   const dir = `${documentDirectory}pse_exports/`;
@@ -95,7 +95,7 @@ export default function ExportScreen() {
 
   const handleExportPackage = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the iOS or Android app.');
+      Alert.alert('Not supported', 'Game package export is not available in the web preview. Use the native mobile app.');
       return;
     }
     if (errors.length > 0) {
@@ -131,7 +131,7 @@ export default function ExportScreen() {
 
   const handleImport = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'File import is not available in the web preview. Use the iOS or Android app.');
+      Alert.alert('Not supported', 'File import is not available in the web preview. Use the native mobile app.');
       return;
     }
     setWorking(true);

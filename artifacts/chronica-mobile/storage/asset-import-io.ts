@@ -95,7 +95,7 @@ export async function pickAndImportAssetZip(
   existingNames: readonly string[],
 ): Promise<ImportAssetsResult> {
   if (Platform.OS === 'web') {
-    return { ok: false, error: 'Zip import is not available in the web preview. Use the iOS or Android app.' };
+    return { ok: false, error: 'Zip import is not available in the web preview. Use the native mobile app.' };
   }
 
   const { getDocumentAsync } = await import('expo-document-picker');
@@ -123,7 +123,7 @@ export async function pickAndImportAssetFiles(
   existingNames: readonly string[],
 ): Promise<ImportAssetsResult> {
   if (Platform.OS === 'web') {
-    return { ok: false, error: 'File import is not available in the web preview. Use the iOS or Android app.' };
+    return { ok: false, error: 'File import is not available in the web preview. Use the native mobile app.' };
   }
 
   const { getDocumentAsync } = await import('expo-document-picker');
