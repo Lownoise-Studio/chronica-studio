@@ -2,7 +2,7 @@
 
 This document defines **Chronica Studio** as a game engine. It is the technical contract for how the engine is structured, what it guarantees, and what it is building toward.
 
-Chronica Studio is a **mobile-first game engine** with a touch-first editor. The narrative workflow shipping today is **Phase 1** of the engine—not the whole product. Creators use it to build games; the engine runs those games deterministically on device.
+Chronica Studio is a **mobile-first game engine** built around **validated state transitions**. The narrative workflow shipping today is the **first gameplay model** on this foundation—not the whole product. Creators use it to build games; the engine runs those games deterministically on device.
 
 For product vision and phased delivery, see [VISION.md](./VISION.md) and [ROADMAP.md](./ROADMAP.md).
 
@@ -12,13 +12,29 @@ For product vision and phased delivery, see [VISION.md](./VISION.md) and [ROADMA
 
 ### What Chronica Studio is
 
-- A **mobile-first game engine** for authoring, playtesting, and shipping interactive games on phone and tablet.
+- A **mobile-first game engine** for authoring, playtesting, and shipping **state-driven interactive games** on phone and tablet.
 - A **touch-first editor** layered on top of the same runtime creators playtest—no separate desktop toolchain required for core workflows.
 - A **runtime + editor separation**: game logic, state, validation, and packaging live in a portable engine core; UI shells the engine for editing and play.
 
 ### What the narrative module is
 
-The current scene/fragment editor, choice graph, variables, and playtest player are the **Phase 1 narrative module**. They prove the engine primitives (scenes, state, assets, export) on mobile. Future modules—characters, hotspots, inventory, audio layers—compose on the same core rather than replacing it.
+The current scene/fragment editor, choice graph, variables, and playtest player are the **first gameplay model** (Phase 1 narrative module). They prove that the engine primitives—compiler, runtime, state, assets, packages—work on mobile. Future models—characters, hotspots, inventory, quests—compose on the same core rather than replacing it.
+
+### Engine design principles
+
+These principles guide technical decisions. Violations require explicit justification in spec or roadmap.
+
+1. **The core engine owns execution.** The compiler produces `CompiledGame`; the runtime executes deterministic rules. Gameplay and presentation must not bypass this path.
+2. **Gameplay models define rules.** Scenes, choices, inventory, quests, and hotspots express *what can happen* as state transitions and conditions.
+3. **Presentation defines appearance.** Player UI, VN chrome, and adventure renderers display engine output; they do not own game rules.
+4. **State is authoritative.** `ChronicaState` is the source of truth during play. UI reflects state; it does not substitute for it.
+5. **All gameplay is expressed as state transitions**, validated at compile time and executed deterministically at runtime.
+6. **New genres extend the engine by adding gameplay models**—not by changing the execution model. Continuous simulation, real-time loops, and physics are out of scope until explicitly adopted as a new execution model.
+7. **The engine remains data-driven.** Engine behavior is defined by validated data wherever practical. Engine code executes rules; gameplay models describe them. The compiler lowers authored data (e.g. `goto:forest`, `variables.trust += 1`) into structured execution; the runtime must not parse arbitrary per-genre logic. Future models—dialogue, inventory, quests, hotspots, characters—become data the engine understands, not `if (gameType === "RPG")` branches in core code.
+
+Conceptual capabilities (state engine, action engine) are documentation terms only—not folder names. The repository layout (`engine/`, `runtime/`, `components/`) evolves with architecture; it is not reorganized to match terminology.
+
+See [VISION.md](./VISION.md) for product-level architecture and the decision filter for new features.
 
 ### Lineage
 
@@ -32,14 +48,15 @@ The mobile app (`artifacts/chronica-mobile`) is organized in layers. **Only `eng
 
 ```
 ┌─────────────────────────────────────────────────────────┐
+│  Presentation (components/PlayerView, player chrome)    │
+├─────────────────────────────────────────────────────────┤
 │  Editor UI (app/, components/)                          │
 │  Touch-first screens: library, scene editor, playtest   │
 ├─────────────────────────────────────────────────────────┤
-│  Host & I/O (context/, storage/)                        │
+│  Host & I/O (context/, storage/, runtime/)              │
 │  Persistence, file system, .chronica zip I/O, load flow │
 ├─────────────────────────────────────────────────────────┤
-│  Engine (engine/)                                       │
-│  Types, session, resolver, validator, package format    │
+│  Engine (engine/) — compiler, state, actions, packages  │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -197,4 +214,4 @@ Chronica Studio is building engine foundations first. The following are **out of
 
 ---
 
-*Document version: 2 — aligns with project `schemaVersion: 2` and `.chronica` package `version: 1`.*
+*Document version: 4 — adds data-driven principle (7); gameplay models terminology.*

@@ -2,11 +2,20 @@
 
 Roadmap organized by phase. Items marked ✅ are implemented in the current mobile app (`artifacts/chronica-mobile`).
 
+Phases map to **gameplay models** on the core engine (compiler, runtime, state, packages). See [ENGINE_SPEC.md](./ENGINE_SPEC.md) and [VISION.md](./VISION.md) for architecture principles.
+
+| Layer | Phases |
+|-------|--------|
+| **Core** | Phase 1 (compiler, runtime, packages, identity, persistence) |
+| **Gameplay models** | Phase 1 narrative · Phase 2 dialogue · Phase 3 inventory/quests |
+| **Presentation** | Phase 2 VN · future adventure/top-down/hidden-object renderers |
+| **Distribution** | Phase 4 export/APK · Phase 5 marketplace |
+
 ---
 
-## Phase 1 — Narrative Game Engine MVP
+## Phase 1 — Narrative Gameplay Model (MVP)
 
-**Goal:** A creator can build, playtest, and export a branching narrative game entirely on mobile.
+**Goal:** A creator can build, playtest, and export a branching narrative game entirely on mobile—proving the state-driven core on device.
 
 | Item | Status |
 |------|--------|
@@ -38,9 +47,9 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 
 ---
 
-## Phase 2 — Visual Novel / Character Layer
+## Phase 2 — Dialogue & Visual Novel Presentation
 
-**Goal:** Games look and feel like visual novels—not plain text screens.
+**Goal:** Games look and feel like visual novels—not plain text screens. Adds **presentation** and a **dialogue gameplay model** on the narrative core.
 
 - [ ] Character definitions (name, portrait, expressions)
 - [ ] Dialogue attribution (speaker labels, portrait display)
@@ -53,9 +62,9 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 
 ---
 
-## Phase 3 — Light RPG Systems
+## Phase 3 — Inventory, Quests & Light RPG Gameplay
 
-**Goal:** Support simple RPG mechanics without becoming a general-purpose RPG toolkit.
+**Goal:** Support simple RPG mechanics without becoming a general-purpose RPG toolkit or changing the discrete state-transition execution model.
 
 - [ ] Inventory items (pick up, use, consume)
 - [ ] Stats and derived checks (e.g. trust ≥ N gates a choice)
