@@ -4,7 +4,7 @@ Repeatable checklist for verifying asset package reliability on real devices.
 
 ## Prerequisites
 
-- Chronica Studio mobile app on iOS or Android (not web preview)
+- Chronica Studio native mobile app (not web preview)
 - A test project with at least one **image** and one **audio** background assigned to scenes
 
 ## Same-device round-trip

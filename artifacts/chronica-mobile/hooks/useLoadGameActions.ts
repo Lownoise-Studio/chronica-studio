@@ -35,7 +35,7 @@ export function useLoadGameActions() {
 
   const handleLoadGame = async (): Promise<LoadGameNavigation | null> => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Load Game is not available in the web preview. Use the iOS or Android app.');
+      Alert.alert('Not supported', 'Load Game is not available in the web preview. Use the native mobile app.');
       return null;
     }
     setLoadingGame(true);
@@ -59,7 +59,7 @@ export function useLoadGameActions() {
 
   const handleTryDemo = async (): Promise<LoadGameNavigation | null> => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Try Demo is not available in the web preview. Use the iOS or Android app.');
+      Alert.alert('Not supported', 'Try Demo is not available in the web preview. Use the native mobile app.');
       return null;
     }
     setLoadingDemo(true);
