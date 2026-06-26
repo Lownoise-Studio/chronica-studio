@@ -49,16 +49,16 @@ Phases map to **gameplay models** on the core engine (compiler, runtime, state, 
 
 ## Phase 2 — Dialogue & Visual Novel Presentation
 
-**Goal:** Games look and feel like visual novels—not plain text screens. Adds **presentation** and a **dialogue gameplay model** on the narrative core.
+**Goal:** Improve visual novel presentation on top of the implemented dialogue and character/cast gameplay models.
 
-- [ ] Character definitions (name, portrait, expressions)
-- [ ] Dialogue attribution (speaker labels, portrait display)
-- [ ] Background layers (full-screen images per scene, transitions)
+- [x] Character/cast definitions (name, portrait, expressions)
+- [x] Dialogue attribution (speaker labels, portrait display)
+- [ ] Background presentation polish (layering, transitions, safe-area tuning)
 - [ ] Text presentation modes (narration vs dialogue box)
-- [ ] Audio cues (BGM, SFX per scene or choice)
+- [ ] Audio presentation polish (BGM/SFX controls and transitions)
 - [ ] Asset library improvements (preview, tags, reuse across scenes)
 
-*Background images per scene and package round-trip are ✅ in Phase 1.*
+*Background images per scene, dialogue data, character/cast data, and package round-trip are ✅ in Phase 1/current app.*
 
 ---
 

@@ -2,7 +2,7 @@
 
 Chronica Studio is a **mobile-first game engine for state-driven games**. Its compiler transforms editable projects into executable games, its runtime executes deterministic rules over authoritative game state, and its package system preserves game integrity across devices.
 
-**Narrative is the first proof that the architecture works.** The current scene/fragment editor is the first **gameplay model** on this foundation—not the engine itself, and not merely a story-writing app.
+**Narrative is the first proof that the architecture works.** The current scene, dialogue, character/cast, and hotspot workflows are early **gameplay models** on this foundation—not the engine itself, and not merely a story-writing app.
 
 Chronica's goal is not to be a general-purpose rendering engine. Its goal is to become the best engine for creating **state-driven interactive games on mobile**, where gameplay emerges from validated state, deterministic rules, and meaningful player decisions.
 
@@ -23,9 +23,9 @@ Every game built in Chronica Studio is structured around shared primitives:
 | **State** | The live snapshot of location, variables, memory, and instability during play |
 | **Events** | Conditions and effects that gate scenes/choices and mutate state on entry or selection |
 | **Playtest** | In-app player to run the game on device as the creator builds it |
-| **Export** | Portable project JSON for backup, sharing, and future packaging pipelines |
+| **Export** | Portable `.chronica` packages for sharing and runtime import, with JSON backup for project data |
 
-Creators work scene-by-scene today. Future gameplay models—including dialogue, characters, inventory, hotspots, quests, and combat—compose on the same compiler, runtime, package, and state architecture rather than replacing it.
+Creators work scene-by-scene today. Implemented gameplay models such as dialogue, characters, and hotspots compose with the same compiler, runtime, package, and state architecture. Additional gameplay models—such as inventory, quests, and challenge systems—should extend that foundation rather than replacing it.
 
 ## Architecture
 
@@ -58,4 +58,4 @@ Conceptual capabilities (state engine, action engine, execution engine) belong i
 
 ## Success looks like
 
-A creator opens Chronica Studio on their phone or tablet, builds a branching game with unlockable paths, playtests it immediately, exports the project, and eventually publishes a playable build—without leaving their mobile workflow. Android is the first shipping target, while the product remains mobile-first.
+A creator opens Chronica Studio on their phone or tablet, builds a state-driven interactive game with unlockable paths, playtests it immediately, exports `.chronica` packages, and eventually publishes a playable build—without leaving their mobile-first workflow. Android is the first shipping target, while the product remains mobile-first.
