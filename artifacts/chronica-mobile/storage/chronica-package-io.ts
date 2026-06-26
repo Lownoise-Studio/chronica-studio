@@ -2,18 +2,22 @@ import {
   ASSETS_PREFIX,
   BuildPackagePlan,
   MANIFEST_PATH,
+  PACKAGE_LIMITS,
   STORY_PATH,
   buildAssetsManifest,
+  findUnlistedPackageAssets,
   findUnresolvedImportAssets,
   hydrateImportedPackageProject,
   missingAssetsToDiagnostics,
   packageAssetPath,
   planChronicaPackage,
   sanitizePackageFilename,
+  validatePackageEntryStructure,
   validatePackageManifest,
   validatePackageStory,
   verifyPackageAssetsManifest,
   type PackageExportDiagnostic,
+  type PackageImportReason,
 } from '@/engine/chronica-package';
 import { compileProject } from '@/engine/compiler';
 import { computeProjectContentHash } from '@/engine/compiler/build-compiled-game';
@@ -54,9 +58,19 @@ export type ImportChronicaPackageResult = {
   manifestTitle: string;
 } | {
   ok: false;
+  /** Typed, user-facing failure reason — never a raw exception. */
+  reason: PackageImportReason;
   error: string;
   diagnostics?: ValidationError[];
 };
+
+function importFailure(
+  reason: PackageImportReason,
+  error: string,
+  diagnostics?: ValidationError[],
+): ImportChronicaPackageResult {
+  return { ok: false, reason, error, diagnostics };
+}
 
 export async function extractPackageAssets(
   map: Map<string, Uint8Array>,
@@ -139,6 +153,21 @@ export async function buildChronicaPackageBytes(
     };
   }
 
+  // Guard: two library assets whose names collapse to the same package path
+  // would produce a manifest that fails its own re-import. Fail loudly instead.
+  const seenPaths = new Set<string>();
+  for (const file of plan.assetFiles) {
+    const key = file.packagePath.toLowerCase();
+    if (seenPaths.has(key)) {
+      return {
+        ok: false,
+        error: `Cannot export: two assets map to the same package path "${file.packagePath}". Rename one before exporting.`,
+        plan,
+      };
+    }
+    seenPaths.add(key);
+  }
+
   const assetEntries: ZipEntry[] = [];
   for (const file of plan.assetFiles) {
     const data = await readBytes(file.sourceUri);
@@ -175,20 +204,30 @@ export async function parseChronicaPackage(
   bytes: Uint8Array,
   targetProjectId: string,
 ): Promise<ImportChronicaPackageResult> {
+  // Cheapest guard first: reject an oversized archive before allocating to decode it.
+  if (bytes.length > PACKAGE_LIMITS.maxPackageBytes) {
+    return importFailure('oversized-package', 'Package exceeds the maximum allowed size.');
+  }
+
   let entries;
   try {
     entries = decodeZip(bytes);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Invalid package archive.';
-    return { ok: false, error: msg };
+    return importFailure('invalid-zip', msg);
   }
+
+  // Structural validation: single manifest/story, no duplicates, no traversal,
+  // no unexpected entries, per-entry/aggregate size ceilings.
+  const structure = validatePackageEntryStructure(entries);
+  if (!structure.ok) return importFailure(structure.reason, structure.error);
 
   const map = zipEntryMap(entries);
   const manifestJson = getZipTextFile(map, MANIFEST_PATH);
   const storyJson = getZipTextFile(map, STORY_PATH);
 
-  if (!manifestJson) return { ok: false, error: 'Package missing manifest.json.' };
-  if (!storyJson) return { ok: false, error: 'Package missing story.json.' };
+  if (!manifestJson) return importFailure('missing-manifest', 'Package missing manifest.json.');
+  if (!storyJson) return importFailure('missing-story', 'Package missing story.json.');
 
   let manifestData: unknown;
   let storyData: unknown;
@@ -196,23 +235,30 @@ export async function parseChronicaPackage(
     manifestData = JSON.parse(manifestJson);
     storyData = JSON.parse(storyJson);
   } catch {
-    return { ok: false, error: 'Package contains invalid JSON.' };
+    return importFailure('invalid-json', 'Package contains invalid JSON.');
   }
 
   const manifestResult = validatePackageManifest(manifestData);
-  if (!manifestResult.ok) return { ok: false, error: manifestResult.error };
+  if (!manifestResult.ok) return importFailure(manifestResult.reason, manifestResult.error);
 
   const storyResult = validatePackageStory(storyData);
-  if (!storyResult.ok) return { ok: false, error: storyResult.error };
+  if (!storyResult.ok) return importFailure(storyResult.reason, storyResult.error);
 
   const manifest = manifestResult.manifest;
   if (storyResult.story.gameId !== manifest.gameId) {
-    return { ok: false, error: 'Package story gameId does not match manifest.' };
+    return importFailure('gameid-mismatch', 'Package story gameId does not match manifest.');
   }
 
   const storyHash = computeProjectContentHash(storyResult.story);
   if (storyHash !== manifest.storyContentHash) {
-    return { ok: false, error: 'Package story content does not match manifest hash.' };
+    return importFailure('hash-mismatch', 'Package story content does not match manifest hash.');
+  }
+
+  // Every embedded asset must be declared in the manifest (manifest is the
+  // source of truth — unlisted files are rejected, not silently imported).
+  const unlisted = findUnlistedPackageAssets(entries, manifest.assetsManifest);
+  if (unlisted.length > 0) {
+    return importFailure('unexpected-entry', `Package contains asset(s) not listed in the manifest: ${unlisted.join(', ')}.`);
   }
 
   const assetCheck = verifyPackageAssetsManifest(
@@ -220,17 +266,14 @@ export async function parseChronicaPackage(
     manifest.assetsManifest,
   );
   if (!assetCheck.ok) {
-    return { ok: false, error: assetCheck.error };
+    return importFailure(assetCheck.code, assetCheck.error);
   }
 
   const localUriByPackagePath = await extractPackageAssets(map, targetProjectId);
   const hydrated = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);
   const unresolvedAssets = findUnresolvedImportAssets(hydrated);
   if (unresolvedAssets.length > 0) {
-    return {
-      ok: false,
-      error: `Package is missing referenced asset(s): ${unresolvedAssets.join(', ')}`,
-    };
+    return importFailure('missing-asset', `Package is missing referenced asset(s): ${unresolvedAssets.join(', ')}`);
   }
 
   const project = migrateProject({
@@ -241,11 +284,7 @@ export async function parseChronicaPackage(
 
   const compiled = compileProject(project);
   if (!compiled.ok) {
-    return {
-      ok: false,
-      error: 'Imported package story does not compile.',
-      diagnostics: compiled.diagnostics,
-    };
+    return importFailure('compile-failed', 'Imported package story does not compile.', compiled.diagnostics);
   }
 
   return {

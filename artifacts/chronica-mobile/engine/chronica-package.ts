@@ -1,5 +1,6 @@
 import { normalizeAssetUri } from './asset-resolver';
 import { computeProjectContentHash } from './compiler/build-compiled-game';
+import { PROJECT_SCHEMA_VERSION } from './project-migration';
 import { crc32 } from './crc32';
 import { Project, ProjectAsset } from './types';
 
@@ -11,9 +12,60 @@ export const CHRONICA_PACKAGE_VERSION_MIN = 1;
 export const CHRONICA_PACKAGE_VERSION_MAX = 1;
 export const CHRONICA_PACKAGE_APP = 'Chronica Studio';
 
+/** Lowest/highest story schemaVersion an imported package may declare. */
+export const PACKAGE_SCHEMA_VERSION_MIN = 1;
+export const PACKAGE_SCHEMA_VERSION_MAX = PROJECT_SCHEMA_VERSION;
+
 export const MANIFEST_PATH = 'manifest.json';
 export const STORY_PATH = 'story.json';
 export const ASSETS_PREFIX = 'assets/';
+
+/**
+ * Defensive ceilings for package import. These are not tight budgets — they
+ * exist to stop a corrupt/hostile package from exhausting memory or storage
+ * before the integrity checks run. Surfaced as typed oversized-* failures.
+ */
+export const PACKAGE_LIMITS = {
+  /** Whole .chronica archive. */
+  maxPackageBytes: 256 * 1024 * 1024,
+  /** A single embedded asset file. */
+  maxAssetBytes: 64 * 1024 * 1024,
+  /** Number of embedded asset files. */
+  maxAssetCount: 2000,
+  /** story.json text. */
+  maxStoryJsonBytes: 16 * 1024 * 1024,
+  /** manifest.json text. */
+  maxManifestJsonBytes: 4 * 1024 * 1024,
+} as const;
+
+/** Typed, user-facing reasons for a package import failure. Never raw exceptions. */
+export type PackageImportReason =
+  | 'invalid-zip'
+  | 'oversized-package'
+  | 'oversized-asset'
+  | 'missing-manifest'
+  | 'missing-story'
+  | 'duplicate-manifest'
+  | 'duplicate-story'
+  | 'duplicate-asset-path'
+  | 'path-traversal'
+  | 'unexpected-entry'
+  | 'invalid-json'
+  | 'invalid-manifest'
+  | 'unsupported-package-version'
+  | 'invalid-story'
+  | 'unsupported-schema-version'
+  | 'gameid-mismatch'
+  | 'hash-mismatch'
+  | 'missing-asset'
+  | 'corrupt-asset'
+  | 'compile-failed';
+
+export type PackageImportFailure = { ok: false; reason: PackageImportReason; error: string };
+
+function fail(reason: PackageImportReason, error: string): PackageImportFailure {
+  return { ok: false, reason, error };
+}
 
 export interface PackageAssetManifestEntry {
   path: string;
@@ -109,6 +161,91 @@ export function verifyPackageAssetsManifest(
   return { ok: true };
 }
 
+export interface PackageEntryLike {
+  path: string;
+  data: Uint8Array;
+}
+
+function hasPathTraversal(path: string): boolean {
+  return path.split('/').some(seg => seg === '..');
+}
+
+/**
+ * Structural validation of raw ZIP entries before any hydration:
+ * required single manifest/story, no duplicate paths, no path traversal,
+ * no unexpected entries, and per-entry/aggregate size ceilings.
+ *
+ * Policy: every entry must be exactly manifest.json, story.json, or a file
+ * under assets/. Anything else (top-level junk, executables, absolute paths
+ * that normalized to an unexpected root) is rejected as unexpected-entry.
+ */
+export function validatePackageEntryStructure(
+  entries: ReadonlyArray<PackageEntryLike>,
+): { ok: true } | PackageImportFailure {
+  let manifestCount = 0;
+  let storyCount = 0;
+  let assetCount = 0;
+  const seen = new Set<string>();
+
+  for (const entry of entries) {
+    const path = normalizePackagePath(entry.path);
+    if (!path || path.endsWith('/')) continue; // skip directory markers
+
+    if (hasPathTraversal(path)) {
+      return fail('path-traversal', `Package entry escapes the archive root: "${entry.path}".`);
+    }
+
+    const key = path.toLowerCase();
+    if (seen.has(key)) {
+      if (path === MANIFEST_PATH) return fail('duplicate-manifest', 'Package contains more than one manifest.json.');
+      if (path === STORY_PATH) return fail('duplicate-story', 'Package contains more than one story.json.');
+      return fail('duplicate-asset-path', `Package contains a duplicate entry path: "${path}".`);
+    }
+    seen.add(key);
+
+    if (path === MANIFEST_PATH) {
+      manifestCount++;
+      if (entry.data.length > PACKAGE_LIMITS.maxManifestJsonBytes) {
+        return fail('oversized-package', 'manifest.json exceeds the maximum allowed size.');
+      }
+    } else if (path === STORY_PATH) {
+      storyCount++;
+      if (entry.data.length > PACKAGE_LIMITS.maxStoryJsonBytes) {
+        return fail('oversized-package', 'story.json exceeds the maximum allowed size.');
+      }
+    } else if (path.startsWith(ASSETS_PREFIX)) {
+      assetCount++;
+      if (entry.data.length > PACKAGE_LIMITS.maxAssetBytes) {
+        return fail('oversized-asset', `Embedded asset exceeds the maximum allowed size: "${path}".`);
+      }
+    } else {
+      return fail('unexpected-entry', `Package contains an unexpected entry: "${path}".`);
+    }
+  }
+
+  if (manifestCount === 0) return fail('missing-manifest', 'Package missing manifest.json.');
+  if (storyCount === 0) return fail('missing-story', 'Package missing story.json.');
+  if (assetCount > PACKAGE_LIMITS.maxAssetCount) {
+    return fail('oversized-package', `Package contains too many assets (${assetCount} > ${PACKAGE_LIMITS.maxAssetCount}).`);
+  }
+  return { ok: true };
+}
+
+/** Asset files present in the ZIP but absent from the manifest's assetsManifest. */
+export function findUnlistedPackageAssets(
+  entries: ReadonlyArray<PackageEntryLike>,
+  assetsManifest: readonly PackageAssetManifestEntry[],
+): string[] {
+  const listed = new Set(assetsManifest.map(e => normalizePackagePath(e.path).toLowerCase()));
+  const unlisted: string[] = [];
+  for (const entry of entries) {
+    const path = normalizePackagePath(entry.path);
+    if (!path.startsWith(ASSETS_PREFIX) || path.endsWith('/')) continue;
+    if (!listed.has(path.toLowerCase())) unlisted.push(path);
+  }
+  return unlisted;
+}
+
 export function collectReferencedAssetNames(project: Project): string[] {
   const names = new Set<string>();
   for (const frag of project.fragments) {
@@ -185,9 +322,12 @@ export function migratePackageManifest(manifest: ChronicaPackageManifest): Chron
   return manifest;
 }
 
-export function assertSupportedPackageVersion(version: number): { ok: true } | { ok: false; error: string } {
+export function assertSupportedPackageVersion(version: number): { ok: true } | PackageImportFailure {
   if (version < CHRONICA_PACKAGE_VERSION_MIN || version > CHRONICA_PACKAGE_VERSION_MAX) {
-    return { ok: false, error: `Unsupported package version: ${version}` };
+    return fail(
+      'unsupported-package-version',
+      `Unsupported package version ${version}. This build supports ${CHRONICA_PACKAGE_VERSION_MIN}–${CHRONICA_PACKAGE_VERSION_MAX}.`,
+    );
   }
   return { ok: true };
 }
@@ -204,87 +344,98 @@ export function findUnresolvedImportAssets(project: Project): string[] {
   return unresolved;
 }
 
-export function validatePackageManifest(data: unknown): { ok: true; manifest: ChronicaPackageManifest } | { ok: false; error: string } {
+export const DEFAULT_PACKAGE_TITLE = 'Untitled Story';
+
+export function validatePackageManifest(data: unknown): { ok: true; manifest: ChronicaPackageManifest } | PackageImportFailure {
   if (!data || typeof data !== 'object') {
-    return { ok: false, error: 'manifest.json is not an object.' };
+    return fail('invalid-manifest', 'manifest.json is not an object.');
   }
   const m = data as Record<string, unknown>;
   if (m.format !== CHRONICA_PACKAGE_FORMAT) {
-    return { ok: false, error: 'manifest.json has invalid format.' };
+    return fail('invalid-manifest', 'manifest.json has invalid format.');
   }
   if (typeof m.version !== 'number') {
-    return { ok: false, error: 'manifest.json missing version.' };
+    return fail('invalid-manifest', 'manifest.json missing version.');
   }
   const versionCheck = assertSupportedPackageVersion(m.version);
   if (!versionCheck.ok) return versionCheck;
   if (m.app !== CHRONICA_PACKAGE_APP) {
-    return { ok: false, error: 'manifest.json app field is not Chronica Studio.' };
+    return fail('invalid-manifest', 'manifest.json app field is not Chronica Studio.');
   }
   if (typeof m.exportedAt !== 'string' || !m.exportedAt) {
-    return { ok: false, error: 'manifest.json missing exportedAt.' };
+    return fail('invalid-manifest', 'manifest.json missing exportedAt.');
   }
-  if (typeof m.title !== 'string' || !m.title) {
-    return { ok: false, error: 'manifest.json missing title.' };
-  }
+  // Title is non-critical metadata: default it rather than reject the package.
+  const title = typeof m.title === 'string' && m.title.trim() ? m.title : DEFAULT_PACKAGE_TITLE;
   if (typeof m.gameId !== 'string' || !m.gameId) {
-    return { ok: false, error: 'manifest.json missing gameId.' };
+    return fail('invalid-manifest', 'manifest.json missing gameId.');
   }
   if (typeof m.assetCount !== 'number') {
-    return { ok: false, error: 'manifest.json missing assetCount.' };
+    return fail('invalid-manifest', 'manifest.json missing assetCount.');
   }
   if (typeof m.storySchemaVersion !== 'number') {
-    return { ok: false, error: 'manifest.json missing storySchemaVersion.' };
+    return fail('invalid-manifest', 'manifest.json missing storySchemaVersion.');
   }
   if (typeof m.storyContentHash !== 'string' || !m.storyContentHash.trim()) {
-    return { ok: false, error: 'manifest.json missing storyContentHash.' };
+    return fail('invalid-manifest', 'manifest.json missing storyContentHash.');
   }
   if (!Array.isArray(m.assetsManifest)) {
-    return { ok: false, error: 'manifest.json missing assetsManifest.' };
+    return fail('invalid-manifest', 'manifest.json missing assetsManifest.');
   }
+  const seenPaths = new Set<string>();
   for (const item of m.assetsManifest) {
     if (!item || typeof item !== 'object') {
-      return { ok: false, error: 'manifest.json assetsManifest has invalid entry.' };
+      return fail('invalid-manifest', 'manifest.json assetsManifest has invalid entry.');
     }
     const entry = item as Record<string, unknown>;
     if (typeof entry.path !== 'string' || !entry.path) {
-      return { ok: false, error: 'manifest.json assetsManifest entry missing path.' };
+      return fail('invalid-manifest', 'manifest.json assetsManifest entry missing path.');
     }
+    const normalizedPath = normalizePackagePath(entry.path).toLowerCase();
+    if (seenPaths.has(normalizedPath)) {
+      return fail('duplicate-asset-path', `manifest.json lists a duplicate asset path: ${entry.path}.`);
+    }
+    seenPaths.add(normalizedPath);
     if (typeof entry.size !== 'number' || entry.size < 0) {
-      return { ok: false, error: `manifest.json assetsManifest entry invalid size for ${entry.path}.` };
+      return fail('invalid-manifest', `manifest.json assetsManifest entry invalid size for ${entry.path}.`);
     }
     if (typeof entry.crc32 !== 'number') {
-      return { ok: false, error: `manifest.json assetsManifest entry missing crc32 for ${entry.path}.` };
+      return fail('invalid-manifest', `manifest.json assetsManifest entry missing crc32 for ${entry.path}.`);
     }
   }
   if (m.assetCount !== m.assetsManifest.length) {
-    return {
-      ok: false,
-      error: 'manifest.json assetCount does not match assetsManifest length.',
-    };
+    return fail('invalid-manifest', 'manifest.json assetCount does not match assetsManifest length.');
   }
-  const manifest = migratePackageManifest(m as unknown as ChronicaPackageManifest);
+  // Unknown future fields are preserved harmlessly via the cast — never rejected.
+  const manifest = migratePackageManifest({ ...(m as unknown as ChronicaPackageManifest), title });
   return { ok: true, manifest };
 }
 
-export function validatePackageStory(data: unknown): { ok: true; story: Project } | { ok: false; error: string } {
+export function validatePackageStory(data: unknown): { ok: true; story: Project } | PackageImportFailure {
   if (!data || typeof data !== 'object') {
-    return { ok: false, error: 'story.json is not an object.' };
+    return fail('invalid-story', 'story.json is not an object.');
   }
   const s = data as Record<string, unknown>;
-  if (!s.schemaVersion) {
-    return { ok: false, error: 'story.json missing schemaVersion.' };
+  if (typeof s.schemaVersion !== 'number') {
+    return fail('invalid-story', 'story.json missing schemaVersion.');
+  }
+  if (s.schemaVersion < PACKAGE_SCHEMA_VERSION_MIN || s.schemaVersion > PACKAGE_SCHEMA_VERSION_MAX) {
+    return fail(
+      'unsupported-schema-version',
+      `Unsupported story schema version ${s.schemaVersion}. This build supports ${PACKAGE_SCHEMA_VERSION_MIN}–${PACKAGE_SCHEMA_VERSION_MAX}.`,
+    );
   }
   if (!s.id || !s.title) {
-    return { ok: false, error: 'story.json missing id or title.' };
+    return fail('invalid-story', 'story.json missing id or title.');
   }
   if (!s.gameId || typeof s.gameId !== 'string') {
-    return { ok: false, error: 'story.json missing gameId.' };
+    return fail('invalid-story', 'story.json missing gameId.');
   }
   if (!Array.isArray(s.fragments)) {
-    return { ok: false, error: 'story.json fragments must be an array.' };
+    return fail('invalid-story', 'story.json fragments must be an array.');
   }
   if (!Array.isArray(s.assets)) {
-    return { ok: false, error: 'story.json assets must be an array.' };
+    return fail('invalid-story', 'story.json assets must be an array.');
   }
   return { ok: true, story: s as unknown as Project };
 }
