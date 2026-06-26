@@ -4,6 +4,33 @@ import appJson from './app.json';
 
 const base = appJson.expo as ExpoConfig;
 
+const EAS_PROJECT_ID = '465f6328-9713-4a7e-9b6a-d1817a57cc85';
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function mergeExtra(
+  configExtra: ExpoConfig['extra'],
+  baseExtra: ExpoConfig['extra'],
+  chronicaAppMode: 'studio' | 'player',
+): ExpoConfig['extra'] {
+  const merged = {
+    ...asRecord(configExtra),
+    ...asRecord(baseExtra),
+  };
+  const existingEas = asRecord(merged.eas);
+
+  return {
+    ...merged,
+    chronicaAppMode,
+    eas: {
+      ...existingEas,
+      projectId: existingEas.projectId ?? EAS_PROJECT_ID,
+    },
+  };
+}
+
 export default ({ config }: ConfigContext): ExpoConfig => {
   const isPlayer = process.env.CHRONICA_APP_MODE === 'player';
 
@@ -11,10 +38,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     return {
       ...config,
       ...base,
-      extra: {
-        ...base.extra,
-        chronicaAppMode: 'studio',
-      },
+      extra: mergeExtra(config.extra, base.extra, 'studio'),
     };
   }
 
@@ -24,10 +48,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     name: 'Chronica Player',
     slug: 'chronica-player',
     scheme: 'chronicaplayer',
-    extra: {
-      ...base.extra,
-      chronicaAppMode: 'player',
-    },
+    extra: mergeExtra(config.extra, base.extra, 'player'),
     ios: {
       ...base.ios,
       bundleIdentifier: 'studio.lownoise.chronicaplayer',

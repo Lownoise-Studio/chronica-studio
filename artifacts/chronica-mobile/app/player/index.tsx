@@ -22,14 +22,13 @@ import {
   showRemoveGameMenu,
   useLoadGameActions,
 } from '@/hooks/useLoadGameActions';
-import { readBytes } from '@/storage/fileSystem';
+import { loadGameFromUri } from '@/storage/load-game';
 
 export default function PlayerHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { projects, deleteProject, isLoaded } = useProjects();
-  const { loadingGame, loadingDemo, loadProjectBytes, handleLoadGame, handleTryDemo } =
-    useLoadGameActions();
+  const { projects, deleteProject, isLoaded, importProject, importProjectPackage } = useProjects();
+  const { loadingGame, loadingDemo, handleLoadGame, handleTryDemo } = useLoadGameActions();
 
   const openGame = useCallback(async () => {
     const nav = await handleLoadGame();
@@ -48,15 +47,18 @@ export default function PlayerHomeScreen() {
       if (!path && !uri.startsWith('content://') && !uri.startsWith('file://')) return;
 
       try {
-        const bytes = await readBytes(uri);
-        const nav = await loadProjectBytes(bytes);
-        if (nav) navigateToPlay(router, nav);
+        const result = await loadGameFromUri(uri, { importProject, importProjectPackage });
+        if (!result.ok) {
+          Alert.alert('Could not open game', result.error);
+          return;
+        }
+        navigateToPlay(router, { projectId: result.project.id, autoStart: true });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Could not open file.';
         Alert.alert('Could not open game', msg);
       }
     },
-    [loadProjectBytes],
+    [importProject, importProjectPackage],
   );
 
   useEffect(() => {

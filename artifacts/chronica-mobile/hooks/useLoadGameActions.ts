@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useProjects } from '@/context/ProjectsContext';
-import { pickAndLoadGame } from '@/storage/load-game';
+import { pickAndLoadGame, loadGameFromPackageBytes } from '@/storage/load-game';
 import { buildShowcasePackageBytes } from '@/demo/showcase-package';
 import type { Project } from '@/engine/types';
 
@@ -24,8 +24,7 @@ export function useLoadGameActions() {
   const [loadingDemo, setLoadingDemo] = useState(false);
 
   const loadProjectBytes = async (bytes: Uint8Array): Promise<LoadGameNavigation | null> => {
-    const { loadGameFromBytes } = await import('@/engine/load-game');
-    const result = await loadGameFromBytes(bytes, { importProject, importProjectPackage });
+    const result = await loadGameFromPackageBytes(bytes, { importProject, importProjectPackage });
     if (!result.ok) {
       Alert.alert('Could not load game', formatLoadError(result.error, result.diagnostics));
       return null;
@@ -66,16 +65,16 @@ export function useLoadGameActions() {
     setLoadingDemo(true);
     try {
       const bytes = buildShowcasePackageBytes();
-      const outcome = await importProjectPackage(bytes);
-      if (!outcome.ok || !outcome.project) {
+      const result = await loadGameFromPackageBytes(bytes, { importProject, importProjectPackage });
+      if (!result.ok) {
         Alert.alert(
           'Could not load demo',
-          formatLoadError(outcome.error ?? 'Demo package failed.', outcome.diagnostics),
+          formatLoadError(result.error, result.diagnostics),
         );
         return null;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return { projectId: outcome.project.id, autoStart: true };
+      return { projectId: result.project.id, autoStart: true };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Could not load demo.';
       Alert.alert('Could not load demo', msg);
