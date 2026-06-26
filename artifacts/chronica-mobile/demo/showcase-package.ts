@@ -1,6 +1,7 @@
 import {
   MANIFEST_PATH,
   STORY_PATH,
+  buildAssetsManifest,
   planChronicaPackage,
 } from '@/engine/chronica-package';
 import { encodeZip } from '@/storage/zip-store';
@@ -11,20 +12,28 @@ export function buildShowcasePackageBytes(exportedAt = new Date().toISOString())
   const project = getShowcaseProject();
   const plan = planChronicaPackage(project, () => true, exportedAt);
 
+  const assetEntries = plan.assetFiles.map(file => ({
+    path: file.packagePath,
+    data: DEMO_PNG_BYTES,
+  }));
+
+  const manifest = {
+    ...plan.manifest,
+    assetsManifest: buildAssetsManifest(assetEntries),
+    assetCount: assetEntries.length,
+  };
+
   const entries = [
     {
       path: MANIFEST_PATH,
-      data: new TextEncoder().encode(JSON.stringify(plan.manifest, null, 2)),
+      data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
     },
     {
       path: STORY_PATH,
       data: new TextEncoder().encode(JSON.stringify(plan.story, null, 2)),
     },
+    ...assetEntries,
   ];
-
-  for (const file of plan.assetFiles) {
-    entries.push({ path: file.packagePath, data: DEMO_PNG_BYTES });
-  }
 
   return encodeZip(entries);
 }

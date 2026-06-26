@@ -3,6 +3,10 @@
  * Zero external dependencies — sufficient for .chronica packages.
  */
 
+import { crc32 } from '@/engine/crc32';
+
+export { crc32 };
+
 export interface ZipEntry {
   path: string;
   data: Uint8Array;
@@ -11,17 +15,6 @@ export interface ZipEntry {
 const SIG_LOCAL = 0x04034b50;
 const SIG_CENTRAL = 0x02014b50;
 const SIG_EOCD = 0x06054b50;
-
-function crc32(data: Uint8Array): number {
-  let crc = 0xffffffff;
-  for (let i = 0; i < data.length; i++) {
-    crc ^= data[i];
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
 
 function writeUint16(view: DataView, offset: number, value: number) {
   view.setUint16(offset, value, true);

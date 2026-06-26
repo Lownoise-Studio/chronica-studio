@@ -99,7 +99,7 @@ A `.chronica` file is a **ZIP archive** (stored, uncompressed entries) containin
 
 | Path | Contents |
 |------|----------|
-| `manifest.json` | `format: "chronica-package"`, `version`, `app`, `exportedAt`, `title`, `gameId`, `storyContentHash`, `assetCount`, `storySchemaVersion` |
+| `manifest.json` | `format: "chronica-package"`, `version`, `app`, `exportedAt`, `title`, `gameId`, `storyContentHash`, `assetsManifest`, `assetCount`, `storySchemaVersion` |
 | `story.json` | Full project; asset `uri` fields rewritten to portable `assets/<filename>` paths |
 | `assets/*` | Binary copies of referenced image/audio files |
 
@@ -161,7 +161,7 @@ Not yet supported as first-class engine features: character portraits, dialogue 
 
 Ordered by foundation impact. These are engine-layer efforts (not app polish alone).
 
-1. **Asset package reliability** — round-trip `.chronica` export/import with verified binary integrity, missing-asset reporting, and consistent URI hydration on Android and iOS.
+1. **Asset package reliability** — ✅ per-asset CRC manifest, hard export gate, import compile gate, `storyContentHash` + `assetsManifest` verification.
 2. **Runtime / player separation** — ✅ `PlayerHost` + `PlayerView` over `CompiledGame`; save gate validates `gameId` + `contentHash` on resume; playtest and Load Game share the same host contract.
 3. **Project compiler / validator** — ✅ `compileProject` → `CompiledGame` with fragment index, validation gate on play/export.
 4. **Event / action system** — ✅ typed `ActionStep` AST, `parseActionString`, compile-time action validation, runtime executes `choiceActions` only.

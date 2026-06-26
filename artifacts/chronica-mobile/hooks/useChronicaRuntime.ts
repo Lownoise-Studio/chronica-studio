@@ -16,6 +16,7 @@ const EMPTY_SNAPSHOT = {
   history: [] as ReturnType<PlayerHost['snapshot']>['history'],
   backgroundUri: undefined as string | undefined,
   audioUri: undefined as string | undefined,
+  assetWarnings: [] as string[],
 };
 
 export function useChronicaRuntime(project: Project | undefined) {

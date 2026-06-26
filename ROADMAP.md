@@ -23,7 +23,7 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 | Runtime host module (`runtime/chronica-runtime.ts`) | ✅ |
 | Player host + save integrity gate (`runtime/player-host.ts`) | ✅ |
 | Presentation-only player UI (`components/PlayerView.tsx`) | ✅ |
-| Bundled Try Demo showcase (`.chronica` in-memory) | ✅ |
+| Asset package reliability (export gate, CRC manifest, import compile gate) | ✅ |
 | Story Graph View | ✅ |
 | Engine tests (expressions, validator, turn resolver, runtime, packages) | ✅ |
 | Advanced Mode (raw IDs, conditions syntax, state inspector) | ✅ |

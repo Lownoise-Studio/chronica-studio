@@ -1,4 +1,5 @@
 import { CompiledGame } from '@/engine/compiler/types';
+import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
 import { Choice, ChronicaState, Fragment } from '@/engine/types';
 import { ChronicaRuntime, ChooseResult, HistoryEntry, RuntimeSave } from './chronica-runtime';
 import { ResumeResult } from './validate-runtime-save';
@@ -11,6 +12,7 @@ export type PlayerSnapshot = {
   history: HistoryEntry[];
   backgroundUri: string | undefined;
   audioUri: string | undefined;
+  assetWarnings: string[];
 };
 
 /**
@@ -48,14 +50,25 @@ export class PlayerHost {
   }
 
   snapshot(): PlayerSnapshot {
+    const fragment = this.runtime.currentFragment;
+    const assetWarnings = fragment
+      ? resolveSceneAssetIssues(this.game.assets, fragment).map(issue => {
+          if (issue.kind === 'not-in-library') {
+            return `${issue.field} "${issue.reference}" is not in the asset library`;
+          }
+          return `${issue.field} "${issue.reference}" (${issue.assetName}) has no loadable URI`;
+        })
+      : [];
+
     return {
       started: this.runtime.isStarted,
       state: this.runtime.runtimeState,
-      fragment: this.runtime.currentFragment,
+      fragment,
       visibleChoices: this.runtime.visibleChoices,
       history: this.runtime.pathHistory,
       backgroundUri: this.runtime.getBackgroundUri(),
       audioUri: this.runtime.getAudioUri(),
+      assetWarnings,
     };
   }
 

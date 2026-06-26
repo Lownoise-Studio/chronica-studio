@@ -100,7 +100,7 @@ interface ProjectsContextType {
   getProject: (id: string) => Project | undefined;
   exportProject: (id: string) => string | null;
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
-  importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project }>;
+  importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project; diagnostics?: ValidationError[] }>;
   getValidationErrors: (id: string) => ValidationError[];
 }
 
@@ -265,16 +265,16 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const importProjectPackage = async (
     bytes: Uint8Array,
-  ): Promise<{ ok: boolean; error?: string; project?: Project }> => {
+  ): Promise<{ ok: boolean; error?: string; project?: Project; diagnostics?: ValidationError[] }> => {
     try {
       const newInstallId = createId();
       const result = await parseChronicaPackage(bytes, newInstallId);
-      if (!result.ok) return { ok: false, error: result.error };
+      if (!result.ok) {
+        return { ok: false, error: result.error, diagnostics: result.diagnostics };
+      }
 
-      const migrated = migrateProject(result.project);
-      const project: Project = { ...migrated, id: newInstallId, updatedAt: nowIso() };
-      persist([...projects, project]);
-      return { ok: true, project };
+      persist([...projects, result.project]);
+      return { ok: true, project: result.project };
     } catch (e: any) {
       return { ok: false, error: e?.message ?? 'Failed to import package.' };
     }

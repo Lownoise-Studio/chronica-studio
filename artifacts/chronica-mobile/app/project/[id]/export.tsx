@@ -109,35 +109,10 @@ export default function ExportScreen() {
     try {
       const built = await buildChronicaPackageBytes(project);
       if (!built.ok) {
-        setStatus({ ok: false, msg: built.error });
-        return;
-      }
-      if (built.warnings.length) {
-        Alert.alert(
-          'Export warnings',
-          built.warnings.join('\n\n'),
-          [
-            { text: 'Cancel', style: 'cancel', onPress: () => setWorking(false) },
-            {
-              text: 'Export anyway',
-              onPress: async () => {
-                try {
-                  const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}.chronica`;
-                  await writeAndSharePackage(filename, built.bytes);
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setStatus({
-                    ok: true,
-                    msg: `Game package exported with ${built.plan.assetFiles.length} image(s).`,
-                  });
-                } catch (e: any) {
-                  setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
-                } finally {
-                  setWorking(false);
-                }
-              },
-            },
-          ],
-        );
+        const detail = built.diagnostics?.length
+          ? built.diagnostics.map(d => `• ${d.message}`).join('\n')
+          : built.error;
+        setStatus({ ok: false, msg: detail });
         return;
       }
       const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}.chronica`;
@@ -145,7 +120,7 @@ export default function ExportScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStatus({
         ok: true,
-        msg: `Game package exported with ${built.plan.assetFiles.length} image(s).`,
+        msg: `Game package exported with ${built.plan.assetFiles.length} asset(s).`,
       });
     } catch (e: any) {
       setStatus({ ok: false, msg: e?.message ?? 'Export failed.' });
@@ -179,7 +154,10 @@ export default function ExportScreen() {
             msg: `Imported game package "${outcome.project.title}" with images.`,
           });
         } else {
-          setStatus({ ok: false, msg: outcome.error ?? 'Package import failed.' });
+          const detail = outcome.diagnostics?.length
+            ? `${outcome.error ?? 'Package import failed.'}\n\n${outcome.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
+            : (outcome.error ?? 'Package import failed.');
+          setStatus({ ok: false, msg: detail });
         }
         return;
       }

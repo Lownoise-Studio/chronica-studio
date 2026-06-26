@@ -40,7 +40,10 @@ export default function HomeScreen() {
       const result = await pickAndLoadGame({ importProject, importProjectPackage });
       if (!result.ok) {
         if (result.cancelled) return;
-        Alert.alert('Could not load game', result.error);
+        const detail = result.diagnostics?.length
+          ? `${result.error}\n\n${result.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
+          : result.error;
+        Alert.alert('Could not load game', detail ?? 'Import failed.');
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -66,7 +69,10 @@ export default function HomeScreen() {
       const bytes = buildShowcasePackageBytes();
       const outcome = await importProjectPackage(bytes);
       if (!outcome.ok || !outcome.project) {
-        Alert.alert('Could not load demo', outcome.error ?? 'Demo package failed.');
+        const detail = outcome.diagnostics?.length
+          ? `${outcome.error ?? 'Demo package failed.'}\n\n${outcome.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
+          : (outcome.error ?? 'Demo package failed.');
+        Alert.alert('Could not load demo', detail);
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

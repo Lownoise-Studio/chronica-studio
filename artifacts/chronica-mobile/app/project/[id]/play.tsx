@@ -34,6 +34,7 @@ export default function PlayScreen() {
     history,
     backgroundUri: bgUri,
     audioUri,
+    assetWarnings,
     start,
     tryResume,
     choose,
@@ -175,7 +176,16 @@ export default function PlayScreen() {
       onChoose={handleChoice}
       debugPanel={
         advancedMode && gameState && currentFragment ? (
-          <View style={{ marginTop: 8 }}>
+          <View style={{ marginTop: 8, gap: 8 }}>
+            {assetWarnings.length > 0 && (
+              <View style={{ gap: 4 }}>
+                {assetWarnings.map((warning, i) => (
+                  <Text key={i} style={{ color: colors.destructive, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                    {warning}
+                  </Text>
+                ))}
+              </View>
+            )}
             <DebugPanel
               state={gameState}
               onStateChange={updated => {

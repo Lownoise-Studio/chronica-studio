@@ -1,5 +1,9 @@
 import { ProjectAsset } from './types';
 
+export type AssetResolveIssue =
+  | { kind: 'not-in-library'; reference: string; field: 'backgroundImage' | 'backgroundAudio' }
+  | { kind: 'empty-uri'; reference: string; assetName: string; field: 'backgroundImage' | 'backgroundAudio' };
+
 /** True when the string looks like a URI or absolute filesystem path. */
 export function isUriLike(reference: string): boolean {
   return (
@@ -33,6 +37,30 @@ export function normalizeAssetUri(uri: string): string {
   return trimmed;
 }
 
+function findAssetRecord(
+  assets: readonly ProjectAsset[],
+  reference: string,
+): ProjectAsset | undefined {
+  const ref = reference.trim();
+  if (!ref) return undefined;
+
+  const byName = assets.find(a => a.name === ref);
+  if (byName) return byName;
+
+  const lower = ref.toLowerCase();
+  const byNameInsensitive = assets.find(a => a.name.toLowerCase() === lower);
+  if (byNameInsensitive) return byNameInsensitive;
+
+  const byId = assets.find(a => a.id === ref);
+  if (byId) return byId;
+
+  const byExactUri = assets.find(a => a.uri === ref);
+  if (byExactUri) return byExactUri;
+
+  const base = ref.split('/').pop() ?? ref;
+  return assets.find(a => a.name === base || a.name === ref || a.uri.endsWith(`/${base}`));
+}
+
 /**
  * Resolve a scene background (or audio) reference to a loadable URI.
  * Fragments store the project asset `name`; this also accepts id, uri, or basename.
@@ -44,31 +72,43 @@ export function resolveAssetUri(
   const ref = reference?.trim();
   if (!ref) return undefined;
 
-  const byName = assets.find(a => a.name === ref && a.uri);
-  if (byName) return normalizeAssetUri(byName.uri);
-
-  const lower = ref.toLowerCase();
-  const byNameInsensitive = assets.find(
-    a => a.uri && a.name.toLowerCase() === lower,
-  );
-  if (byNameInsensitive) return normalizeAssetUri(byNameInsensitive.uri);
-
-  const byId = assets.find(a => a.id === ref && a.uri);
-  if (byId) return normalizeAssetUri(byId.uri);
-
-  const byExactUri = assets.find(a => a.uri === ref);
-  if (byExactUri) return normalizeAssetUri(byExactUri.uri);
-
-  const base = ref.split('/').pop() ?? ref;
-  const byBasename = assets.find(a => {
-    if (!a.uri) return false;
-    return a.name === base || a.name === ref || a.uri.endsWith(`/${base}`);
-  });
-  if (byBasename) return normalizeAssetUri(byBasename.uri);
+  const record = findAssetRecord(assets, ref);
+  if (record?.uri?.trim()) return normalizeAssetUri(record.uri);
 
   if (isUriLike(ref)) return normalizeAssetUri(ref);
 
   return undefined;
+}
+
+/** Collect asset resolution issues for the current scene media references. */
+export function resolveSceneAssetIssues(
+  assets: readonly ProjectAsset[],
+  fragment: { backgroundImage?: string; backgroundAudio?: string },
+): AssetResolveIssue[] {
+  const issues: AssetResolveIssue[] = [];
+
+  const check = (
+    reference: string | undefined,
+    field: 'backgroundImage' | 'backgroundAudio',
+    type: ProjectAsset['type'],
+  ) => {
+    const ref = reference?.trim();
+    if (!ref) return;
+
+    const pool = assets.filter(a => a.type === type);
+    const record = findAssetRecord(pool, ref) ?? findAssetRecord(assets, ref);
+    if (!record) {
+      issues.push({ kind: 'not-in-library', reference: ref, field });
+      return;
+    }
+    if (!record.uri?.trim()) {
+      issues.push({ kind: 'empty-uri', reference: ref, assetName: record.name, field });
+    }
+  };
+
+  check(fragment.backgroundImage, 'backgroundImage', 'image');
+  check(fragment.backgroundAudio, 'backgroundAudio', 'audio');
+  return issues;
 }
 
 /**

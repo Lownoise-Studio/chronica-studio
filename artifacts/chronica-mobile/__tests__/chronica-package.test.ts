@@ -4,6 +4,7 @@ import {
   CHRONICA_PACKAGE_FORMAT,
   MANIFEST_PATH,
   STORY_PATH,
+  buildAssetsManifest,
   buildPackageStory,
   createPackageManifest,
   findMissingPackageAssets,
@@ -12,6 +13,7 @@ import {
   planChronicaPackage,
   validatePackageManifest,
   validatePackageStory,
+  verifyPackageAssetsManifest,
 } from '../engine/chronica-package';
 import { decodeZip, encodeZip, getZipTextFile, zipEntryMap } from '../storage/zip-store';
 
@@ -141,6 +143,14 @@ describe('missing asset reporting', () => {
 });
 
 describe('package validation', () => {
+  test('validates manifest with assetsManifest', () => {
+    const manifest = {
+      ...createPackageManifest(makeProject(), 1, '2026-01-01T00:00:00.000Z'),
+      assetsManifest: buildAssetsManifest([{ path: 'assets/forest.jpg', data: PNG_BYTES }]),
+    };
+    expect(validatePackageManifest(manifest).ok).toBe(true);
+  });
+
   test('validates manifest', () => {
     const manifest = createPackageManifest(makeProject(), 1, '2026-01-01T00:00:00.000Z');
     expect(validatePackageManifest(manifest).ok).toBe(true);
@@ -151,6 +161,27 @@ describe('package validation', () => {
     const story = buildPackageStory(makeProject(), []);
     expect(validatePackageStory(story).ok).toBe(true);
     expect(validatePackageStory({ title: 'x' }).ok).toBe(false);
+  });
+});
+
+describe('verifyPackageAssetsManifest', () => {
+  test('accepts matching asset bytes', () => {
+    const data = PNG_BYTES;
+    const manifest = buildAssetsManifest([{ path: 'assets/forest.jpg', data }]);
+    const map = new Map([['assets/forest.jpg', data]]);
+    expect(verifyPackageAssetsManifest(path => map.get(path), manifest)).toEqual({ ok: true });
+  });
+
+  test('rejects checksum mismatch', () => {
+    const data = PNG_BYTES;
+    const manifest = buildAssetsManifest([{ path: 'assets/forest.jpg', data }]);
+    const tampered = new Uint8Array(data);
+    tampered[0] = 0;
+    const map = new Map([['assets/forest.jpg', tampered]]);
+    const result = verifyPackageAssetsManifest(path => map.get(path), manifest);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe('corrupt-asset');
   });
 });
 

@@ -1,5 +1,6 @@
 import { normalizeAssetUri } from './asset-resolver';
 import { computeProjectContentHash } from './compiler/build-compiled-game';
+import { crc32 } from './crc32';
 import { Project, ProjectAsset } from './types';
 
 export const CHRONICA_PACKAGE_FORMAT = 'chronica-package';
@@ -10,6 +11,12 @@ export const MANIFEST_PATH = 'manifest.json';
 export const STORY_PATH = 'story.json';
 export const ASSETS_PREFIX = 'assets/';
 
+export interface PackageAssetManifestEntry {
+  path: string;
+  size: number;
+  crc32: number;
+}
+
 export interface ChronicaPackageManifest {
   format: typeof CHRONICA_PACKAGE_FORMAT;
   version: number;
@@ -19,6 +26,8 @@ export interface ChronicaPackageManifest {
   gameId: string;
   /** Hash of authored story content at export time; optional for legacy packages. */
   storyContentHash?: string;
+  /** Per-asset integrity entries for embedded assets/* files; optional for legacy packages. */
+  assetsManifest?: PackageAssetManifestEntry[];
   assetCount: number;
   storySchemaVersion: number;
 }
@@ -41,6 +50,59 @@ export interface MissingAssetReport {
   name: string;
   reason: 'not-in-library' | 'missing-file' | 'empty-uri';
   referencedBy: string[];
+}
+
+export type PackageExportDiagnosticType = MissingAssetReport['reason'];
+
+export interface PackageExportDiagnostic {
+  type: PackageExportDiagnosticType;
+  assetName: string;
+  message: string;
+  referencedBy: string[];
+}
+
+export function missingAssetsToDiagnostics(reports: MissingAssetReport[]): PackageExportDiagnostic[] {
+  return reports.map(report => ({
+    type: report.reason,
+    assetName: report.name,
+    message: `Missing asset "${report.name}" (${report.reason}) referenced by: ${report.referencedBy.join(', ')}`,
+    referencedBy: report.referencedBy,
+  }));
+}
+
+export function buildAssetsManifest(
+  files: ReadonlyArray<{ path: string; data: Uint8Array }>,
+): PackageAssetManifestEntry[] {
+  return files.map(({ path, data }) => ({
+    path: normalizePackagePath(path),
+    size: data.length,
+    crc32: crc32(data),
+  }));
+}
+
+export type PackageAssetVerifyResult =
+  | { ok: true }
+  | { ok: false; code: 'missing-asset' | 'corrupt-asset'; error: string };
+
+/** Verify embedded asset bytes against manifest entries (pure — caller supplies zip map lookup). */
+export function verifyPackageAssetsManifest(
+  getAssetData: (packagePath: string) => Uint8Array | undefined,
+  manifest: readonly PackageAssetManifestEntry[],
+): PackageAssetVerifyResult {
+  for (const entry of manifest) {
+    const normalized = normalizePackagePath(entry.path);
+    const data = getAssetData(normalized);
+    if (!data) {
+      return { ok: false, code: 'missing-asset', error: `Package missing asset file: ${entry.path}` };
+    }
+    if (data.length !== entry.size) {
+      return { ok: false, code: 'corrupt-asset', error: `Package asset size mismatch: ${entry.path}` };
+    }
+    if (crc32(data) !== entry.crc32) {
+      return { ok: false, code: 'corrupt-asset', error: `Package asset checksum mismatch: ${entry.path}` };
+    }
+  }
+  return { ok: true };
 }
 
 export function collectReferencedAssetNames(project: Project): string[] {
@@ -137,6 +199,26 @@ export function validatePackageManifest(data: unknown): { ok: true; manifest: Ch
   }
   if (m.storyContentHash !== undefined && typeof m.storyContentHash !== 'string') {
     return { ok: false, error: 'manifest.json storyContentHash must be a string.' };
+  }
+  if (m.assetsManifest !== undefined) {
+    if (!Array.isArray(m.assetsManifest)) {
+      return { ok: false, error: 'manifest.json assetsManifest must be an array.' };
+    }
+    for (const item of m.assetsManifest) {
+      if (!item || typeof item !== 'object') {
+        return { ok: false, error: 'manifest.json assetsManifest has invalid entry.' };
+      }
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.path !== 'string' || !entry.path) {
+        return { ok: false, error: 'manifest.json assetsManifest entry missing path.' };
+      }
+      if (typeof entry.size !== 'number' || entry.size < 0) {
+        return { ok: false, error: `manifest.json assetsManifest entry invalid size for ${entry.path}.` };
+      }
+      if (typeof entry.crc32 !== 'number') {
+        return { ok: false, error: `manifest.json assetsManifest entry missing crc32 for ${entry.path}.` };
+      }
+    }
   }
   return { ok: true, manifest: m as unknown as ChronicaPackageManifest };
 }

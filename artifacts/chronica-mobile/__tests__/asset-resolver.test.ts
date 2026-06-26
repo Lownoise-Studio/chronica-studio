@@ -2,6 +2,7 @@ import {
   isUriLike,
   normalizeAssetUri,
   resolveAssetUri,
+  resolveSceneAssetIssues,
   resolveSceneAudioUri,
   resolveSceneBackgroundUri,
 } from '../engine/asset-resolver';
@@ -92,5 +93,20 @@ describe('resolveSceneAudioUri', () => {
   test('ignores non-audio assets', () => {
     expect(resolveSceneAudioUri(assets, 'forest.jpg')).toBeUndefined();
     expect(resolveSceneAudioUri(assets, 'theme.mp3')).toBeTruthy();
+  });
+});
+
+describe('resolveSceneAssetIssues', () => {
+  test('reports missing library entry', () => {
+    const issues = resolveSceneAssetIssues(assets, { backgroundImage: 'missing.png' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].kind).toBe('not-in-library');
+  });
+
+  test('reports empty uri on known asset', () => {
+    const emptyAssets: ProjectAsset[] = [{ ...assets[0], uri: '' }];
+    const issues = resolveSceneAssetIssues(emptyAssets, { backgroundImage: 'forest.jpg' });
+    expect(issues).toHaveLength(1);
+    expect(issues[0].kind).toBe('empty-uri');
   });
 });

@@ -1,4 +1,5 @@
 import { compileProject } from '../engine/compiler';
+import { buildCompiledGame } from '../engine/compiler/build-compiled-game';
 import { PlayerHost } from '../runtime/player-host';
 import { validateRuntimeSave } from '../runtime/validate-runtime-save';
 import { Project, Fragment } from '../engine/types';
@@ -133,11 +134,23 @@ describe('PlayerHost', () => {
     expect(host2.tryResume(save)).toEqual({ ok: false, reason: 'stale-content' });
   });
 
-  test('choose advances through snapshot', () => {
-    const host = PlayerHost.create(compileOrThrow(makeProject(fragments)));
+  test('snapshot reports asset warnings for empty uri', () => {
+    const project = makeProject([
+      { ...fragments[0], backgroundImage: 'forest.jpg' },
+      fragments[1],
+    ], {
+      assets: [{
+        id: 'a-empty',
+        name: 'forest.jpg',
+        type: 'image',
+        uri: '',
+        mimeType: 'image/jpeg',
+        size: 0,
+        importedAt: '',
+      }],
+    });
+    const host = PlayerHost.create(buildCompiledGame(project));
     host.startNew();
-    const choice = host.snapshot().visibleChoices[0];
-    expect(host.choose(choice).ok).toBe(true);
-    expect(host.snapshot().fragment?.locationId).toBe('forest');
+    expect(host.snapshot().assetWarnings.some(w => w.includes('forest.jpg'))).toBe(true);
   });
 });

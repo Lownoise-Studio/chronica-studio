@@ -1,14 +1,14 @@
 import { isChronicaPackageBytes } from './chronica-package';
-import { Project } from './types';
+import { Project, ValidationError } from './types';
 
 export type LoadGameImportFns = {
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
-  importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project }>;
+  importProjectPackage: (bytes: Uint8Array) => Promise<{ ok: boolean; error?: string; project?: Project; diagnostics?: ValidationError[] }>;
 };
 
 export type LoadGameResult =
   | { ok: true; project: Project; kind: 'package' | 'json' }
-  | { ok: false; error: string; cancelled?: boolean };
+  | { ok: false; error: string; cancelled?: boolean; diagnostics?: ValidationError[] };
 
 export async function loadGameFromBytes(
   bytes: Uint8Array,
@@ -19,7 +19,7 @@ export async function loadGameFromBytes(
     if (outcome.ok && outcome.project) {
       return { ok: true, project: outcome.project, kind: 'package' };
     }
-    return { ok: false, error: outcome.error ?? 'Could not load game package.' };
+    return { ok: false, error: outcome.error ?? 'Could not load game package.', diagnostics: outcome.diagnostics };
   }
 
   const content = new TextDecoder().decode(bytes);

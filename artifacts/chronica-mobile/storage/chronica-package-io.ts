@@ -3,15 +3,21 @@ import {
   BuildPackagePlan,
   MANIFEST_PATH,
   STORY_PATH,
+  buildAssetsManifest,
   hydrateImportedPackageProject,
+  missingAssetsToDiagnostics,
   packageAssetPath,
   planChronicaPackage,
   sanitizePackageFilename,
   validatePackageManifest,
   validatePackageStory,
+  verifyPackageAssetsManifest,
+  type PackageExportDiagnostic,
 } from '@/engine/chronica-package';
+import { compileProject } from '@/engine/compiler';
 import { computeProjectContentHash } from '@/engine/compiler/build-compiled-game';
-import { Project } from '@/engine/types';
+import { migrateProject } from '@/engine/project-migration';
+import { Project, ValidationError } from '@/engine/types';
 import {
   assetDir,
   ensureDir,
@@ -23,6 +29,7 @@ import {
 import {
   decodeZip,
   encodeZip,
+  getZipBinaryFile,
   getZipTextFile,
   normalizeZipPath,
   zipEntryMap,
@@ -33,11 +40,11 @@ export type BuildChronicaPackageResult = {
   ok: true;
   bytes: Uint8Array;
   plan: BuildPackagePlan;
-  warnings: string[];
 } | {
   ok: false;
   error: string;
   plan?: BuildPackagePlan;
+  diagnostics?: PackageExportDiagnostic[];
 };
 
 export type ImportChronicaPackageResult = {
@@ -47,6 +54,7 @@ export type ImportChronicaPackageResult = {
 } | {
   ok: false;
   error: string;
+  diagnostics?: ValidationError[];
 };
 
 export async function extractPackageAssets(
@@ -104,40 +112,61 @@ export async function buildChronicaPackageBytes(
     exportedAt,
   );
 
-  const warnings: string[] = plan.missingAssets.map(
-    m => `Missing asset "${m.name}" (${m.reason}) referenced by: ${m.referencedBy.join(', ')}`,
-  );
+  if (plan.missingAssets.length > 0) {
+    const diagnostics = missingAssetsToDiagnostics(plan.missingAssets);
+    return {
+      ok: false,
+      error: `Cannot export: ${plan.missingAssets.length} referenced asset(s) missing.`,
+      plan,
+      diagnostics,
+    };
+  }
 
   const missingOnDisk = plan.assetFiles.filter(f => !uriExists.get(f.sourceUri));
   if (missingOnDisk.length) {
+    const diagnostics: PackageExportDiagnostic[] = missingOnDisk.map(f => ({
+      type: 'missing-file',
+      assetName: f.asset.name,
+      message: `Asset file missing on device: "${f.asset.name}"`,
+      referencedBy: [],
+    }));
     return {
       ok: false,
       error: `Cannot export: asset file(s) missing on device: ${missingOnDisk.map(f => f.asset.name).join(', ')}`,
       plan,
+      diagnostics,
     };
   }
+
+  const assetEntries: ZipEntry[] = [];
+  for (const file of plan.assetFiles) {
+    const data = await readBytes(file.sourceUri);
+    assetEntries.push({ path: file.packagePath, data });
+  }
+
+  const assetsManifest = buildAssetsManifest(assetEntries);
+  const manifest = {
+    ...plan.manifest,
+    assetsManifest,
+    assetCount: assetsManifest.length,
+  };
 
   const entries: ZipEntry[] = [
     {
       path: MANIFEST_PATH,
-      data: new TextEncoder().encode(JSON.stringify(plan.manifest, null, 2)),
+      data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
     },
     {
       path: STORY_PATH,
       data: new TextEncoder().encode(JSON.stringify(plan.story, null, 2)),
     },
+    ...assetEntries,
   ];
-
-  for (const file of plan.assetFiles) {
-    const data = await readBytes(file.sourceUri);
-    entries.push({ path: file.packagePath, data });
-  }
 
   return {
     ok: true,
     bytes: encodeZip(entries),
-    plan,
-    warnings,
+    plan: { ...plan, manifest },
   };
 }
 
@@ -186,11 +215,36 @@ export async function parseChronicaPackage(
     }
   }
 
+  if (manifest.assetsManifest?.length) {
+    const assetCheck = verifyPackageAssetsManifest(
+      path => getZipBinaryFile(map, path),
+      manifest.assetsManifest,
+    );
+    if (!assetCheck.ok) {
+      return { ok: false, error: assetCheck.error };
+    }
+  }
+
   const localUriByPackagePath = await extractPackageAssets(map, targetProjectId);
-  const project = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);
+  const hydrated = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);
+  const project = migrateProject({
+    ...hydrated,
+    id: targetProjectId,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const compiled = compileProject(project);
+  if (!compiled.ok) {
+    return {
+      ok: false,
+      error: 'Imported package story does not compile.',
+      diagnostics: compiled.diagnostics,
+    };
+  }
+
   return {
     ok: true,
-    project: { ...project, id: targetProjectId, updatedAt: new Date().toISOString() },
-    manifestTitle: manifestResult.manifest.title,
+    project,
+    manifestTitle: manifest.title,
   };
 }
