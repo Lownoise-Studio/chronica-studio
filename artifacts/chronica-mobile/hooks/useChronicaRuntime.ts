@@ -3,7 +3,8 @@ import { compileProject } from '@/engine/compiler';
 import { Choice, ChronicaState, Project, SceneHotspot, ValidationError } from '@/engine/types';
 import {
   PlayerHost,
-  ChooseResult,
+  PlayerActionResult,
+  PlayerAdvanceDialogueResult,
   RuntimeSave,
   ResumeResult,
 } from '@/runtime';
@@ -17,7 +18,8 @@ const EMPTY_SNAPSHOT = {
   history: [] as ReturnType<PlayerHost['snapshot']>['history'],
   backgroundUri: undefined as string | undefined,
   audioUri: undefined as string | undefined,
-  assetWarnings: [] as string[],
+  assetWarnings: [] as ReturnType<PlayerHost['snapshot']>['assetWarnings'],
+  runtimeWarnings: [] as ReturnType<PlayerHost['snapshot']>['runtimeWarnings'],
   dialogue: null as ReturnType<PlayerHost['snapshot']>['dialogue'],
 };
 
@@ -36,44 +38,55 @@ export function useChronicaRuntime(project: Project | undefined) {
 
   const refresh = useCallback(() => tick(), []);
 
+  /** Fire-and-forget asset existence check; re-renders once it resolves. Never blocks the action result. */
+  const verifyAndRefresh = useCallback(() => {
+    if (!host) return;
+    host.verifyAssets().then(refresh).catch(refresh);
+  }, [host, refresh]);
+
   const start = useCallback((): boolean => {
     if (!host) return false;
     const ok = host.startNew();
     refresh();
+    verifyAndRefresh();
     return ok;
-  }, [host, refresh]);
+  }, [host, refresh, verifyAndRefresh]);
 
   const tryResume = useCallback((save: RuntimeSave): ResumeResult => {
     if (!host) return { ok: false, reason: 'corrupt-state' };
     const result = host.tryResume(save);
     refresh();
+    verifyAndRefresh();
     return result;
-  }, [host, refresh]);
+  }, [host, refresh, verifyAndRefresh]);
 
   const resume = useCallback((save: RuntimeSave): boolean => {
     return tryResume(save).ok;
   }, [tryResume]);
 
-  const choose = useCallback((choice: Choice): ChooseResult => {
+  const choose = useCallback((choice: Choice): PlayerActionResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.choose(choice);
     refresh();
+    verifyAndRefresh();
     return result;
-  }, [host, refresh]);
+  }, [host, refresh, verifyAndRefresh]);
 
-  const activateHotspot = useCallback((hotspot: SceneHotspot): ChooseResult => {
+  const activateHotspot = useCallback((hotspot: SceneHotspot): PlayerActionResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.activateHotspot(hotspot);
     refresh();
+    verifyAndRefresh();
     return result;
-  }, [host, refresh]);
+  }, [host, refresh, verifyAndRefresh]);
 
-  const advanceDialogue = useCallback(() => {
-    if (!host) return { ok: false, reason: 'not-started' } as const;
+  const advanceDialogue = useCallback((): PlayerAdvanceDialogueResult => {
+    if (!host) return { ok: false, reason: 'not-started' };
     const result = host.advanceDialogue();
     refresh();
+    verifyAndRefresh();
     return result;
-  }, [host, refresh]);
+  }, [host, refresh, verifyAndRefresh]);
 
   const setRuntimeState = useCallback((next: ChronicaState) => {
     host?.setRuntimeState(next);

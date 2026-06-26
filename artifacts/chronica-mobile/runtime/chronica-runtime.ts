@@ -39,6 +39,19 @@ export type AdvanceDialogueResult =
   | { ok: false; reason: 'not-started' };
 
 /**
+ * Thrown when a runtime assumption is violated (e.g. a stale hotspot/choice
+ * reference, or an out-of-bounds dialogue index). PlayerHost is responsible
+ * for catching these and turning them into structured results — they must
+ * never escape to a UI event handler as an uncaught exception.
+ */
+export class RuntimeInvariantError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RuntimeInvariantError';
+  }
+}
+
+/**
  * Runtime host — executes a CompiledGame produced by the compiler.
  * No React or storage dependencies; persistence lives in runtime/save-store.ts.
  */
@@ -115,11 +128,17 @@ export class ChronicaRuntime {
     const state = deserializeState(save.state);
     if (!state) return { ok: false, reason: 'corrupt-state' };
 
-    const fragment = getActiveFragmentFromIndex(state.location, state, this.game.fragmentIndex);
-    this.history = save.history ?? [];
-    this.applyTurn(state, fragment);
-    this.started = true;
-    return { ok: true };
+    try {
+      const fragment = getActiveFragmentFromIndex(state.location, state, this.game.fragmentIndex);
+      this.history = save.history ?? [];
+      this.applyTurn(state, fragment);
+      this.started = true;
+      return { ok: true };
+    } catch {
+      // Defensive: a malformed-but-parseable save (e.g. variables of the wrong
+      // type) must not crash resume — treat it as corrupt rather than throwing.
+      return { ok: false, reason: 'corrupt-state' };
+    }
   }
 
   resume(save: RuntimeSave): boolean {
@@ -129,6 +148,9 @@ export class ChronicaRuntime {
   advanceDialogue(): AdvanceDialogueResult {
     if (!this.started || !this.state || !this.fragment) {
       return { ok: false, reason: 'not-started' };
+    }
+    if (!Number.isFinite(this.state.dialogueLineIndex) || this.state.dialogueLineIndex < 0) {
+      throw new RuntimeInvariantError('Dialogue line index is out of bounds.');
     }
 
     const lines = getFragmentDialogueLines(this.fragment);
@@ -148,6 +170,12 @@ export class ChronicaRuntime {
     if (!this.started || !this.state) {
       return { ok: false, reason: 'not-started' };
     }
+    if (!this.fragment) {
+      throw new RuntimeInvariantError('No active fragment to resolve a choice against.');
+    }
+    if (!(choice.uid in this.game.choiceActions)) {
+      throw new RuntimeInvariantError(`Choice "${choice.uid}" has no compiled action in this game.`);
+    }
     const result = engineChoose(choice, this.state, this.game);
     if (!result.fragment) {
       return { ok: false, reason: 'dead-end' };
@@ -166,6 +194,15 @@ export class ChronicaRuntime {
   activateHotspot(hotspot: SceneHotspot): ChooseResult {
     if (!this.started || !this.state) {
       return { ok: false, reason: 'not-started' };
+    }
+    if (!this.fragment) {
+      throw new RuntimeInvariantError('No active fragment to resolve a hotspot against.');
+    }
+    if (!this.fragment.hotspots?.some(h => h.uid === hotspot.uid)) {
+      throw new RuntimeInvariantError(`Hotspot "${hotspot.uid}" does not belong to the active fragment.`);
+    }
+    if (!(hotspot.uid in this.game.hotspotActions)) {
+      throw new RuntimeInvariantError(`Hotspot "${hotspot.uid}" has no compiled action in this game.`);
     }
     const result = engineActivateHotspot(hotspot, this.state, this.game);
     if (!result.fragment) {

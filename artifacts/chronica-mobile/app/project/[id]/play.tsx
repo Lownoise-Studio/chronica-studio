@@ -225,7 +225,7 @@ export default function PlayScreen() {
               <View style={{ gap: 4 }}>
                 {assetWarnings.map((warning, i) => (
                   <Text key={i} style={{ color: colors.destructive, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
-                    {warning}
+                    {warning.message}
                   </Text>
                 ))}
               </View>

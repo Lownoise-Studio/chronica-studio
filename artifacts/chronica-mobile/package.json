@@ -25,7 +25,8 @@
       "^expo-constants$": "<rootDir>/__mocks__/expo-constants.js",
       "^expo-file-system$": "<rootDir>/__mocks__/expo-file-system.js",
       "^expo-file-system/build/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js",
-      "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js"
+      "^expo-file-system/legacy$": "<rootDir>/__mocks__/expo-file-system-legacy.js",
+      "^react-native$": "<rootDir>/__mocks__/react-native.js"
     },
     "moduleFileExtensions": ["ts", "tsx", "js", "jsx", "json"]
   },
