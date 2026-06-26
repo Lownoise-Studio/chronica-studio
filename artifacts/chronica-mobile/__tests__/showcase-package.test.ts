@@ -49,10 +49,11 @@ describe('showcase demo package', () => {
     const project = await importShowcaseGame();
     expect(project.characters).toHaveLength(1);
     expect(project.characters[0]?.displayName).toBe('Elena');
-    expect(project.fragments).toHaveLength(3);
-    expect(project.fragments[0]?.dialogue?.length).toBeGreaterThanOrEqual(2);
-    expect(project.fragments[1]?.hotspots?.length).toBe(1);
-    expect(project.assets.length).toBeGreaterThanOrEqual(5);
+    expect(project.fragments).toHaveLength(7);
+    expect(project.fragments[0]?.dialogue?.length).toBeGreaterThanOrEqual(3);
+    expect(project.fragments[2]?.hotspots?.length).toBe(1);
+    expect(project.fragments[3]?.hotspots?.length).toBe(1);
+    expect(project.assets.length).toBeGreaterThanOrEqual(9);
   });
 
   test('compiles cleanly after package import', async () => {
@@ -88,46 +89,78 @@ describe('showcase demo gameplay', () => {
     return rt;
   }
 
+  function exhaustDialogue(rt: ChronicaRuntime) {
+    while (rt.getDialoguePresentation()?.canAdvance) {
+      rt.advanceDialogue();
+    }
+  }
+
+  function reachBridgeViaEngine(rt: ChronicaRuntime) {
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:corridor')!);
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:engine')!);
+    exhaustDialogue(rt);
+    rt.activateHotspot(rt.visibleHotspots[0]!);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:bridge')!);
+  }
+
   test('dialogue advances before choices appear', async () => {
     const rt = await startRuntime();
     expect(rt.currentFragment?.locationId).toBe('briefing');
     expect(rt.visibleChoices).toHaveLength(0);
     expect(rt.getDialoguePresentation()?.canAdvance).toBe(true);
 
-    rt.advanceDialogue();
+    exhaustDialogue(rt);
     expect(rt.getDialoguePresentation()?.exhausted).toBe(true);
     expect(rt.visibleChoices).toHaveLength(1);
   });
 
   test('hotspot sets variable and reveals gated choice on the bridge', async () => {
     const rt = await startRuntime();
-    rt.advanceDialogue();
-    rt.choose(rt.visibleChoices[0]!);
+    reachBridgeViaEngine(rt);
     expect(rt.currentFragment?.locationId).toBe('bridge');
+    expect(rt.runtimeState?.variables.power_routed).toBe(true);
 
-    rt.advanceDialogue();
+    exhaustDialogue(rt);
     expect(rt.visibleHotspots).toHaveLength(1);
     expect(rt.visibleChoices).toHaveLength(0);
 
-    const console = rt.visibleHotspots[0]!;
-    rt.activateHotspot(console);
+    rt.activateHotspot(rt.visibleHotspots[0]!);
     expect(rt.runtimeState?.variables.console_inspected).toBe(true);
     expect(rt.visibleHotspots).toHaveLength(0);
     expect(rt.visibleChoices).toHaveLength(1);
-    expect(rt.visibleChoices[0]?.label).toBe('Open the hidden route');
+    expect(rt.visibleChoices[0]?.label).toBe('Enter the sealed conduit');
   });
 
-  test('gated route reaches the final vault scene', async () => {
+  test('conduit vault choice stays locked until both variables are set', async () => {
     const rt = await startRuntime();
-    rt.advanceDialogue();
-    rt.choose(rt.visibleChoices[0]!);
-    rt.advanceDialogue();
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:corridor')!);
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:bridge')!);
+    exhaustDialogue(rt);
     rt.activateHotspot(rt.visibleHotspots[0]!);
-    rt.choose(rt.visibleChoices[0]!);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:conduit')!);
+    exhaustDialogue(rt);
+
+    expect(rt.visibleChoices.find(c => c.action === 'goto:vault')).toBeUndefined();
+    expect(rt.visibleChoices.find(c => c.action === 'goto:bridge')).toBeTruthy();
+  });
+
+  test('full tour reaches the epilogue', async () => {
+    const rt = await startRuntime();
+    reachBridgeViaEngine(rt);
+    exhaustDialogue(rt);
+    rt.activateHotspot(rt.visibleHotspots[0]!);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:conduit')!);
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:vault')!);
 
     expect(rt.currentFragment?.locationId).toBe('vault');
-    expect(rt.getDialoguePresentation()?.speakerName).toBeUndefined();
-    rt.advanceDialogue();
+    exhaustDialogue(rt);
+    rt.choose(rt.visibleChoices.find(c => c.action === 'goto:epilogue')!);
+    expect(rt.currentFragment?.locationId).toBe('epilogue');
     expect(rt.getDialoguePresentation()?.speakerName).toBe('Elena');
   });
 
@@ -139,7 +172,8 @@ describe('showcase demo gameplay', () => {
     const host = PlayerHost.create(compiled.game);
     host.startNew();
     host.advanceDialogue();
-    expect(host.snapshot().state?.dialogueLineIndex).toBe(1);
+    host.advanceDialogue();
+    expect(host.snapshot().state?.dialogueLineIndex).toBe(2);
 
     const save = host.toSave(project.id);
     expect(save).not.toBeNull();
@@ -147,8 +181,8 @@ describe('showcase demo gameplay', () => {
     const resumed = PlayerHost.create(compiled.game);
     const result = resumed.tryResume(save!);
     expect(result.ok).toBe(true);
-    expect(resumed.snapshot().state?.dialogueLineIndex).toBe(1);
-    expect(resumed.snapshot().dialogue?.lineIndex).toBe(1);
+    expect(resumed.snapshot().state?.dialogueLineIndex).toBe(2);
+    expect(resumed.snapshot().dialogue?.lineIndex).toBe(2);
   });
 });
 

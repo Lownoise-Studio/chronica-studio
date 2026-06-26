@@ -157,7 +157,7 @@ export default function HomeScreen() {
               {loadingDemo && <ActivityIndicator size="small" color={colors.primary} />}
             </View>
             <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
-              Play Engine Showcase — dialogue, portraits, hotspots, and branching state in one bundled .chronica game.
+              Play Engine Showcase — a guided tour with dialogue, hotspots, branching paths, and state-driven unlocks.
             </Text>
           </TouchableOpacity>
         }
