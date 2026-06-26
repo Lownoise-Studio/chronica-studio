@@ -119,6 +119,13 @@ export default function ProjectScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+          onPress={() => router.push(`/project/${project.id}/characters` as any)}
+          activeOpacity={0.8}
+        >
+          <Feather name="users" size={18} color={colors.foreground} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
           onPress={() => router.push(`/project/${project.id}/assets` as any)}
           activeOpacity={0.8}
         >
@@ -146,6 +153,7 @@ export default function ProjectScreen() {
           [totalScenes, 'Scenes'],
           [totalPlaces, advancedMode ? 'Locations' : 'Places'],
           [project.assets.length, advancedMode ? 'Assets' : 'Images'],
+          [project.characters?.length ?? 0, 'Cast'],
         ] as [number, string][]).map(([val, label], i) => (
           <React.Fragment key={label}>
             {i > 0 && <View style={[styles.statDiv, { backgroundColor: colors.border }]} />}

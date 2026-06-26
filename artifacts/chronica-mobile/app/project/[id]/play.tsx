@@ -42,10 +42,12 @@ export default function PlayScreen() {
     backgroundUri: bgUri,
     audioUri,
     assetWarnings,
+    dialogue,
     start,
     tryResume,
     choose,
     activateHotspot,
+    advanceDialogue,
     setRuntimeState,
     toSave,
   } = useChronicaRuntime(project);
@@ -134,6 +136,11 @@ export default function PlayScreen() {
     }
   };
 
+  const handleAdvanceDialogue = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    advanceDialogue();
+  };
+
   if (!project) {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -208,6 +215,8 @@ export default function PlayScreen() {
       onSave={saveGame}
       onChoose={handleChoice}
       onActivateHotspot={handleHotspot}
+      dialogue={dialogue}
+      onAdvanceDialogue={handleAdvanceDialogue}
       sceneOptions={sceneOptions}
       debugPanel={
         advancedMode && gameState && currentFragment ? (

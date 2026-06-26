@@ -15,6 +15,7 @@ function makeProject(fragments: Fragment[] = []): Project {
     updatedAt: new Date().toISOString(),
     fragments,
     assets: [],
+    characters: [],
   };
 }
 

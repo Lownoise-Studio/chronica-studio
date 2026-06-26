@@ -15,6 +15,7 @@ function cloneState(s: ChronicaState): ChronicaState {
     reality_layer: s.reality_layer,
     memory: { ...s.memory },
     variables: { ...s.variables },
+    dialogueLineIndex: s.dialogueLineIndex ?? 0,
   };
 }
 
@@ -24,6 +25,7 @@ function commitState(target: ChronicaState, source: ChronicaState): void {
   target.reality_layer = source.reality_layer;
   target.memory = { ...source.memory };
   target.variables = { ...source.variables };
+  target.dialogueLineIndex = source.dialogueLineIndex ?? 0;
 }
 
 /**

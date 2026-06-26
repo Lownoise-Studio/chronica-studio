@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import {
+  ActivityIndicator,
   Alert, FlatList, Image, Modal, Platform, ScrollView,
   StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -14,6 +15,7 @@ import { AssetItem } from '@/components/AssetItem';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectAsset } from '@/engine/types';
 import { createId } from '@/engine/identity';
+import { pickAndImportAssetFiles, pickAndImportAssetZip, type ImportAssetsResult } from '@/storage/asset-import-io';
 import { assetDir, ensureDir, copyFile, deleteFile, readText } from '@/storage/fileSystem';
 
 export default function AssetsScreen() {
@@ -24,15 +26,31 @@ export default function AssetsScreen() {
   const [importing, setImporting] = useState(false);
   const [previewAsset, setPreviewAsset] = useState<ProjectAsset | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const audioRef = useRef<{ unload: () => void } | null>(null);
+  const audioRef = useRef<{ unload: () => void; pause: () => void; play: () => void } | null>(null);
 
   const project = getProject(projectId!);
+  const existingNames = (project?.assets ?? []).map(asset => asset.name);
+
+  const finishImport = (result: ImportAssetsResult) => {
+    if (!result.ok) {
+      if (result.cancelled) return;
+      Alert.alert('Import failed', result.error);
+      return;
+    }
+
+    for (const asset of result.assets) {
+      addAsset(projectId!, asset);
+    }
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const skippedNote = result.skipped > 0 ? ` ${result.skipped} unsupported file(s) were skipped.` : '';
+    Alert.alert('Import complete', `Added ${result.assets.length} asset(s) to your library.${skippedNote}`);
+  };
 
   const handleImportImage = async () => {
     try {
       setImporting(true);
 
-      // On native, request permission first; web uses the browser file picker natively
       if (Platform.OS !== 'web') {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -49,7 +67,6 @@ export default function AssetsScreen() {
       if (result.canceled || !result.assets?.length) return;
 
       if (Platform.OS !== 'web') {
-        // Native: copy picked images into persistent app storage
         const dir = assetDir(projectId!);
         await ensureDir(dir);
         for (const img of result.assets) {
@@ -62,15 +79,13 @@ export default function AssetsScreen() {
             name,
             type: 'image',
             uri: destUri,
-            mimeType: `image/${ext}`,
+            mimeType: img.mimeType ?? `image/${ext}`,
             size: img.fileSize ?? 0,
             importedAt: new Date().toISOString(),
           });
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
       } else {
-        // Web: expo-image-picker returns a blob URI that is directly usable —
-        // no file-system copy needed
         for (const img of result.assets) {
           const mimeType = img.mimeType ?? 'image/jpeg';
           const ext = mimeType.split('/')[1] ?? 'jpg';
@@ -93,8 +108,44 @@ export default function AssetsScreen() {
     }
   };
 
+  const handleImportFiles = async () => {
+    try {
+      setImporting(true);
+      finishImport(await pickAndImportAssetFiles(projectId!, existingNames));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleImportZip = async () => {
+    try {
+      setImporting(true);
+      finishImport(await pickAndImportAssetZip(projectId!, existingNames));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const showImportMenu = () => {
+    if (Platform.OS === 'web') {
+      void handleImportImage();
+      return;
+    }
+
+    Alert.alert(
+      'Import Assets',
+      'Add images or audio from your device, or import a zip pack (e.g. Kenney UI packs).',
+      [
+        { text: 'Photo Library', onPress: () => { void handleImportImage(); } },
+        { text: 'Files (multi-select)', onPress: () => { void handleImportFiles(); } },
+        { text: 'Zip Pack', onPress: () => { void handleImportZip(); } },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  };
+
   const handleDelete = (assetId: string, name: string) => {
-    Alert.alert('Remove Image', `Remove "${name}" from this story?`, [
+    Alert.alert('Remove Asset', `Remove "${name}" from this story?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove', style: 'destructive',
@@ -141,17 +192,17 @@ export default function AssetsScreen() {
         ListHeaderComponent={
           assets.length > 0 ? (
             <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Tap an image to preview. Long-press for more options.
+              Tap an asset to preview. Import PNG, JPG, WEBP, GIF, MP3, WAV, OGG, M4A, or a zip pack.
             </Text>
           ) : null
         }
         ListEmptyComponent={
           <EmptyState
             icon="image"
-            title="No images yet"
-            message="Import images from your photo library to use as scene backgrounds"
-            actionLabel="Import Image"
-            onAction={handleImportImage}
+            title="No assets yet"
+            message="Import images and audio for scene backgrounds, music, and future character portraits. Zip packs from asset stores work too."
+            actionLabel="Import Assets"
+            onAction={showImportMenu}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -165,14 +216,17 @@ export default function AssetsScreen() {
             bottom: insets.bottom + (Platform.OS === 'web' ? 34 : 0) + 20,
           },
         ]}
-        onPress={handleImportImage}
+        onPress={showImportMenu}
         disabled={importing}
         activeOpacity={0.8}
       >
-        <Feather name={importing ? 'loader' : 'image'} size={22} color="#fff" />
+        {importing ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Feather name="plus" size={24} color="#fff" />
+        )}
       </TouchableOpacity>
 
-      {/* Preview modal */}
       <Modal visible={!!previewAsset} transparent animationType="fade" onRequestClose={closePreview}>
         <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.92)' }]}>
           <TouchableOpacity style={[styles.closePreviewBtn, { top: insets.top + 16 }]} onPress={closePreview}>
@@ -181,6 +235,39 @@ export default function AssetsScreen() {
 
           {previewAsset?.type === 'image' && (
             <Image source={{ uri: previewAsset.uri }} style={styles.previewImage} resizeMode="contain" />
+          )}
+
+          {previewAsset?.type === 'audio' && previewAsset && (
+            <AudioPreview
+              asset={previewAsset}
+              playing={audioPlaying}
+              onToggle={async () => {
+                if (audioPlaying && audioRef.current) {
+                  await audioRef.current.pause();
+                  setAudioPlaying(false);
+                  return;
+                }
+                if (audioRef.current) {
+                  await audioRef.current.play();
+                  setAudioPlaying(true);
+                  return;
+                }
+                try {
+                  const { Audio } = await import('expo-av');
+                  await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+                  const { sound } = await Audio.Sound.createAsync({ uri: previewAsset.uri });
+                  audioRef.current = {
+                    unload: () => { sound.unloadAsync().catch(() => {}); },
+                    pause: () => sound.pauseAsync().catch(() => {}),
+                    play: () => sound.playAsync().catch(() => {}),
+                  };
+                  await sound.playAsync();
+                  setAudioPlaying(true);
+                } catch {
+                  Alert.alert('Playback failed', 'Could not play this audio file.');
+                }
+              }}
+            />
           )}
 
           {previewAsset?.type === 'data' && previewAsset && (
@@ -195,6 +282,27 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function AudioPreview({
+  asset,
+  playing,
+  onToggle,
+}: {
+  asset: ProjectAsset;
+  playing: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <View style={styles.audioPreview}>
+      <Feather name="music" size={48} color="#fff" />
+      <Text style={styles.audioTitle}>{asset.name}</Text>
+      <TouchableOpacity style={styles.audioBtn} onPress={onToggle} activeOpacity={0.8}>
+        <Feather name={playing ? 'pause' : 'play'} size={20} color="#fff" />
+        <Text style={styles.audioBtnText}>{playing ? 'Pause' : 'Play'}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -224,6 +332,18 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   closePreviewBtn: { position: 'absolute', right: 20, zIndex: 10, padding: 8 },
   previewImage: { width: '90%', height: '65%' },
+  audioPreview: { alignItems: 'center', gap: 16, paddingHorizontal: 24 },
+  audioTitle: { color: '#fff', fontSize: 16, fontFamily: 'Inter_600SemiBold', textAlign: 'center' },
+  audioBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+  },
+  audioBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   dataPreview: { width: '90%', maxHeight: '65%', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10 },
   dataText: { color: '#e0ddf0', fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   previewMeta: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', gap: 4, paddingTop: 16 },

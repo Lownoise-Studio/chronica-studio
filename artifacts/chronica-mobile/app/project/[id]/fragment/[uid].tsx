@@ -10,8 +10,10 @@ import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { ArrayEditor, ArrayEditorSuggestion } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
+import { DialogueEditor } from '@/components/DialogueEditor';
 import { HotspotEditor } from '@/components/HotspotEditor';
-import { Choice, SceneHotspot } from '@/engine/types';
+import { Choice, DialogueLine, SceneHotspot } from '@/engine/types';
+import { getFragmentDialogueLines, syncFragmentTextFromDialogue } from '@/engine/dialogue';
 import { isValidCondition, isValidEffect } from '@/engine/expression-evaluator';
 import {
   buildUnlockCondition,
@@ -32,7 +34,7 @@ export default function FragmentEditorScreen() {
   const [title, setTitle] = useState('');
   const [locationId, setLocationId] = useState('');
   const [priority, setPriority] = useState('0');
-  const [text, setText] = useState('');
+  const [dialogue, setDialogue] = useState<DialogueLine[]>([]);
   const [conditions, setConditions] = useState<string[]>([]);
   const [effects, setEffects] = useState<string[]>([]);
   const [choices, setChoices] = useState<Choice[]>([]);
@@ -44,7 +46,7 @@ export default function FragmentEditorScreen() {
       setTitle(fragment.title ?? '');
       setLocationId(fragment.locationId);
       setPriority(String(fragment.priority));
-      setText(fragment.text);
+      setDialogue(getFragmentDialogueLines(fragment));
       setConditions([...fragment.conditions]);
       setEffects([...fragment.effects]);
       setChoices([...fragment.choices]);
@@ -72,7 +74,8 @@ export default function FragmentEditorScreen() {
       title: title.trim() || locationId.trim() || 'Scene',
       locationId: locationId.trim() || 'new-scene',
       priority: parseInt(priority, 10) || 0,
-      text,
+      dialogue,
+      text: syncFragmentTextFromDialogue(dialogue),
       conditions,
       effects,
       choices,
@@ -91,7 +94,7 @@ export default function FragmentEditorScreen() {
         </TouchableOpacity>
       ),
     });
-  }, [title, locationId, priority, text, conditions, effects, choices, hotspots, bgImage]);
+  }, [title, locationId, priority, dialogue, conditions, effects, choices, hotspots, bgImage]);
 
   if (!project || !fragment) {
     return (
@@ -160,19 +163,12 @@ export default function FragmentEditorScreen() {
         )}
       </View>
 
-      {/* Story Text */}
-      <View>
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>STORY TEXT</Text>
-        <TextInput
-          style={[styles.textArea, { backgroundColor: colors.muted, color: colors.foreground, borderColor: colors.border }]}
-          value={text}
-          onChangeText={setText}
-          placeholder="Write what the reader sees at this moment in the story…"
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          textAlignVertical="top"
-        />
-      </View>
+      {/* Dialogue */}
+      <DialogueEditor
+        lines={dialogue}
+        characters={project.characters ?? []}
+        onChange={setDialogue}
+      />
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />
 

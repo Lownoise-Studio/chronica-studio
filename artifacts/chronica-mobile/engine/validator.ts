@@ -4,6 +4,8 @@ import { findAssetByName } from './chronica-package';
 import { getGotoTargetsFromAction } from './actions/parse-action';
 import { validateProjectActions } from './actions/validate-actions';
 import { isValidHotspotBounds } from './hotspots';
+import { validateCharacters, validateCharacterAssetRefs } from './characters';
+import { validateFragmentDialogue } from './validate-dialogue';
 
 function assetExists(assets: ProjectAsset[], name: string): boolean {
   const asset = findAssetByName(assets, name);
@@ -168,7 +170,11 @@ export function validateProject(project: Project): ValidationError[] {
 
   for (const frag of project.fragments) {
     errors.push(...validateFragment(frag));
+    errors.push(...validateFragmentDialogue(frag, project.characters ?? []));
   }
+
+  errors.push(...validateCharacters(project.characters ?? []));
+  errors.push(...validateCharacterAssetRefs(project.characters ?? [], project.assets));
 
   errors.push(...validateProjectActions(project));
   errors.push(...findDuplicateLocations(project));

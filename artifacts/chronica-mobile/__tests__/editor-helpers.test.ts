@@ -24,6 +24,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     createdAt: '',
     updatedAt: '',
     assets: [],
+    characters: [],
     fragments: [],
     ...overrides,
   };

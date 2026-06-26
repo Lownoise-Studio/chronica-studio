@@ -16,6 +16,7 @@ export function createInitialState(
     reality_layer: typeof variables.reality_layer === 'number' ? variables.reality_layer : 0,
     memory: { ...initialMemory },
     variables,
+    dialogueLineIndex: 0,
   };
 }
 
@@ -65,6 +66,7 @@ export function serializeState(state: ChronicaState): string {
     reality_layer: state.reality_layer,
     memory: state.memory,
     variables: state.variables,
+    dialogueLineIndex: state.dialogueLineIndex ?? 0,
   });
 }
 
@@ -76,6 +78,7 @@ export function deserializeState(data: Record<string, unknown>): ChronicaState |
       reality_layer: (data.reality_layer as number) ?? 0,
       memory: (data.memory as Record<string, VariableValue>) ?? {},
       variables: (data.variables as Record<string, VariableValue>) ?? {},
+      dialogueLineIndex: typeof data.dialogueLineIndex === 'number' ? data.dialogueLineIndex : 0,
     };
   } catch {
     return null;

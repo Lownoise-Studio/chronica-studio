@@ -20,6 +20,7 @@ function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): P
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     assets: [],
+    characters: [],
     fragments,
     ...overrides,
   };
@@ -148,6 +149,7 @@ describe('fragment index lookup', () => {
       reality_layer: 0,
       memory: {},
       variables: {},
+      dialogueLineIndex: 0,
     };
 
     expect(getActiveFragmentFromIndex('intro', state, game.fragmentIndex)?.uid).toBe('default');

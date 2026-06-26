@@ -9,6 +9,7 @@ function makeState(overrides: Partial<ChronicaState> = {}): ChronicaState {
     reality_layer: 0,
     memory: {},
     variables: {},
+    dialogueLineIndex: 0,
     ...overrides,
   };
 }

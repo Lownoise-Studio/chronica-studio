@@ -1,7 +1,8 @@
-import { Fragment, Project } from './types';
+import { Fragment, Project, DialogueLine } from './types';
 import { createId } from './identity/create-id';
+import { syncFragmentTextFromDialogue } from './dialogue';
 
-export const PROJECT_SCHEMA_VERSION = 2;
+export const PROJECT_SCHEMA_VERSION = 3;
 
 /** Match a fragment by canonical locationId or legacy human-readable title. */
 function findFragmentByLocationKey(fragments: Fragment[], key: string): Fragment | undefined {
@@ -52,6 +53,26 @@ function migrateChoiceAction(action: string, fragments: Fragment[]): string {
   return migrated.join('; ');
 }
 
+function migrateDialogueFields(f: Fragment): Fragment {
+  const dialogue: DialogueLine[] = (f.dialogue?.length
+    ? f.dialogue
+    : f.text?.trim()
+      ? [{ uid: `${f.uid}-line-1`, text: f.text, speakerId: null }]
+      : [{ uid: `${f.uid}-line-1`, text: '', speakerId: null }]
+  ).map((line, index) => ({
+    uid: line.uid?.trim() || `${f.uid}-line-${index + 1}`,
+    speakerId: line.speakerId?.trim() ? line.speakerId.trim() : null,
+    expressionId: line.expressionId?.trim() || undefined,
+    text: line.text ?? '',
+  }));
+
+  return {
+    ...f,
+    dialogue,
+    text: syncFragmentTextFromDialogue(dialogue),
+  };
+}
+
 function migrateFragmentFields(f: Fragment): Fragment {
   const title = (f.title ?? '').trim();
   const locationId = (f.locationId ?? '').trim() || title || 'scene';
@@ -77,7 +98,7 @@ function migrateFragmentFields(f: Fragment): Fragment {
  * Backfill missing fields on loaded or imported projects.
  */
 export function migrateProject(p: Project): Project {
-  const fragments = (p.fragments ?? []).map(migrateFragmentFields);
+  const fragments = (p.fragments ?? []).map(migrateFragmentFields).map(migrateDialogueFields);
   const withActions = fragments.map(f => ({
     ...f,
     choices: f.choices.map(c => ({
@@ -98,6 +119,7 @@ export function migrateProject(p: Project): Project {
     initialVariables: p.initialVariables ?? {},
     initialMemory: p.initialMemory ?? {},
     assets: p.assets ?? [],
+    characters: p.characters ?? [],
     fragments: withActions,
   };
 }

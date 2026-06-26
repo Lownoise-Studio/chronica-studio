@@ -33,6 +33,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     assets: [],
+    characters: [],
     fragments: [
       {
         uid: 'f1',
@@ -74,6 +75,7 @@ describe('migrateProject', () => {
       updatedAt: '',
       fragments: [],
       assets: [],
+      characters: [],
     } as Omit<Project, 'gameId'> as Project;
 
     const migrated = migrateProject(legacy);
@@ -115,6 +117,7 @@ describe('migrateProject', () => {
         },
       ],
       assets: [],
+      characters: [],
     } as Omit<Project, 'gameId'> as Project;
 
     const migrated = migrateProject(legacy);
@@ -187,6 +190,7 @@ describe('package gameId round-trip', () => {
           importedAt: '2026-01-01T00:00:00.000Z',
         },
       ],
+    characters: [],
       fragments: [
         {
           uid: 'f1',

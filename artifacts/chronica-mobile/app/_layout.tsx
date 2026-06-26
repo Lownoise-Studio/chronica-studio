@@ -39,6 +39,7 @@ function RootLayoutNav() {
       <Stack.Screen name="project/[id]/graph" options={{ title: "Story Graph" }} />
       <Stack.Screen name="project/[id]/fragment/[uid]" options={{ title: "Scene" }} />
       <Stack.Screen name="project/[id]/assets" options={{ title: "Assets" }} />
+      <Stack.Screen name="project/[id]/characters" options={{ title: "Cast" }} />
       <Stack.Screen name="project/[id]/play" options={{ headerShown: false }} />
       <Stack.Screen name="project/[id]/settings" options={{ title: "Settings" }} />
       <Stack.Screen name="project/[id]/export" options={{ title: "Export / Import" }} />

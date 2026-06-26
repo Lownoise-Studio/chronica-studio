@@ -1,5 +1,29 @@
 export type VariableValue = string | number | boolean;
 
+/** Reusable cast member — referenced by dialogue lines via characterId. */
+export interface Character {
+  uid: string;
+  /** Stable slug used in dialogue (e.g. elena, guard). */
+  characterId: string;
+  displayName: string;
+  defaultPortrait?: string;
+  expressions?: CharacterExpression[];
+}
+
+export interface CharacterExpression {
+  id: string;
+  label?: string;
+  portrait: string;
+}
+
+/** One line in a scene script. speakerId null/omit = narration. */
+export interface DialogueLine {
+  uid: string;
+  speakerId?: string | null;
+  expressionId?: string;
+  text: string;
+}
+
 export interface Choice {
   uid: string;
   label: string;
@@ -32,6 +56,8 @@ export interface Fragment {
   conditions: string[];
   effects: string[];
   text: string;
+  /** Ordered scene script. When empty, legacy `text` is used as a single narration line. */
+  dialogue?: DialogueLine[];
   choices: Choice[];
   hotspots?: SceneHotspot[];
   backgroundImage?: string;
@@ -44,6 +70,8 @@ export interface ChronicaState {
   reality_layer: number;
   memory: Record<string, VariableValue>;
   variables: Record<string, VariableValue>;
+  /** Index into the current fragment's dialogue lines (tap-to-advance). */
+  dialogueLineIndex: number;
 }
 
 export interface ProjectAsset {
@@ -71,6 +99,7 @@ export interface Project {
   updatedAt: string;
   fragments: Fragment[];
   assets: ProjectAsset[];
+  characters: Character[];
 }
 
 export interface GameSave {
@@ -83,6 +112,6 @@ export interface GameSave {
 export interface ValidationError {
   fragmentUid: string;
   fragmentTitle: string;
-  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'invalid-action' | 'invalid-hotspot' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene';
+  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'invalid-action' | 'invalid-hotspot' | 'invalid-dialogue' | 'missing-character' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene';
   message: string;
 }

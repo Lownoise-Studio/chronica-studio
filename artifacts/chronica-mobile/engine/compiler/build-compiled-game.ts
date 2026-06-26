@@ -29,6 +29,7 @@ export function computeProjectContentHash(project: Project): string {
       type: a.type,
       uri: a.uri,
     })),
+    characters: project.characters ?? [],
   });
 
   let hash = 0;
@@ -83,6 +84,7 @@ export function buildCompiledGame(project: Project): CompiledGame {
       ...h,
       conditions: [...(h.conditions ?? [])],
     })),
+    dialogue: (f.dialogue ?? []).map(line => ({ ...line })),
   }));
 
   return {
@@ -98,6 +100,10 @@ export function buildCompiledGame(project: Project): CompiledGame {
     initialMemory: { ...(project.initialMemory ?? {}) },
     fragments,
     assets: project.assets.map(a => ({ ...a })),
+    characters: (project.characters ?? []).map(c => ({
+      ...c,
+      expressions: (c.expressions ?? []).map(e => ({ ...e })),
+    })),
     fragmentIndex: buildFragmentIndex(fragments),
     choiceActions: buildChoiceActions(project),
     hotspotActions: buildHotspotActions(project),

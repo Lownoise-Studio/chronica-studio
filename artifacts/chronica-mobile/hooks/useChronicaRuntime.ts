@@ -18,6 +18,7 @@ const EMPTY_SNAPSHOT = {
   backgroundUri: undefined as string | undefined,
   audioUri: undefined as string | undefined,
   assetWarnings: [] as string[],
+  dialogue: null as ReturnType<PlayerHost['snapshot']>['dialogue'],
 };
 
 export function useChronicaRuntime(project: Project | undefined) {
@@ -67,6 +68,13 @@ export function useChronicaRuntime(project: Project | undefined) {
     return result;
   }, [host, refresh]);
 
+  const advanceDialogue = useCallback(() => {
+    if (!host) return { ok: false, reason: 'not-started' } as const;
+    const result = host.advanceDialogue();
+    refresh();
+    return result;
+  }, [host, refresh]);
+
   const setRuntimeState = useCallback((next: ChronicaState) => {
     host?.setRuntimeState(next);
     refresh();
@@ -92,6 +100,7 @@ export function useChronicaRuntime(project: Project | undefined) {
     tryResume,
     choose,
     activateHotspot,
+    advanceDialogue,
     setRuntimeState,
     toSave,
   };

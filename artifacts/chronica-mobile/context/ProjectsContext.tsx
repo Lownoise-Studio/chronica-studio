@@ -34,6 +34,7 @@ function makeSampleProject(): Project {
     createdAt: nowIso(),
     updatedAt: nowIso(),
     assets: [],
+    characters: [],
     fragments: [
       {
         uid: f1uid,
@@ -89,7 +90,7 @@ interface ProjectsContextType {
   hasOnboarded: boolean;
   setHasOnboarded: (v: boolean) => void;
   createProject: (title: string, description: string) => Project;
-  updateProject: (id: string, updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory'>>) => void;
+  updateProject: (id: string, updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory' | 'characters'>>) => void;
   duplicateProject: (id: string) => Project | null;
   deleteProject: (id: string) => void;
   addFragment: (projectId: string, fragment: Omit<Fragment, 'uid'>) => Fragment;
@@ -164,15 +165,16 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
       fragments: [],
-      assets: [],
-    };
+    assets: [],
+    characters: [],
+  };
     persist([...projects, p]);
     return p;
   };
 
   const updateProject = (
     id: string,
-    updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory'>>
+    updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory' | 'characters'>>
   ) => persist(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: nowIso() } : p));
 
   const duplicateProject = (id: string): Project | null => {
@@ -189,6 +191,13 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
         ...f,
         uid: createId(),
         choices: f.choices.map(c => ({ ...c, uid: createId() })),
+        hotspots: (f.hotspots ?? []).map(h => ({ ...h, uid: createId() })),
+        dialogue: (f.dialogue ?? []).map(line => ({ ...line, uid: createId() })),
+      })),
+      characters: (source.characters ?? []).map(c => ({
+        ...c,
+        uid: createId(),
+        expressions: (c.expressions ?? []).map(e => ({ ...e })),
       })),
     };
     persist([...projects, copy]);

@@ -1,4 +1,4 @@
-import { Fragment, ProjectAsset, ValidationError, VariableValue } from '../types';
+import { Fragment, ProjectAsset, ValidationError, VariableValue, Character } from '../types';
 import type { ActionStep } from '../actions/types';
 import type { FragmentIndex } from './fragment-index';
 
@@ -25,6 +25,7 @@ export interface CompiledGame {
   initialMemory: Readonly<Record<string, VariableValue>>;
   fragments: readonly Fragment[];
   assets: readonly ProjectAsset[];
+  characters: readonly Character[];
   fragmentIndex: FragmentIndex;
   /** Compiled action steps keyed by choice.uid */
   choiceActions: Readonly<Record<string, readonly ActionStep[]>>;

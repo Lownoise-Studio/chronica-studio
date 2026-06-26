@@ -1,5 +1,6 @@
 import { CompiledGame } from '@/engine/compiler/types';
 import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
+import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { ChronicaRuntime, ChooseResult, HistoryEntry, RuntimeSave } from './chronica-runtime';
 import { ResumeResult } from './validate-runtime-save';
@@ -14,6 +15,7 @@ export type PlayerSnapshot = {
   backgroundUri: string | undefined;
   audioUri: string | undefined;
   assetWarnings: string[];
+  dialogue: DialoguePresentation | null;
 };
 
 /**
@@ -50,6 +52,10 @@ export class PlayerHost {
     return this.runtime.activateHotspot(hotspot);
   }
 
+  advanceDialogue() {
+    return this.runtime.advanceDialogue();
+  }
+
   setRuntimeState(next: ChronicaState): void {
     this.runtime.setRuntimeState(next);
   }
@@ -75,6 +81,11 @@ export class PlayerHost {
       backgroundUri: this.runtime.getBackgroundUri(),
       audioUri: this.runtime.getAudioUri(),
       assetWarnings,
+      dialogue: resolveDialoguePresentationFromGame(
+        this.game,
+        fragment,
+        this.runtime.runtimeState?.dialogueLineIndex ?? 0,
+      ),
     };
   }
 

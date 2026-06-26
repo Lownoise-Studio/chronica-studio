@@ -7,6 +7,13 @@ import {
 } from '@/engine/chronica-session';
 import { resolveSceneAudioUri, resolveSceneBackgroundUri } from '@/engine/asset-resolver';
 import { getActiveFragmentFromIndex } from '@/engine/compiler/fragment-index';
+import {
+  advanceDialogueIndex,
+  canAdvanceDialogue,
+  getFragmentDialogueLines,
+  isDialogueExhausted,
+} from '@/engine/dialogue';
+import { resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { getVisibleChoices, getVisibleHotspots } from '@/engine/turn-resolver';
 import { CompiledGame } from '@/engine/compiler/types';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
@@ -26,6 +33,10 @@ export type RuntimeSave = {
 export type ChooseResult =
   | { ok: true }
   | { ok: false; reason: 'not-started' | 'dead-end' };
+
+export type AdvanceDialogueResult =
+  | { ok: true; advanced: boolean }
+  | { ok: false; reason: 'not-started' };
 
 /**
  * Runtime host — executes a CompiledGame produced by the compiler.
@@ -77,13 +88,22 @@ export class ChronicaRuntime {
     return resolveSceneAudioUri(this.game.assets, this.fragment?.backgroundAudio);
   }
 
+  getDialoguePresentation() {
+    if (!this.state) return null;
+    return resolveDialoguePresentationFromGame(
+      this.game,
+      this.fragment,
+      this.state.dialogueLineIndex ?? 0,
+    );
+  }
+
   start(): boolean {
     if (!this.game.fragments.length) return false;
     const result = startSession(this.game);
     this.history = result.fragment
       ? [{ locationId: result.fragment.locationId, title: result.fragment.title || result.fragment.locationId }]
       : [];
-    this.applyTurn(result.state, result.fragment, result.visibleChoices, result.visibleHotspots);
+    this.applyTurn(result.state, result.fragment);
     this.started = true;
     return true;
   }
@@ -96,16 +116,32 @@ export class ChronicaRuntime {
     if (!state) return { ok: false, reason: 'corrupt-state' };
 
     const fragment = getActiveFragmentFromIndex(state.location, state, this.game.fragmentIndex);
-    const choices = fragment ? getVisibleChoices(fragment, state) : [];
-    const hotspots = fragment ? getVisibleHotspots(fragment, state) : [];
     this.history = save.history ?? [];
-    this.applyTurn(state, fragment, choices, hotspots);
+    this.applyTurn(state, fragment);
     this.started = true;
     return { ok: true };
   }
 
   resume(save: RuntimeSave): boolean {
     return this.tryResume(save).ok;
+  }
+
+  advanceDialogue(): AdvanceDialogueResult {
+    if (!this.started || !this.state || !this.fragment) {
+      return { ok: false, reason: 'not-started' };
+    }
+
+    const lines = getFragmentDialogueLines(this.fragment);
+    if (!canAdvanceDialogue(this.state.dialogueLineIndex, lines.length)) {
+      return { ok: true, advanced: false };
+    }
+
+    this.state = {
+      ...this.state,
+      dialogueLineIndex: advanceDialogueIndex(this.state.dialogueLineIndex, lines.length),
+    };
+    this.refreshInteractions();
+    return { ok: true, advanced: true };
   }
 
   choose(choice: Choice): ChooseResult {
@@ -123,7 +159,7 @@ export class ChronicaRuntime {
         title: result.fragment.title || result.fragment.locationId,
       },
     ];
-    this.applyTurn(this.state, result.fragment, result.visibleChoices, result.visibleHotspots);
+    this.applyTurn(this.state, result.fragment);
     return { ok: true };
   }
 
@@ -145,17 +181,14 @@ export class ChronicaRuntime {
         },
       ];
     }
-    this.applyTurn(this.state, result.fragment, result.visibleChoices, result.visibleHotspots);
+    this.applyTurn(this.state, result.fragment);
     return { ok: true };
   }
 
   /** Advanced debug: replace runtime state and refresh visible interactions. */
   setRuntimeState(next: ChronicaState): void {
-    this.state = { ...next };
-    if (this.fragment) {
-      this._visibleChoices = getVisibleChoices(this.fragment, this.state);
-      this._visibleHotspots = getVisibleHotspots(this.fragment, this.state);
-    }
+    this.state = { ...next, dialogueLineIndex: next.dialogueLineIndex ?? 0 };
+    this.refreshInteractions();
   }
 
   toSave(projectId: string): RuntimeSave | null {
@@ -170,15 +203,29 @@ export class ChronicaRuntime {
     };
   }
 
-  private applyTurn(
-    state: ChronicaState,
-    fragment: Fragment | null,
-    choices: Choice[],
-    hotspots: SceneHotspot[],
-  ): void {
-    this.state = { ...state };
+  private refreshInteractions(): void {
+    if (!this.state || !this.fragment) {
+      this._visibleChoices = [];
+      this._visibleHotspots = [];
+      return;
+    }
+
+    const lines = getFragmentDialogueLines(this.fragment);
+    const exhausted = isDialogueExhausted(this.state.dialogueLineIndex, lines.length);
+    this._visibleChoices = exhausted ? getVisibleChoices(this.fragment, this.state) : [];
+    this._visibleHotspots = exhausted ? getVisibleHotspots(this.fragment, this.state) : [];
+  }
+
+  private applyTurn(state: ChronicaState, fragment: Fragment | null): void {
+    const prevLocation = this.fragment?.locationId;
+    const nextLocation = fragment?.locationId;
+    const resetDialogue = prevLocation !== nextLocation;
+
+    this.state = {
+      ...state,
+      dialogueLineIndex: resetDialogue ? 0 : (state.dialogueLineIndex ?? 0),
+    };
     this.fragment = fragment;
-    this._visibleChoices = choices;
-    this._visibleHotspots = hotspots;
+    this.refreshInteractions();
   }
 }

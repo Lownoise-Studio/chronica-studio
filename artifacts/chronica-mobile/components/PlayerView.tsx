@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { HistoryEntry } from '@/runtime';
 import { EmptyState } from '@/components/EmptyState';
+import { DialogueBubble } from '@/components/DialogueBubble';
 import { SceneHotspotOverlay } from '@/components/player/SceneHotspotOverlay';
 import { getHotspotDisplayLabel, summarizeHotspotAction } from '@/engine/hotspot-helpers';
 import type { SceneOption } from '@/engine/editor-helpers';
@@ -21,6 +22,7 @@ import {
   shouldShowSceneBackground,
 } from '@/engine/player-presentation';
 import { useSceneAudio } from '@/components/player/useSceneAudio';
+import type { DialoguePresentation } from '@/engine/dialogue-presentation';
 
 export type PlayerViewColors = {
   background: string;
@@ -49,6 +51,8 @@ export type PlayerViewProps = {
   onSave: () => void;
   onChoose: (choice: Choice) => void;
   onActivateHotspot?: (hotspot: SceneHotspot) => void;
+  dialogue?: DialoguePresentation | null;
+  onAdvanceDialogue?: () => void;
   sceneOptions?: SceneOption[];
   debugPanel?: React.ReactNode;
 };
@@ -69,6 +73,8 @@ export function PlayerView({
   onSave,
   onChoose,
   onActivateHotspot,
+  dialogue,
+  onAdvanceDialogue,
   sceneOptions = [],
   debugPanel,
 }: PlayerViewProps) {
@@ -87,6 +93,7 @@ export function PlayerView({
   const storyTextColor = getStoryTextColor(showBackground && !useAdventureLayout, colors.foreground);
   const choiceSurfaceColor = getChoiceSurfaceColor(showBackground && !useAdventureLayout, colors.secondary);
   const endCardSurfaceColor = getEndCardSurfaceColor(showBackground && !useAdventureLayout, colors.secondary);
+  const dialogueDone = !dialogue || dialogue.exhausted;
 
   const header = (
     <View style={[styles.gameHeader, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 16) }]}>
@@ -120,11 +127,19 @@ export function PlayerView({
           {currentFragment.title && currentFragment.title !== currentFragment.locationId && (
             <Text style={[styles.fragmentTitle, { color: colors.accent }]}>{currentFragment.title}</Text>
           )}
-          <Text style={[styles.fragmentText, { color: useAdventureLayout ? colors.foreground : storyTextColor }]}>
-            {currentFragment.text || '(this scene has no text yet)'}
-          </Text>
+          {dialogue ? (
+            <DialogueBubble
+              dialogue={dialogue}
+              colors={colors}
+              onAdvance={onAdvanceDialogue}
+            />
+          ) : (
+            <Text style={[styles.fragmentText, { color: useAdventureLayout ? colors.foreground : storyTextColor }]}>
+              {currentFragment.text || '(this scene has no text yet)'}
+            </Text>
+          )}
 
-          {useAdventureLayout && visibleHotspots.length > 0 && onActivateHotspot && (
+          {useAdventureLayout && dialogueDone && visibleHotspots.length > 0 && onActivateHotspot && (
             <View style={styles.hotspotChipList}>
               <Text style={[styles.hotspotHint, { color: colors.mutedForeground }]}>
                 Tap on the scene above, or choose:
@@ -174,7 +189,7 @@ export function PlayerView({
                 </TouchableOpacity>
               ))}
             </View>
-          ) : visibleHotspots.length === 0 ? (
+          ) : dialogueDone && visibleHotspots.length === 0 ? (
             <View
               style={[
                 styles.endCard,
