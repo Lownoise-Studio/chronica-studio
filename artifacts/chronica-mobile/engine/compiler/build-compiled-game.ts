@@ -14,6 +14,31 @@ export function resolveCompileStartLocation(project: Project): string {
   return project.fragments[0].locationId;
 }
 
+const FNV_OFFSET_BASIS_64 = 0xcbf29ce484222325n;
+const FNV_PRIME_64 = 0x100000001b3n;
+const U64_MASK = 0xffffffffffffffffn;
+
+/**
+ * FNV-1a 64-bit hash over a UTF-16 string, processed two bytes per code unit so
+ * every character (including non-ASCII story text) affects the digest.
+ *
+ * Replaces the prior 32-bit rolling hash: this is load-bearing for stale-save
+ * rejection and package-manifest integrity, where a collision would silently
+ * accept incompatible content. A 64-bit digest makes that collision
+ * probability negligible (~5e-20 per edit vs ~2e-10 at 32-bit).
+ */
+function fnv1a64Hex(input: string): string {
+  let hash = FNV_OFFSET_BASIS_64;
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    hash ^= BigInt(code & 0xff);
+    hash = (hash * FNV_PRIME_64) & U64_MASK;
+    hash ^= BigInt((code >> 8) & 0xff);
+    hash = (hash * FNV_PRIME_64) & U64_MASK;
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
 /** Stable hash of authored project content — used by CompiledGame and package manifests. */
 export function computeProjectContentHash(project: Project): string {
   const payload = JSON.stringify({
@@ -32,11 +57,7 @@ export function computeProjectContentHash(project: Project): string {
     characters: project.characters ?? [],
   });
 
-  let hash = 0;
-  for (let i = 0; i < payload.length; i++) {
-    hash = ((hash << 5) - hash + payload.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash).toString(36);
+  return fnv1a64Hex(payload);
 }
 
 function buildChoiceActions(project: Project): Record<string, ActionStep[]> {

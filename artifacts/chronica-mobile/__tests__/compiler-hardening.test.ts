@@ -1,4 +1,5 @@
 import { compileProject } from '../engine/compiler';
+import { computeProjectContentHash } from '../engine/compiler/build-compiled-game';
 import { analyzeProjectWarnings } from '../engine/analyze-warnings';
 import { applyEffect, evaluateCondition } from '../engine/expression-evaluator';
 import { serializeState, deserializeState } from '../engine/chronica-session';
@@ -163,6 +164,37 @@ describe('semantic warnings (non-blocking)', () => {
       frag({ uid: 'f2', locationId: 'next' }),
     ]);
     expect(analyzeProjectWarnings(project)).toEqual([]);
+  });
+});
+
+describe('content hash (FNV-1a 64-bit)', () => {
+  test('is a stable 16-char hex digest', () => {
+    const project = makeProject([frag({ uid: 'f1', locationId: 'intro', text: 'hello' })]);
+    const h = computeProjectContentHash(project);
+    expect(h).toMatch(/^[0-9a-f]{16}$/);
+    expect(computeProjectContentHash(project)).toBe(h); // deterministic
+  });
+
+  test('changes when any runtime-relevant content changes', () => {
+    const base = makeProject([frag({ uid: 'f1', locationId: 'intro', text: 'hello' })]);
+    const edited = makeProject([frag({ uid: 'f1', locationId: 'intro', text: 'hello.' })]);
+    expect(computeProjectContentHash(base)).not.toBe(computeProjectContentHash(edited));
+  });
+
+  test('is sensitive to non-ASCII differences (two-byte mixing)', () => {
+    // Curly vs straight apostrophe — single non-ASCII code unit difference.
+    const straight = makeProject([frag({ uid: 'f1', locationId: 'intro', text: "don't" })]);
+    const curly = makeProject([frag({ uid: 'f1', locationId: 'intro', text: 'don’t' })]);
+    expect(computeProjectContentHash(straight)).not.toBe(computeProjectContentHash(curly));
+  });
+
+  test('no collisions across many near-identical single-character edits', () => {
+    const hashes = new Set<string>();
+    for (let i = 0; i < 5000; i++) {
+      const project = makeProject([frag({ uid: 'f1', locationId: 'intro', text: `line-${i}` })]);
+      hashes.add(computeProjectContentHash(project));
+    }
+    expect(hashes.size).toBe(5000);
   });
 });
 
