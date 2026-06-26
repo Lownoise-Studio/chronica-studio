@@ -10,11 +10,19 @@ function parseValue(raw: string): VariableValue {
   if (t === 'true') return true;
   if (t === 'false') return false;
   const n = Number(t);
-  if (!isNaN(n) && t !== '') return n;
+  // Only treat as numeric when finite — "1e400"/Infinity/NaN must never enter
+  // state, since JSON.stringify turns them into null on save (silent corruption).
+  if (Number.isFinite(n) && t !== '') return n;
   if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
     return t.slice(1, -1);
   }
   return t;
+}
+
+/** Coerce any stored value to a finite number for arithmetic; non-numeric -> 0. */
+function coerceNumber(value: VariableValue | undefined): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function resolvePath(path: string, state: ChronicaState): VariableValue {
@@ -38,12 +46,14 @@ function resolvePath(path: string, state: ChronicaState): VariableValue {
 
 function compare(left: VariableValue, op: string, right: VariableValue): boolean {
   switch (op) {
-    case '>=': return (left as number) >= (right as number);
-    case '<=': return (left as number) <= (right as number);
+    // Ordering comparisons are numeric; coerce both sides deterministically so a
+    // string-vs-number comparison can't depend on JS's implicit coercion rules.
+    case '>=': return coerceNumber(left) >= coerceNumber(right);
+    case '<=': return coerceNumber(left) <= coerceNumber(right);
+    case '>': return coerceNumber(left) > coerceNumber(right);
+    case '<': return coerceNumber(left) < coerceNumber(right);
     case '==': return left === right;
     case '!=': return left !== right;
-    case '>': return (left as number) > (right as number);
-    case '<': return (left as number) < (right as number);
     default: return false;
   }
 }
@@ -60,12 +70,14 @@ export function evaluateCondition(expression: string, state: ChronicaState): boo
 function applyIncrement(path: string, amount: number, state: ChronicaState): void {
   if (path.startsWith('memory.')) {
     const key = path.slice('memory.'.length);
-    state.memory[key] = ((state.memory[key] as number) ?? 0) + amount;
+    // coerceNumber, not `as number`: incrementing a non-numeric value must not
+    // silently string-concatenate ("abc" += 1 -> "abc1").
+    state.memory[key] = coerceNumber(state.memory[key]) + amount;
     return;
   }
   if (path.startsWith('variables.')) {
     const key = path.slice('variables.'.length);
-    state.variables[key] = ((state.variables[key] as number) ?? 0) + amount;
+    state.variables[key] = coerceNumber(state.variables[key]) + amount;
     if (key === 'instability') state.instability = state.variables[key] as number;
     return;
   }
@@ -127,6 +139,26 @@ export function applyEffect(expression: string, state: ChronicaState): void {
 export function isValidCondition(expression: string): boolean {
   const t = expression.trim();
   return !t || conditionRegex.test(t);
+}
+
+/** Structured parts of a condition, or null if it doesn't match the grammar. */
+export function getConditionParts(
+  expression: string,
+): { path: string; op: string; rhs: string } | null {
+  const m = expression.trim().match(conditionRegex);
+  return m ? { path: m[1], op: m[2], rhs: m[3] } : null;
+}
+
+/** The left-hand target (write path) of an effect expression, or null. */
+export function getEffectTarget(expression: string): string | null {
+  const t = expression.trim();
+  const m = t.match(incrementRegex) ?? t.match(decrementRegex) ?? t.match(assignmentRegex);
+  return m ? m[1] : null;
+}
+
+/** Parse a literal token the same way effects/conditions do (for analysis only). */
+export function parseLiteralValue(raw: string): VariableValue {
+  return parseValue(raw);
 }
 
 export function isValidEffect(expression: string): boolean {

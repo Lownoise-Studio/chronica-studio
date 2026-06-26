@@ -34,5 +34,5 @@ export interface CompiledGame {
 }
 
 export type CompileResult =
-  | { ok: true; game: CompiledGame }
+  | { ok: true; game: CompiledGame; warnings: ValidationError[] }
   | { ok: false; diagnostics: ValidationError[] };

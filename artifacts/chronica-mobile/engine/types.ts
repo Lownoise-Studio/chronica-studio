@@ -112,6 +112,8 @@ export interface GameSave {
 export interface ValidationError {
   fragmentUid: string;
   fragmentTitle: string;
-  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'invalid-action' | 'invalid-hotspot' | 'invalid-dialogue' | 'missing-character' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene';
+  type: 'broken-link' | 'invalid-condition' | 'invalid-effect' | 'invalid-action' | 'invalid-hotspot' | 'invalid-dialogue' | 'missing-character' | 'missing-start' | 'duplicate-location' | 'missing-asset' | 'orphan-scene' | 'unknown-path' | 'type-mismatch' | 'unreachable-target';
   message: string;
+  /** Defaults to 'error' when absent (back-compat). Warnings inform but never block compile. */
+  severity?: 'error' | 'warning';
 }
