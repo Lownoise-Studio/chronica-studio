@@ -9,6 +9,7 @@ import { getActiveFragmentFromIndex } from '@/engine/compiler/fragment-index';
 import { getVisibleChoices } from '@/engine/turn-resolver';
 import { CompiledGame } from '@/engine/compiler/types';
 import { Choice, ChronicaState, Fragment } from '@/engine/types';
+import { ResumeResult, validateRuntimeSave } from './validate-runtime-save';
 
 export type HistoryEntry = { locationId: string; title: string };
 
@@ -81,15 +82,23 @@ export class ChronicaRuntime {
     return true;
   }
 
-  resume(save: RuntimeSave): boolean {
+  tryResume(save: RuntimeSave): ResumeResult {
+    const validation = validateRuntimeSave(save, this.game);
+    if (!validation.ok) return validation;
+
     const state = deserializeState(save.state);
-    if (!state) return false;
+    if (!state) return { ok: false, reason: 'corrupt-state' };
+
     const fragment = getActiveFragmentFromIndex(state.location, state, this.game.fragmentIndex);
     const choices = fragment ? getVisibleChoices(fragment, state) : [];
     this.history = save.history ?? [];
     this.applyTurn(state, fragment, choices);
     this.started = true;
-    return true;
+    return { ok: true };
+  }
+
+  resume(save: RuntimeSave): boolean {
+    return this.tryResume(save).ok;
   }
 
   choose(choice: Choice): ChooseResult {

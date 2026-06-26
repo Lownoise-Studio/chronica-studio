@@ -10,6 +10,7 @@ import {
   validatePackageManifest,
   validatePackageStory,
 } from '@/engine/chronica-package';
+import { computeProjectContentHash } from '@/engine/compiler/build-compiled-game';
 import { Project } from '@/engine/types';
 import {
   assetDir,
@@ -173,6 +174,17 @@ export async function parseChronicaPackage(
 
   const storyResult = validatePackageStory(storyData);
   if (!storyResult.ok) return { ok: false, error: storyResult.error };
+
+  const manifest = manifestResult.manifest;
+  if (storyResult.story.gameId !== manifest.gameId) {
+    return { ok: false, error: 'Package story gameId does not match manifest.' };
+  }
+  if (manifest.storyContentHash) {
+    const storyHash = computeProjectContentHash(storyResult.story);
+    if (storyHash !== manifest.storyContentHash) {
+      return { ok: false, error: 'Package story content does not match manifest hash.' };
+    }
+  }
 
   const localUriByPackagePath = await extractPackageAssets(map, targetProjectId);
   const project = hydrateImportedPackageProject(storyResult.story, localUriByPackagePath);

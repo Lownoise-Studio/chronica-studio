@@ -90,8 +90,10 @@ The runtime **must not** write back to authored project source (fragments, choic
 | Validator | `engine/validator.ts` | ✓ primary consumer | optional pre-flight |
 | Editor helpers | `engine/editor-helpers.ts` | ✓ | ✗ |
 | Story graph | `engine/story-graph.ts` | ✓ | ✗ |
-| Playtest UI | `app/project/[id]/play.tsx` | hosted in app | runtime shell (needs further isolation) |
-| Load Game | `storage/load-game.ts`, Library screen | entry point | entry point |
+| Playtest UI | `app/project/[id]/play.tsx` | compile gate, routing | thin shell over `PlayerView` |
+| Player presentation | `components/PlayerView.tsx`, `components/player/useSceneAudio.ts` | — | ✓ |
+| Player host | `runtime/player-host.ts`, `hooks/useChronicaRuntime.ts` | — | ✓ |
+| Load Game | `storage/load-game.ts`, Library screen | entry point | entry point → same `PlayerHost` via play screen |
 
 ---
 
@@ -123,7 +125,15 @@ Legacy **JSON-only export** (URIs stripped) is a **backup**, not a complete ship
 
 ## 4. Runtime API concept
 
-The runtime exposes a **session-oriented API**. Names below describe the **intended contract**; some map to existing `engine/` functions today, others describe the target surface as the player is extracted from editor UI.
+The runtime exposes a **session-oriented API** through `PlayerHost`, backed by `ChronicaRuntime` and a compiled `CompiledGame`.
+
+### Compile gate (editor + player entry)
+
+| API | Intent | Implementation |
+|-----|--------|----------------|
+| `compileProject(project)` | Validate + build `CompiledGame` | `engine/compiler/compile-project.ts` |
+| `PlayerHost.create(game)` | Orchestration over runtime session | `runtime/player-host.ts` |
+| `useChronicaRuntime(project)` | React hook: compile → host → snapshot | `hooks/useChronicaRuntime.ts` |
 
 ### Package loading
 
@@ -132,21 +142,24 @@ The runtime exposes a **session-oriented API**. Names below describe the **inten
 | `loadGamePackage(bytes)` | Parse `.chronica`, validate, extract assets, return playable `Project` | `parseChronicaPackage()` in `storage/chronica-package-io.ts`; `loadGameFromBytes()` in `engine/load-game.ts` |
 | `isGamePackage(bytes)` | Detect `.chronica` vs plain JSON | `isChronicaPackageBytes()` in `engine/chronica-package.ts` |
 
+Import validates `manifest.gameId === story.gameId` and, when present, `manifest.storyContentHash` against authored story content.
+
 ### Session lifecycle
 
 | API | Intent | Current implementation (reference) |
 |-----|--------|----------------------------------|
-| `startSession(project)` | New game from `startLocation`, apply entry effects, return initial scene + choices | `startSession()` in `engine/chronica-session.ts` |
-| `resumeSession(project, saveData)` | Restore `ChronicaState`, resolve current fragment and visible choices | `deserializeState()` + `getActiveFragment()` + `getVisibleChoices()` |
-| `getRuntimeState()` | Current `ChronicaState` (location, variables, memory, instability) | `ChronicaState` held by runtime host; `serializeState()` for persistence |
+| `PlayerHost.startNew()` | New game from `startLocation`, apply entry effects | `ChronicaRuntime.start()` → `startSession()` |
+| `PlayerHost.tryResume(save)` | Validate save, restore `ChronicaState`, resolve scene + choices | `validateRuntimeSave()` + `ChronicaRuntime.tryResume()` |
+| `PlayerHost.snapshot()` | Fragment, choices, URIs, state for UI | `runtime/player-host.ts` |
+| `getRuntimeState()` | Current `ChronicaState` | `snapshot().state`; `serializeState()` for persistence |
 
 ### Turn loop
 
 | API | Intent | Current implementation (reference) |
 |-----|--------|----------------------------------|
-| `choose(choice)` | Apply choice action, advance state, return new scene + filtered choices | `choose()` in `engine/chronica-session.ts` |
-| `getCurrentScene()` | Active fragment for current location/state | `getActiveFragment()` in `engine/fragment-store.ts` |
-| `getVisibleChoices()` | Choices passing condition checks on current fragment | `getVisibleChoices()` in `engine/turn-resolver.ts` |
+| `PlayerHost.choose(choice)` | Apply compiled choice actions, advance state | `ChronicaRuntime.choose()` → `engine/chronica-session.ts` |
+| `getCurrentScene()` | Active fragment for current location/state | `snapshot().fragment` via `getActiveFragmentFromIndex()` |
+| `getVisibleChoices()` | Choices passing condition checks on current fragment | `snapshot().visibleChoices` via `getVisibleChoices()` |
 
 ### Presentation inputs (runtime host, not game rules)
 
@@ -163,11 +176,16 @@ Future APIs (`getHotspots()`, `getPortrait()`, `getInventory()`) should follow t
 
 ### Save format
 
-Runtime saves contain **session state only**, e.g.:
+`RuntimeSave` (see `runtime/chronica-runtime.ts`) contains **session state only**:
 
-- `projectId` (or package id)
+- `projectId` — local install id (`CompiledGame.installId`)
+- `gameId` — stable game identity; must match `CompiledGame.gameId` on resume
+- `contentHash` — authored content fingerprint; must match `CompiledGame.contentHash` on resume
 - Serialized `ChronicaState` (`location`, `variables`, `memory`, `instability`, `reality_layer`)
-- Optional path history or slot metadata (host concern)
+- `history` — optional path metadata for UI
+- `savedAt` — ISO timestamp
+
+`validateRuntimeSave()` rejects saves when `gameId` or `contentHash` do not match the current compiled game (`wrong-game`, `stale-content`, `corrupt-state`). Storage key remains `pse_save_<projectId>` for Phase 1.
 
 They must **not** include fragment definitions, asset binaries, or editor layout.
 

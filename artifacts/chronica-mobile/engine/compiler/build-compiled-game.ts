@@ -14,7 +14,8 @@ export function resolveCompileStartLocation(project: Project): string {
   return project.fragments[0].locationId;
 }
 
-function computeContentHash(project: Project): string {
+/** Stable hash of authored project content — used by CompiledGame and package manifests. */
+export function computeProjectContentHash(project: Project): string {
   const payload = JSON.stringify({
     gameId: project.gameId,
     schemaVersion: project.schemaVersion,
@@ -68,7 +69,7 @@ export function buildCompiledGame(project: Project): CompiledGame {
 
   return {
     version: COMPILED_GAME_VERSION,
-    contentHash: computeContentHash(project),
+    contentHash: computeProjectContentHash(project),
     gameId: project.gameId,
     installId: project.id,
     projectId: project.id,

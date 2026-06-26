@@ -1,4 +1,5 @@
 import { normalizeAssetUri } from './asset-resolver';
+import { computeProjectContentHash } from './compiler/build-compiled-game';
 import { Project, ProjectAsset } from './types';
 
 export const CHRONICA_PACKAGE_FORMAT = 'chronica-package';
@@ -16,6 +17,8 @@ export interface ChronicaPackageManifest {
   exportedAt: string;
   title: string;
   gameId: string;
+  /** Hash of authored story content at export time; optional for legacy packages. */
+  storyContentHash?: string;
   assetCount: number;
   storySchemaVersion: number;
 }
@@ -97,6 +100,7 @@ export function createPackageManifest(
     exportedAt,
     title: project.title,
     gameId: project.gameId,
+    storyContentHash: computeProjectContentHash(project),
     assetCount,
     storySchemaVersion: project.schemaVersion,
   };
@@ -130,6 +134,9 @@ export function validatePackageManifest(data: unknown): { ok: true; manifest: Ch
   }
   if (typeof m.storySchemaVersion !== 'number') {
     return { ok: false, error: 'manifest.json missing storySchemaVersion.' };
+  }
+  if (m.storyContentHash !== undefined && typeof m.storyContentHash !== 'string') {
+    return { ok: false, error: 'manifest.json storyContentHash must be a string.' };
   }
   return { ok: true, manifest: m as unknown as ChronicaPackageManifest };
 }
@@ -225,7 +232,10 @@ export function planChronicaPackage(
   }
 
   const story = buildPackageStory(project, assetFiles);
-  const manifest = createPackageManifest(project, assetFiles.length, exportedAt);
+  const manifest = {
+    ...createPackageManifest(project, assetFiles.length, exportedAt),
+    storyContentHash: computeProjectContentHash(story),
+  };
 
   return { manifest, story, assetFiles, missingAssets };
 }

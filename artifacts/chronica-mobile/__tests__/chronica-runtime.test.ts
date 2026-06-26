@@ -87,9 +87,22 @@ describe('ChronicaRuntime', () => {
     expect(save!.projectId).toBe('p1');
 
     const rt2 = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
-    expect(rt2.resume(save!)).toBe(true);
+    expect(rt2.tryResume(save!)).toEqual({ ok: true });
     expect(rt2.currentFragment?.locationId).toBe('forest');
     expect(rt2.pathHistory).toHaveLength(2);
+  });
+
+  test('tryResume rejects stale save when content changed', () => {
+    const rt = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
+    rt.start();
+    const save = rt.toSave('p1')!;
+
+    const edited = compileOrThrow(makeProject([
+      { ...fragments[0], text: 'Edited.' },
+      fragments[1],
+    ]));
+    const rt2 = new ChronicaRuntime(edited);
+    expect(rt2.tryResume(save)).toEqual({ ok: false, reason: 'stale-content' });
   });
 
   test('resolves background uri from assets', () => {

@@ -21,6 +21,8 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 | `.chronica` game package export / import | ✅ |
 | Load Game from Library (import + play immediately) | ✅ |
 | Runtime host module (`runtime/chronica-runtime.ts`) | ✅ |
+| Player host + save integrity gate (`runtime/player-host.ts`) | ✅ |
+| Presentation-only player UI (`components/PlayerView.tsx`) | ✅ |
 | Bundled Try Demo showcase (`.chronica` in-memory) | ✅ |
 | Story Graph View | ✅ |
 | Engine tests (expressions, validator, turn resolver, runtime, packages) | ✅ |

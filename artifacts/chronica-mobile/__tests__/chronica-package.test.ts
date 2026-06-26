@@ -61,17 +61,17 @@ const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 
 describe('createPackageManifest', () => {
   test('includes required fields', () => {
-    const manifest = createPackageManifest(makeProject(), 1, '2026-06-22T12:00:00.000Z');
-    expect(manifest).toEqual({
-      format: CHRONICA_PACKAGE_FORMAT,
-      version: 1,
-      app: 'Chronica Studio',
-      exportedAt: '2026-06-22T12:00:00.000Z',
-      title: 'Forest Tale',
-      gameId: 'a0000001-0000-4000-8000-000000000099',
-      assetCount: 1,
-      storySchemaVersion: 2,
-    });
+    const project = makeProject();
+    const manifest = createPackageManifest(project, 1, '2026-06-22T12:00:00.000Z');
+    expect(manifest.format).toBe(CHRONICA_PACKAGE_FORMAT);
+    expect(manifest.version).toBe(1);
+    expect(manifest.app).toBe('Chronica Studio');
+    expect(manifest.exportedAt).toBe('2026-06-22T12:00:00.000Z');
+    expect(manifest.title).toBe('Forest Tale');
+    expect(manifest.gameId).toBe('a0000001-0000-4000-8000-000000000099');
+    expect(manifest.assetCount).toBe(1);
+    expect(manifest.storySchemaVersion).toBe(2);
+    expect(manifest.storyContentHash).toBeTruthy();
   });
 });
 

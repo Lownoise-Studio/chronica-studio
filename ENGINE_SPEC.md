@@ -75,9 +75,9 @@ The session is **deterministic**: given the same project data and choice sequenc
 
 ### Project format
 
-Projects are JSON documents with a top-level **`schemaVersion`** (currently `1`). Core fields:
+Projects are JSON documents with a top-level **`schemaVersion`** (currently `2`). Core fields:
 
-- **Metadata** — `id`, `title`, `description`, timestamps
+- **Metadata** — `gameId` (stable across export/import), `id` (local install id), `title`, `description`, timestamps
 - **Bootstrap** — `startLocation`, `initialVariables`, `initialMemory`
 - **Scenes** — `fragments[]` (locationId, conditions, effects, text, choices, media refs)
 - **Assets** — `assets[]` (name, type, uri, mimeType)
@@ -99,7 +99,7 @@ A `.chronica` file is a **ZIP archive** (stored, uncompressed entries) containin
 
 | Path | Contents |
 |------|----------|
-| `manifest.json` | `format: "chronica-package"`, `version`, `app`, `exportedAt`, `title`, `assetCount`, `storySchemaVersion` |
+| `manifest.json` | `format: "chronica-package"`, `version`, `app`, `exportedAt`, `title`, `gameId`, `storyContentHash`, `assetCount`, `storySchemaVersion` |
 | `story.json` | Full project; asset `uri` fields rewritten to portable `assets/<filename>` paths |
 | `assets/*` | Binary copies of referenced image/audio files |
 
@@ -162,7 +162,7 @@ Not yet supported as first-class engine features: character portraits, dialogue 
 Ordered by foundation impact. These are engine-layer efforts (not app polish alone).
 
 1. **Asset package reliability** — round-trip `.chronica` export/import with verified binary integrity, missing-asset reporting, and consistent URI hydration on Android and iOS.
-2. **Runtime / player separation** — extract a player runtime module that consumes `CompiledGame` without editor imports; single contract for playtest and future standalone builds.
+2. **Runtime / player separation** — ✅ `PlayerHost` + `PlayerView` over `CompiledGame`; save gate validates `gameId` + `contentHash` on resume; playtest and Load Game share the same host contract.
 3. **Project compiler / validator** — ✅ `compileProject` → `CompiledGame` with fragment index, validation gate on play/export.
 4. **Event / action system** — ✅ typed `ActionStep` AST, `parseActionString`, compile-time action validation, runtime executes `choiceActions` only.
 5. **Scene object / hotspot system** — typed interactables on scenes (regions, props) with conditions and actions, still scene-centric.
@@ -190,9 +190,11 @@ Chronica Studio is building engine foundations first. The following are **out of
 | `artifacts/chronica-mobile/__tests__/` | Engine unit tests |
 | `artifacts/chronica-mobile/storage/` | File I/O, zip, package bytes—**not** engine |
 | `artifacts/chronica-mobile/context/` | React state, persistence orchestration—**not** engine |
-| `artifacts/chronica-mobile/app/` | Expo Router screens (editor + playtest host) |
+| `artifacts/chronica-mobile/runtime/` | Player host (`PlayerHost`), runtime session (`ChronicaRuntime`), save validation |
+| `artifacts/chronica-mobile/components/PlayerView.tsx` | Presentation-only player UI (no editor/game rules) |
 | Godot Chronica plugin (reference) | Semantic reference for session, effects, and future parity |
+| `artifacts/chronica-mobile/app/` | Expo Router screens (editor + playtest shell) |
 
 ---
 
-*Document version: 1 — aligns with project `schemaVersion: 1` and `.chronica` package `version: 1`.*
+*Document version: 2 — aligns with project `schemaVersion: 2` and `.chronica` package `version: 1`.*

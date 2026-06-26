@@ -1,43 +1,21 @@
 import { useCallback, useMemo, useReducer } from 'react';
 import { compileProject } from '@/engine/compiler';
-import { Choice, ChronicaState, Fragment, Project, ValidationError } from '@/engine/types';
+import { Choice, ChronicaState, Project, ValidationError } from '@/engine/types';
 import {
-  ChronicaRuntime,
+  PlayerHost,
   ChooseResult,
-  HistoryEntry,
   RuntimeSave,
+  ResumeResult,
 } from '@/runtime';
 
-type RuntimeSnapshot = {
-  started: boolean;
-  state: ChronicaState | null;
-  fragment: Fragment | null;
-  visibleChoices: Choice[];
-  history: HistoryEntry[];
-  backgroundUri: string | undefined;
-  audioUri: string | undefined;
-};
-
-function snapshot(runtime: ChronicaRuntime): RuntimeSnapshot {
-  return {
-    started: runtime.isStarted,
-    state: runtime.runtimeState,
-    fragment: runtime.currentFragment,
-    visibleChoices: runtime.visibleChoices,
-    history: runtime.pathHistory,
-    backgroundUri: runtime.getBackgroundUri(),
-    audioUri: runtime.getAudioUri(),
-  };
-}
-
-const EMPTY_SNAPSHOT: RuntimeSnapshot = {
+const EMPTY_SNAPSHOT = {
   started: false,
-  state: null,
+  state: null as ChronicaState | null,
   fragment: null,
-  visibleChoices: [],
-  history: [],
-  backgroundUri: undefined,
-  audioUri: undefined,
+  visibleChoices: [] as Choice[],
+  history: [] as ReturnType<PlayerHost['snapshot']>['history'],
+  backgroundUri: undefined as string | undefined,
+  audioUri: undefined as string | undefined,
 };
 
 export function useChronicaRuntime(project: Project | undefined) {
@@ -48,55 +26,61 @@ export function useChronicaRuntime(project: Project | undefined) {
     return compileProject(project);
   }, [project?.id, project?.updatedAt]);
 
-  const runtime = useMemo(() => {
+  const host = useMemo(() => {
     if (!compileResult?.ok) return null;
-    return new ChronicaRuntime(compileResult.game);
+    return PlayerHost.create(compileResult.game);
   }, [compileResult]);
 
   const refresh = useCallback(() => tick(), []);
 
   const start = useCallback((): boolean => {
-    if (!runtime) return false;
-    const ok = runtime.start();
+    if (!host) return false;
+    const ok = host.startNew();
     refresh();
     return ok;
-  }, [runtime, refresh]);
+  }, [host, refresh]);
 
-  const resume = useCallback((save: RuntimeSave): boolean => {
-    if (!runtime) return false;
-    const ok = runtime.resume(save);
-    refresh();
-    return ok;
-  }, [runtime, refresh]);
-
-  const choose = useCallback((choice: Choice): ChooseResult => {
-    if (!runtime) return { ok: false, reason: 'not-started' };
-    const result = runtime.choose(choice);
+  const tryResume = useCallback((save: RuntimeSave): ResumeResult => {
+    if (!host) return { ok: false, reason: 'corrupt-state' };
+    const result = host.tryResume(save);
     refresh();
     return result;
-  }, [runtime, refresh]);
+  }, [host, refresh]);
+
+  const resume = useCallback((save: RuntimeSave): boolean => {
+    return tryResume(save).ok;
+  }, [tryResume]);
+
+  const choose = useCallback((choice: Choice): ChooseResult => {
+    if (!host) return { ok: false, reason: 'not-started' };
+    const result = host.choose(choice);
+    refresh();
+    return result;
+  }, [host, refresh]);
 
   const setRuntimeState = useCallback((next: ChronicaState) => {
-    runtime?.setRuntimeState(next);
+    host?.setRuntimeState(next);
     refresh();
-  }, [runtime, refresh]);
+  }, [host, refresh]);
 
-  const toSave = useCallback((projectId: string): RuntimeSave | null => {
-    return runtime?.toSave(projectId) ?? null;
-  }, [runtime]);
+  const toSave = useCallback((installId: string): RuntimeSave | null => {
+    return host?.toSave(installId) ?? null;
+  }, [host]);
 
-  const view = runtime ? snapshot(runtime) : EMPTY_SNAPSHOT;
+  const view = host ? host.snapshot() : EMPTY_SNAPSHOT;
   const compileDiagnostics: ValidationError[] = compileResult?.ok
     ? []
     : compileResult?.diagnostics ?? [];
 
   return {
-    runtime,
+    host,
+    runtime: host?.runtime ?? null,
     compileOk: compileResult?.ok ?? false,
     compileDiagnostics,
     ...view,
     start,
     resume,
+    tryResume,
     choose,
     setRuntimeState,
     toSave,
