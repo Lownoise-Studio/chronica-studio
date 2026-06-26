@@ -15,11 +15,12 @@ import {
 } from '../engine/chronica-package';
 import { decodeZip, encodeZip, getZipTextFile, zipEntryMap } from '../storage/zip-store';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     schemaVersion: SCHEMA_VERSION,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'story-1',
     title: 'Forest Tale',
     description: 'Test',
@@ -67,8 +68,9 @@ describe('createPackageManifest', () => {
       app: 'Chronica Studio',
       exportedAt: '2026-06-22T12:00:00.000Z',
       title: 'Forest Tale',
+      gameId: 'a0000001-0000-4000-8000-000000000099',
       assetCount: 1,
-      storySchemaVersion: 1,
+      storySchemaVersion: 2,
     });
   });
 });
@@ -183,7 +185,8 @@ describe('zip package round-trip', () => {
 
 describe('old JSON export compatibility', () => {
   test('plain JSON without zip signature is not a chronica package', () => {
-    const json = JSON.stringify({ schemaVersion: 1, id: 'x', title: 't', fragments: [], assets: [] });
+    const json = JSON.stringify({ schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099', id: 'x', title: 't', fragments: [], assets: [] });
     const bytes = new TextEncoder().encode(json);
     expect(isChronicaPackageBytes(bytes)).toBe(false);
   });

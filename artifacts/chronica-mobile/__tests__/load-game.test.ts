@@ -8,7 +8,8 @@ import {
 import { Project } from '../engine/types';
 
 const STORY: Project = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
   id: 'imported-id',
   title: 'Loaded Tale',
   description: '',
@@ -42,8 +43,9 @@ function makePackageBytes(): Uint8Array {
         app: 'Chronica Studio',
         exportedAt: '2026-06-22T12:00:00.000Z',
         title: 'Loaded Tale',
+        gameId: 'a0000001-0000-4000-8000-000000000099',
         assetCount: 0,
-        storySchemaVersion: 1,
+        storySchemaVersion: 2,
       })),
     },
     {

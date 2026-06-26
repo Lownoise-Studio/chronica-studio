@@ -13,10 +13,8 @@ import { useProjects } from '@/context/ProjectsContext';
 import { AssetItem } from '@/components/AssetItem';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectAsset } from '@/engine/types';
+import { createId } from '@/engine/identity';
 import { assetDir, ensureDir, copyFile, deleteFile, readText } from '@/storage/fileSystem';
-
-const generateId = (): string =>
-  Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 
 export default function AssetsScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
@@ -56,11 +54,11 @@ export default function AssetsScreen() {
         await ensureDir(dir);
         for (const img of result.assets) {
           const ext = img.uri.split('.').pop()?.toLowerCase() ?? 'jpg';
-          const name = `img_${generateId()}.${ext}`;
+          const name = `img_${createId()}.${ext}`;
           const destUri = `${dir}${name}`;
           await copyFile(img.uri, destUri);
           addAsset(projectId!, {
-            id: generateId(),
+            id: createId(),
             name,
             type: 'image',
             uri: destUri,
@@ -76,9 +74,9 @@ export default function AssetsScreen() {
         for (const img of result.assets) {
           const mimeType = img.mimeType ?? 'image/jpeg';
           const ext = mimeType.split('/')[1] ?? 'jpg';
-          const name = img.fileName ?? `img_${generateId()}.${ext}`;
+          const name = img.fileName ?? `img_${createId()}.${ext}`;
           addAsset(projectId!, {
-            id: generateId(),
+            id: createId(),
             name,
             type: 'image',
             uri: img.uri,

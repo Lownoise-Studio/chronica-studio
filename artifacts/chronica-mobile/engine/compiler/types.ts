@@ -12,6 +12,11 @@ export interface CompiledGame {
   version: number;
   /** Changes when any runtime-relevant project content changes. */
   contentHash: string;
+  /** Stable game identity from Project.gameId. */
+  gameId: string;
+  /** Local install id from Project.id. */
+  installId: string;
+  /** @deprecated Use installId — kept for compatibility. */
   projectId: string;
   title: string;
   description: string;

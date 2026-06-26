@@ -9,7 +9,8 @@ import { Project, Fragment } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'p1',
     title: 'Test',
     description: '',
@@ -62,7 +63,8 @@ describe('compileProject', () => {
     const result = compileProject(makeProject(fragments));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.game.projectId).toBe('p1');
+    expect(result.game.gameId).toBe('a0000001-0000-4000-8000-000000000099');
+    expect(result.game.installId).toBe('p1');
     expect(result.game.startLocation).toBe('intro');
     expect(result.game.fragmentIndex.byLocation.intro).toHaveLength(1);
     expect(result.game.contentHash).toBeTruthy();

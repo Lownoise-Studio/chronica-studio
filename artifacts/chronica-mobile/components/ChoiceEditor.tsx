@@ -13,8 +13,9 @@ import {
 } from '@/engine/editor-helpers';
 import { ArrayEditor } from './ArrayEditor';
 
-const generateId = (): string =>
-  Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+import { createId } from '@/engine/identity';
+
+const generateId = (): string => createId();
 
 function ScenePicker({
   scenes,

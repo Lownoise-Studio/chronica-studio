@@ -13,9 +13,12 @@ export const DEMO_PNG_BYTES = new Uint8Array([
   0x42, 0x60, 0x82,
 ]);
 
+export const SHOWCASE_GAME_ID = 'd2000002-0000-4000-8000-000000000002';
+
 export function getShowcaseProject(): Project {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    gameId: SHOWCASE_GAME_ID,
     id: 'showcase-crossroads',
     title: 'The Crossroads',
     description: 'A short demo — branch between forest and river, unlock a hidden grove.',

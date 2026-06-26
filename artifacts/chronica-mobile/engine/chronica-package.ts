@@ -15,6 +15,7 @@ export interface ChronicaPackageManifest {
   app: typeof CHRONICA_PACKAGE_APP;
   exportedAt: string;
   title: string;
+  gameId: string;
   assetCount: number;
   storySchemaVersion: number;
 }
@@ -95,6 +96,7 @@ export function createPackageManifest(
     app: CHRONICA_PACKAGE_APP,
     exportedAt,
     title: project.title,
+    gameId: project.gameId,
     assetCount,
     storySchemaVersion: project.schemaVersion,
   };
@@ -120,6 +122,9 @@ export function validatePackageManifest(data: unknown): { ok: true; manifest: Ch
   if (typeof m.title !== 'string' || !m.title) {
     return { ok: false, error: 'manifest.json missing title.' };
   }
+  if (typeof m.gameId !== 'string' || !m.gameId) {
+    return { ok: false, error: 'manifest.json missing gameId.' };
+  }
   if (typeof m.assetCount !== 'number') {
     return { ok: false, error: 'manifest.json missing assetCount.' };
   }
@@ -139,6 +144,9 @@ export function validatePackageStory(data: unknown): { ok: true; story: Project 
   }
   if (!s.id || !s.title) {
     return { ok: false, error: 'story.json missing id or title.' };
+  }
+  if (!s.gameId || typeof s.gameId !== 'string') {
+    return { ok: false, error: 'story.json missing gameId.' };
   }
   if (!Array.isArray(s.fragments)) {
     return { ok: false, error: 'story.json fragments must be an array.' };

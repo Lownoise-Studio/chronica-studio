@@ -56,7 +56,8 @@ const fragments: Fragment[] = [startFrag, forestFrag];
 
 function makeGame(overrides: Partial<Parameters<typeof buildCompiledGame>[0]> = {}) {
   return buildCompiledGame({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'p1',
     title: 'Test',
     description: '',

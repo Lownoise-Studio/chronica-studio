@@ -2,14 +2,15 @@ import React, { createContext, useContext, useEffect, useState, useRef, ReactNod
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Project, Fragment, ProjectAsset, Choice, VariableValue, ValidationError } from '@/engine/types';
 import { compileProject } from '@/engine/compiler';
+import { createId } from '@/engine/identity';
+import { migrateProject, PROJECT_SCHEMA_VERSION } from '@/engine/project-migration';
 import { parseChronicaPackage } from '@/storage/chronica-package-io';
 
 const STORAGE_KEY = 'pse_projects_v1';
 const ONBOARDED_KEY = 'pse_onboarded_v1';
-const SCHEMA_VERSION = 1;
 
-const generateId = (): string =>
-  Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+/** Stable gameId for the seeded sample story (install id remains local). */
+const SAMPLE_GAME_ID = 'c1000001-0000-4000-8000-000000000001';
 
 const nowIso = () => new Date().toISOString();
 
@@ -18,11 +19,12 @@ const nowIso = () => new Date().toISOString();
 // ---------------------------------------------------------------------------
 function makeSampleProject(): Project {
   const id = 'sample-01';
-  const f1uid = generateId();
-  const f2uid = generateId();
-  const f3uid = generateId();
+  const f1uid = createId();
+  const f2uid = createId();
+  const f3uid = createId();
   return {
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    gameId: SAMPLE_GAME_ID,
     id,
     title: 'The Crossroads',
     description: 'A short demo story — explore it, then build your own.',
@@ -42,8 +44,8 @@ function makeSampleProject(): Project {
         effects: [],
         text: 'You stand at a crossroads. The wind carries whispers from two paths. Which way do you go?',
         choices: [
-          { uid: generateId(), label: 'Take the forest path', action: 'goto:forest', conditions: [] },
-          { uid: generateId(), label: 'Follow the river', action: 'goto:river', conditions: [] },
+          { uid: createId(), label: 'Take the forest path', action: 'goto:forest', conditions: [] },
+          { uid: createId(), label: 'Follow the river', action: 'goto:river', conditions: [] },
         ],
         backgroundImage: undefined,
         backgroundAudio: undefined,
@@ -57,7 +59,7 @@ function makeSampleProject(): Project {
         effects: ['variables.visited_forest = true'],
         text: 'The forest is dark but alive. Ancient trees loom overhead, their roots tangled like old stories.',
         choices: [
-          { uid: generateId(), label: 'Turn back', action: 'goto:intro', conditions: [] },
+          { uid: createId(), label: 'Turn back', action: 'goto:intro', conditions: [] },
         ],
         backgroundImage: undefined,
         backgroundAudio: undefined,
@@ -151,8 +153,9 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const createProject = (title: string, description: string): Project => {
     const p: Project = {
-      schemaVersion: SCHEMA_VERSION,
-      id: generateId(),
+      schemaVersion: PROJECT_SCHEMA_VERSION,
+      gameId: createId(),
+      id: createId(),
       title,
       description,
       startLocation: 'start',
@@ -177,15 +180,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     if (!source) return null;
     const copy: Project = {
       ...JSON.parse(JSON.stringify(source)),
-      id: generateId(),
+      id: createId(),
+      gameId: createId(),
       title: `${source.title} (copy)`,
       createdAt: nowIso(),
       updatedAt: nowIso(),
-      // Re-generate fragment UIDs to avoid collisions
       fragments: source.fragments.map(f => ({
         ...f,
-        uid: generateId(),
-        choices: f.choices.map(c => ({ ...c, uid: generateId() })),
+        uid: createId(),
+        choices: f.choices.map(c => ({ ...c, uid: createId() })),
       })),
     };
     persist([...projects, copy]);
@@ -195,7 +198,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const deleteProject = (id: string) => persist(projects.filter(p => p.id !== id));
 
   const addFragment = (projectId: string, fragment: Omit<Fragment, 'uid'>): Fragment => {
-    const f: Fragment = { ...fragment, uid: generateId() };
+    const f: Fragment = { ...fragment, uid: createId() };
     persist(projects.map(p => {
       if (p.id !== projectId) return p;
       const isFirst = p.fragments.length === 0;
@@ -236,7 +239,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     // Strip local asset URIs from the export (they're device-specific)
     const exportable: Project = {
       ...p,
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: PROJECT_SCHEMA_VERSION,
       assets: p.assets.map(a => ({ ...a, uri: '' })),
     };
     return JSON.stringify(exportable, null, 2);
@@ -251,9 +254,8 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       if (!Array.isArray(data.fragments)) return { ok: false, error: 'Invalid project: fragments must be an array.' };
 
       const migrated = migrateProject(data as Project);
-      // Give it a new ID if there's a collision
-      const newId = projects.some(p => p.id === migrated.id) ? generateId() : migrated.id;
-      const project: Project = { ...migrated, id: newId, updatedAt: nowIso() };
+      const newInstallId = projects.some(p => p.id === migrated.id) ? createId() : migrated.id;
+      const project: Project = { ...migrated, id: newInstallId, updatedAt: nowIso() };
       persist([...projects, project]);
       return { ok: true, project };
     } catch (e: any) {
@@ -265,12 +267,12 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     bytes: Uint8Array,
   ): Promise<{ ok: boolean; error?: string; project?: Project }> => {
     try {
-      const newId = generateId();
-      const result = await parseChronicaPackage(bytes, newId);
+      const newInstallId = createId();
+      const result = await parseChronicaPackage(bytes, newInstallId);
       if (!result.ok) return { ok: false, error: result.error };
 
       const migrated = migrateProject(result.project);
-      const project: Project = { ...migrated, id: newId, updatedAt: nowIso() };
+      const project: Project = { ...migrated, id: newInstallId, updatedAt: nowIso() };
       persist([...projects, project]);
       return { ok: true, project };
     } catch (e: any) {
@@ -304,26 +306,4 @@ export function useProjects(): ProjectsContextType {
   return ctx;
 }
 
-// ---------------------------------------------------------------------------
-// Migration helpers
-// ---------------------------------------------------------------------------
-function migrateProject(p: Project): Project {
-  return {
-    ...p,
-    schemaVersion: p.schemaVersion ?? SCHEMA_VERSION,
-    startLocation: p.startLocation ?? 'start',
-    initialVariables: p.initialVariables ?? {},
-    initialMemory: p.initialMemory ?? {},
-    assets: p.assets ?? [],
-    fragments: (p.fragments ?? []).map(f => ({
-      ...f,
-      title: f.title ?? f.locationId ?? '',
-      conditions: f.conditions ?? [],
-      effects: f.effects ?? [],
-      choices: (f.choices ?? []).map(c => ({
-        ...c,
-        conditions: c.conditions ?? [],
-      })),
-    })),
-  };
-}
+// migrateProject lives in engine/project-migration.ts

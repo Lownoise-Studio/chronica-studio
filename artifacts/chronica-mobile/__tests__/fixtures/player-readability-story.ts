@@ -16,7 +16,8 @@ const longBody = Array.from(
 ).join('\n\n');
 
 export const playerReadabilityStory: Project = {
-  schemaVersion: 1,
+  schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
   id: 'player-readability-test',
   title: 'Player Readability Test',
   description: 'Manual QA story for background overlays and reading panels.',

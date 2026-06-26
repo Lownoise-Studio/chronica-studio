@@ -1,4 +1,6 @@
 export * from './types';
+export * from './identity';
+export * from './project-migration';
 export * from './compiler';
 export * from './actions';
 export * from './expression-evaluator';

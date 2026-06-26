@@ -14,6 +14,8 @@ export type HistoryEntry = { locationId: string; title: string };
 
 export type RuntimeSave = {
   projectId: string;
+  gameId: string;
+  contentHash: string;
   state: Record<string, unknown>;
   history: HistoryEntry[];
   savedAt: string;
@@ -121,6 +123,8 @@ export class ChronicaRuntime {
     if (!this.state) return null;
     return {
       projectId,
+      gameId: this.game.gameId,
+      contentHash: this.game.contentHash,
       state: JSON.parse(serializeState(this.state)),
       history: this.pathHistory,
       savedAt: new Date().toISOString(),

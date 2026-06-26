@@ -4,7 +4,8 @@ import { Project, Fragment } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'p1',
     title: 'Test',
     description: '',
@@ -49,6 +50,15 @@ const fragments: Fragment[] = [
 ];
 
 describe('ChronicaRuntime', () => {
+  test('exposes gameId and installId on compiled game', () => {
+    const game = compileOrThrow(makeProject(fragments));
+    expect(game.gameId).toBe('a0000001-0000-4000-8000-000000000099');
+    expect(game.installId).toBe('p1');
+    const rt = new ChronicaRuntime(game);
+    expect(rt.game.gameId).toBe(game.gameId);
+    expect(rt.game.installId).toBe('p1');
+  });
+
   test('start opens first scene with visible choices', () => {
     const rt = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     expect(rt.start()).toBe(true);
@@ -72,7 +82,9 @@ describe('ChronicaRuntime', () => {
     rt.start();
     rt.choose(rt.visibleChoices[0]);
     const save = rt.toSave('p1');
-    expect(save).not.toBeNull();
+    expect(save!.gameId).toBe('a0000001-0000-4000-8000-000000000099');
+    expect(save!.contentHash).toBeTruthy();
+    expect(save!.projectId).toBe('p1');
 
     const rt2 = new ChronicaRuntime(compileOrThrow(makeProject(fragments)));
     expect(rt2.resume(save!)).toBe(true);

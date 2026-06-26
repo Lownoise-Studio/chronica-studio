@@ -29,7 +29,8 @@ describe('parseChronicaPackage', () => {
 
   test('writes zip assets to storage and hydrates playable file URIs', async () => {
     const project = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
       id: 'story-1',
       title: 'Forest Tale',
       description: '',
@@ -89,7 +90,8 @@ describe('parseChronicaPackage', () => {
 
   test('imports assets when story.json asset list is empty but zip has files', async () => {
     const story = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
       id: 'story-1',
       title: 'Forest Tale',
       description: '',
@@ -123,8 +125,9 @@ describe('parseChronicaPackage', () => {
           app: 'Chronica Studio',
           exportedAt: '2026-06-22T12:00:00.000Z',
           title: 'Forest Tale',
+          gameId: 'a0000001-0000-4000-8000-000000000099',
           assetCount: 1,
-          storySchemaVersion: 1,
+          storySchemaVersion: 2,
         })),
       },
       { path: STORY_PATH, data: new TextEncoder().encode(JSON.stringify(story)) },

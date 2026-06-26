@@ -3,7 +3,8 @@ import { Project, Fragment } from '../engine/types';
 
 function makeProject(fragments: Fragment[] = []): Project {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'test-project',
     title: 'Test Project',
     description: '',

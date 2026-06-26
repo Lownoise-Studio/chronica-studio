@@ -44,6 +44,9 @@ export interface ProjectAsset {
 
 export interface Project {
   schemaVersion: number;
+  /** Stable game identity — survives export/import across devices. */
+  gameId: string;
+  /** Local library / install id (device-specific). */
   id: string;
   title: string;
   description: string;
@@ -58,6 +61,7 @@ export interface Project {
 
 export interface GameSave {
   projectId: string;
+  gameId?: string;
   state: Record<string, unknown>;
   savedAt: string;
 }

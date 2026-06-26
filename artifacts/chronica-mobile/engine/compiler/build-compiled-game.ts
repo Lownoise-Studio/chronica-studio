@@ -16,6 +16,7 @@ export function resolveCompileStartLocation(project: Project): string {
 
 function computeContentHash(project: Project): string {
   const payload = JSON.stringify({
+    gameId: project.gameId,
     schemaVersion: project.schemaVersion,
     startLocation: project.startLocation,
     initialVariables: project.initialVariables,
@@ -68,6 +69,8 @@ export function buildCompiledGame(project: Project): CompiledGame {
   return {
     version: COMPILED_GAME_VERSION,
     contentHash: computeContentHash(project),
+    gameId: project.gameId,
+    installId: project.id,
     projectId: project.id,
     title: project.title,
     description: project.description,

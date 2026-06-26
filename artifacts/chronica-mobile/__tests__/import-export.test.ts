@@ -5,11 +5,12 @@
 import { Project, Fragment } from '../engine/types';
 import { validateProject } from '../engine/validator';
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
     schemaVersion: SCHEMA_VERSION,
+    gameId: 'a0000001-0000-4000-8000-000000000099',
     id: 'test-id',
     title: 'My Story',
     description: 'A test story',
@@ -111,14 +112,16 @@ describe('import validation', () => {
   });
 
   test('rejects missing title', () => {
-    const json = JSON.stringify({ schemaVersion: 1, id: 'x', fragments: [] });
+    const json = JSON.stringify({ schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099', id: 'x', fragments: [] });
     const result = importProject(json);
     expect(result.ok).toBe(false);
     expect(result.error).toContain('required');
   });
 
   test('rejects missing fragments array', () => {
-    const json = JSON.stringify({ schemaVersion: 1, id: 'x', title: 'test', fragments: 'bad' });
+    const json = JSON.stringify({ schemaVersion: 2,
+    gameId: 'a0000001-0000-4000-8000-000000000099', id: 'x', title: 'test', fragments: 'bad' });
     const result = importProject(json);
     expect(result.ok).toBe(false);
   });
