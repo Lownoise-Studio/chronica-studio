@@ -1,31 +1,32 @@
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { compileProject } from '@/engine/compiler';
 import { Choice, ChronicaState, Project, SceneHotspot, ValidationError } from '@/engine/types';
 import {
   PlayerHost,
   PlayerActionResult,
   PlayerAdvanceDialogueResult,
+  PlayerSnapshot,
   RuntimeSave,
   ResumeResult,
 } from '@/runtime';
 
-const EMPTY_SNAPSHOT = {
+const EMPTY_SNAPSHOT: PlayerSnapshot = {
   started: false,
-  state: null as ChronicaState | null,
+  state: null,
   fragment: null,
-  visibleChoices: [] as Choice[],
-  visibleHotspots: [] as SceneHotspot[],
-  history: [] as ReturnType<PlayerHost['snapshot']>['history'],
-  backgroundUri: undefined as string | undefined,
-  audioUri: undefined as string | undefined,
-  assetWarnings: [] as ReturnType<PlayerHost['snapshot']>['assetWarnings'],
-  runtimeWarnings: [] as ReturnType<PlayerHost['snapshot']>['runtimeWarnings'],
-  dialogue: null as ReturnType<PlayerHost['snapshot']>['dialogue'],
-  stageActors: [] as ReturnType<PlayerHost['snapshot']>['stageActors'],
+  visibleChoices: [],
+  visibleHotspots: [],
+  history: [],
+  backgroundUri: undefined,
+  audioUri: undefined,
+  assetWarnings: [],
+  runtimeWarnings: [],
+  dialogue: null,
+  stageActors: [],
 };
 
 export function useChronicaRuntime(project: Project | undefined) {
-  const [, tick] = useReducer((n: number) => n + 1, 0);
+  const [view, setView] = useState<PlayerSnapshot>(EMPTY_SNAPSHOT);
 
   const compileResult = useMemo(() => {
     if (!project) return null;
@@ -37,29 +38,36 @@ export function useChronicaRuntime(project: Project | undefined) {
     return PlayerHost.create(compileResult.game);
   }, [compileResult]);
 
-  const refresh = useCallback(() => tick(), []);
+  const syncView = useCallback(() => {
+    setView(host ? host.snapshot() : EMPTY_SNAPSHOT);
+  }, [host]);
 
-  /** Fire-and-forget asset existence check; re-renders once it resolves. Never blocks the action result. */
-  const verifyAndRefresh = useCallback(() => {
+  useEffect(() => {
+    syncView();
+  }, [host, syncView]);
+
+  /** Verify only uncached URIs; re-render once checks finish. */
+  const verifyAndRefresh = useCallback(async (force = false) => {
     if (!host) return;
-    host.verifyAssets().then(refresh).catch(refresh);
-  }, [host, refresh]);
+    await host.verifyAssets(force ? { force: true } : undefined);
+    syncView();
+  }, [host, syncView]);
 
   const start = useCallback((): boolean => {
     if (!host) return false;
     const ok = host.startNew();
-    refresh();
-    verifyAndRefresh();
+    syncView();
+    void verifyAndRefresh(true);
     return ok;
-  }, [host, refresh, verifyAndRefresh]);
+  }, [host, syncView, verifyAndRefresh]);
 
   const tryResume = useCallback((save: RuntimeSave): ResumeResult => {
     if (!host) return { ok: false, reason: 'corrupt-state' };
     const result = host.tryResume(save);
-    refresh();
-    verifyAndRefresh();
+    syncView();
+    void verifyAndRefresh(true);
     return result;
-  }, [host, refresh, verifyAndRefresh]);
+  }, [host, syncView, verifyAndRefresh]);
 
   const resume = useCallback((save: RuntimeSave): boolean => {
     return tryResume(save).ok;
@@ -68,37 +76,35 @@ export function useChronicaRuntime(project: Project | undefined) {
   const choose = useCallback((choice: Choice): PlayerActionResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.choose(choice);
-    refresh();
-    verifyAndRefresh();
+    syncView();
+    void verifyAndRefresh();
     return result;
-  }, [host, refresh, verifyAndRefresh]);
+  }, [host, syncView, verifyAndRefresh]);
 
   const activateHotspot = useCallback((hotspot: SceneHotspot): PlayerActionResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.activateHotspot(hotspot);
-    refresh();
-    verifyAndRefresh();
+    syncView();
+    void verifyAndRefresh();
     return result;
-  }, [host, refresh, verifyAndRefresh]);
+  }, [host, syncView, verifyAndRefresh]);
 
   const advanceDialogue = useCallback((): PlayerAdvanceDialogueResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.advanceDialogue();
-    refresh();
-    verifyAndRefresh();
+    syncView();
     return result;
-  }, [host, refresh, verifyAndRefresh]);
+  }, [host, syncView]);
 
   const setRuntimeState = useCallback((next: ChronicaState) => {
     host?.setRuntimeState(next);
-    refresh();
-  }, [host, refresh]);
+    syncView();
+  }, [host, syncView]);
 
   const toSave = useCallback((installId: string): RuntimeSave | null => {
     return host?.toSave(installId) ?? null;
   }, [host]);
 
-  const view = host ? host.snapshot() : EMPTY_SNAPSHOT;
   const compileDiagnostics: ValidationError[] = compileResult?.ok
     ? []
     : compileResult?.diagnostics ?? [];

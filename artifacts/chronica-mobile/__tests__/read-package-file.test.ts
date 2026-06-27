@@ -6,49 +6,34 @@ import {
   readPackageFileBytes,
 } from '../storage/read-package-file';
 
-jest.mock('../storage/fileSystem', () => {
-  const actual = jest.requireActual('../storage/fileSystem');
-  return {
-    ...actual,
-    readBytes: jest.fn(),
-    readPickableBytes: jest.fn(),
-  };
-});
+jest.mock('../storage/fileSystem', () => ({
+  readPickableBytes: jest.fn(),
+}));
 
-import { readBytes, readPickableBytes } from '../storage/fileSystem';
+import { readPickableBytes } from '../storage/fileSystem';
 
-const mockReadBytes = readBytes as jest.Mock;
 const mockReadPickableBytes = readPickableBytes as jest.Mock;
 
 describe('readPackageFileBytes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockReadBytes.mockResolvedValue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
     mockReadPickableBytes.mockResolvedValue(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
   });
 
-  test('reads file:// packages via readBytes', async () => {
+  test('reads packages through readPickableBytes for file:// URIs', async () => {
     const bytes = await readPackageFileBytes('file:///cache/game.chronica');
     expect(bytes).toEqual(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
-    expect(mockReadBytes).toHaveBeenCalledWith('file:///cache/game.chronica');
-    expect(mockReadPickableBytes).not.toHaveBeenCalled();
+    expect(mockReadPickableBytes).toHaveBeenCalledWith('file:///cache/game.chronica');
   });
 
-  test('reads content:// packages via readPickableBytes without readBytes', async () => {
+  test('reads packages through readPickableBytes for content:// URIs', async () => {
     const bytes = await readPackageFileBytes('content://media/external/downloads/game.chronica');
     expect(bytes).toEqual(new Uint8Array([0x50, 0x4b, 0x03, 0x04]));
     expect(mockReadPickableBytes).toHaveBeenCalledWith('content://media/external/downloads/game.chronica');
-    expect(mockReadBytes).not.toHaveBeenCalled();
-  });
-
-  test('reads asset:// packages via readPickableBytes without readBytes', async () => {
-    await readPackageFileBytes('asset:///bundled/game.chronica');
-    expect(mockReadPickableBytes).toHaveBeenCalledWith('asset:///bundled/game.chronica');
-    expect(mockReadBytes).not.toHaveBeenCalled();
   });
 
   test('rejects packages larger than the size guard', async () => {
-    mockReadBytes.mockResolvedValue(new Uint8Array(MAX_CHRONICA_PACKAGE_BYTES + 1));
+    mockReadPickableBytes.mockResolvedValue(new Uint8Array(MAX_CHRONICA_PACKAGE_BYTES + 1));
     await expect(readPackageFileBytes('file:///cache/huge.chronica')).rejects.toBeInstanceOf(
       PackageFileTooLargeError,
     );

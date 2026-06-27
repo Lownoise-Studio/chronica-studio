@@ -54,8 +54,8 @@ export function createSceneAudioController(loadAudio: SceneAudioLoader = playAud
   };
 }
 
-/** Loop scene background audio; unloads when the scene or URI changes. */
-export function useSceneAudio(audioUri: string | undefined, sceneKey: string | undefined): void {
+/** Loop scene background audio; unloads when the URI changes. */
+export function useSceneAudio(audioUri: string | undefined): void {
   const controllerRef = useRef<ReturnType<typeof createSceneAudioController> | null>(null);
 
   if (!controllerRef.current) {
@@ -64,5 +64,5 @@ export function useSceneAudio(audioUri: string | undefined, sceneKey: string | u
 
   useEffect(() => {
     return controllerRef.current?.load(audioUri);
-  }, [sceneKey, audioUri]);
+  }, [audioUri]);
 }

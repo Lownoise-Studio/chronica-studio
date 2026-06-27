@@ -90,7 +90,7 @@ export function PlayerView({
     setBgLoadFailed(false);
   }, [currentFragment?.uid, bgUri]);
 
-  useSceneAudio(audioUri, currentFragment?.uid);
+  useSceneAudio(audioUri);
 
   const showBackground = shouldShowSceneBackground(bgUri, bgLoadFailed);
   const hasStageContent = (currentFragment?.hotspots?.length ?? 0) > 0
@@ -283,10 +283,11 @@ export function PlayerView({
         <View style={styles.adventureRoot}>
           <View style={[styles.adventureStage, { flex: ADVENTURE_STAGE_FLEX }]}>
             <Image
-              key={`${currentFragment?.uid ?? 'scene'}:${bgUri}`}
+              key={bgUri}
               source={{ uri: bgUri }}
               style={StyleSheet.absoluteFillObject}
               contentFit="cover"
+              cachePolicy="memory-disk"
               onError={() => setBgLoadFailed(true)}
             />
             <View pointerEvents="none" style={styles.adventureStageScrim} />
@@ -328,10 +329,11 @@ export function PlayerView({
     <View style={styles.fill}>
       {showBackground ? (
         <Image
-          key={`${currentFragment?.uid ?? 'scene'}:${bgUri}`}
+          key={bgUri}
           source={{ uri: bgUri }}
           style={StyleSheet.absoluteFillObject}
           contentFit="cover"
+          cachePolicy="memory-disk"
           onError={() => setBgLoadFailed(true)}
         />
       ) : (

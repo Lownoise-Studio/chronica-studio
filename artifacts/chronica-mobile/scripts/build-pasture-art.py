@@ -8,15 +8,20 @@ import math
 import os
 from io import BytesIO
 
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART_DIR = os.path.join(ROOT, "demo", "pasture-art")
-SRC_FOLIAGE = os.path.join(ROOT, "assets", "kenney_foliage-sprites", "PNG", "Shaded")
-SRC_COW = os.path.join(ROOT, "assets", "kenney_cube-pets_1.0", "Previews", "animal-cow.png")
 OUT_TS = os.path.join(ROOT, "demo", "pasture-art-bytes.ts")
 
-W, H = 1280, 720
+SRC_REMASTERED = os.path.join(ROOT, "assets", "kenney_background-elements-remastered")
+SRC_REMASTERED_BG = os.path.join(SRC_REMASTERED, "Backgrounds")
+SRC_REMASTERED_ELEM = os.path.join(SRC_REMASTERED_BG, "Elements")
+SRC_REMASTERED_SPR = os.path.join(SRC_REMASTERED, "PNG", "Default")
+SRC_ELEMENTS = os.path.join(ROOT, "assets", "kenney_background-elements", "PNG")
+SRC_COW = os.path.join(ROOT, "assets", "kenney_cube-pets_1.0", "Previews", "animal-cow.png")
+
+W, H = 960, 540
 
 ASSET_FILES = [
     "pasture-morning.jpg",
@@ -31,81 +36,154 @@ ASSET_FILES = [
 ]
 
 
-def load_sprite(name: str) -> Image.Image:
-    return Image.open(os.path.join(SRC_FOLIAGE, name)).convert("RGBA")
+def fit_cover(img: Image.Image, width: int, height: int) -> Image.Image:
+    src = img.convert("RGBA")
+    scale = max(width / src.width, height / src.height)
+    resized = src.resize((int(src.width * scale), int(src.height * scale)), Image.LANCZOS)
+    left = (resized.width - width) // 2
+    top = (resized.height - height) // 2
+    return resized.crop((left, top, left + width, top + height))
 
 
-def sky(w: int, h: int, top: tuple[int, int, int], bottom: tuple[int, int, int]) -> Image.Image:
-    img = Image.new("RGB", (w, h), top)
-    px = img.load()
-    for y in range(h):
-        t = y / max(h - 1, 1)
-        r = int(top[0] * (1 - t) + bottom[0] * t)
-        g = int(top[1] * (1 - t) + bottom[1] * t)
-        b = int(top[2] * (1 - t) + bottom[2] * t)
-        for x in range(w):
-            px[x, y] = (r, g, b)
-    return img.convert("RGBA")
+def load_rgba(path: str) -> Image.Image:
+    return Image.open(path).convert("RGBA")
 
 
-def paste_sprite(canvas: Image.Image, sprite: Image.Image, x: float, y: float, scale: float = 1.0, opacity: float = 1.0) -> None:
+def paste_sprite(
+    canvas: Image.Image,
+    sprite: Image.Image,
+    x: float,
+    y: float,
+    scale: float = 1.0,
+    opacity: float = 1.0,
+    anchor: str = "center",
+) -> None:
     s = sprite
     if scale != 1.0:
-        s = s.resize((int(s.width * scale), int(s.height * scale)), Image.NEAREST)
+        s = s.resize((max(1, int(s.width * scale)), max(1, int(s.height * scale))), Image.LANCZOS)
     if opacity < 1.0:
         s = s.copy()
         alpha = s.split()[3].point(lambda a: int(a * opacity))
         s.putalpha(alpha)
-    canvas.alpha_composite(s, (int(x - s.width / 2), int(y - s.height / 2)))
+
+    if anchor == "center":
+        px = int(x - s.width / 2)
+        py = int(y - s.height / 2)
+    elif anchor == "bottom":
+        px = int(x - s.width / 2)
+        py = int(y - s.height)
+    else:
+        px, py = int(x), int(y)
+    canvas.alpha_composite(s, (px, py))
 
 
-def build_background(
-    filename: str,
-    sky_top: tuple[int, int, int],
-    sky_bottom: tuple[int, int, int],
-    overlay: tuple[int, int, int, int] | None = None,
-    vignette: float = 0.0,
+def tile_sprite(
+    canvas: Image.Image,
+    sprite: Image.Image,
+    y: float,
+    scale: float = 1.0,
+    opacity: float = 1.0,
+    gap: float = 0.0,
 ) -> None:
-    canvas = sky(W, H, sky_top, sky_bottom)
-    for spr, x, y, sc, op in [
-        ("sprite_0066.png", W * 0.22, H * 0.72, 0.95, 0.85),
-        ("sprite_0058.png", W * 0.78, H * 0.74, 0.9, 0.85),
-        ("sprite_0060.png", W * 0.5, H * 0.78, 1.05, 0.75),
-        ("sprite_0055.png", W * 0.12, H * 0.82, 0.85, 0.9),
-        ("sprite_0056.png", W * 0.88, H * 0.83, 0.85, 0.9),
+    s = sprite
+    if scale != 1.0:
+        s = s.resize((max(1, int(s.width * scale)), max(1, int(s.height * scale))), Image.LANCZOS)
+    step = s.width + int(gap)
+    x = step / 2
+    while x < W + s.width:
+        paste_sprite(canvas, s, x, y, opacity=opacity, anchor="bottom")
+        x += step
+
+
+def overlay_color(rgba: tuple[int, int, int, int]) -> Image.Image:
+    return Image.new("RGBA", (W, H), rgba)
+
+
+def apply_vignette(canvas: Image.Image, strength: float) -> Image.Image:
+    if strength <= 0:
+        return canvas
+    v = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(v)
+    d.ellipse([-W * 0.1, -H * 0.05, W * 1.1, H * 1.05], fill=(0, 0, 0, int(255 * strength)))
+    return Image.alpha_composite(canvas, v)
+
+
+def compose_pasture(
+    base_name: str,
+    *,
+    color_overlay: tuple[int, int, int, int] | None = None,
+    brightness: float = 1.0,
+    saturation: float = 1.0,
+    vignette: float = 0.0,
+    creek_opacity: float = 1.0,
+    add_moon: bool = False,
+) -> Image.Image:
+    canvas = fit_cover(load_rgba(os.path.join(SRC_REMASTERED_BG, base_name)), W, H)
+
+    # Distant fence line across the mid-field.
+    fence = load_rgba(os.path.join(SRC_REMASTERED_SPR, "fence.png"))
+    tile_sprite(canvas, fence, H * 0.66, scale=2.4, opacity=0.92, gap=-8)
+
+    # Creek / pond on the right — matches the creek hotspot.
+    creek = load_rgba(os.path.join(SRC_REMASTERED_ELEM, "hills.png"))
+    paste_sprite(canvas, creek, W * 0.78, H * 0.78, scale=0.42, opacity=creek_opacity, anchor="bottom")
+
+    # Foreground grass fringe — keep subtle so the remastered plate stays readable.
+    grass_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    for name, x, y, sc, op in [
+        ("grass2.png", W * 0.08, H * 0.97, 2.2, 0.75),
+        ("grass4.png", W * 0.22, H * 0.98, 2.4, 0.8),
+        ("grass5.png", W * 0.38, H * 0.96, 2.1, 0.72),
+        ("grass3.png", W * 0.55, H * 0.98, 2.5, 0.78),
+        ("grass6.png", W * 0.72, H * 0.97, 2.2, 0.74),
+        ("grass1.png", W * 0.9, H * 0.96, 2.3, 0.76),
     ]:
-        paste_sprite(canvas, load_sprite(spr), x, y, sc, op)
+        paste_sprite(grass_layer, load_rgba(os.path.join(SRC_ELEMENTS, name)), x, y, sc, op, anchor="bottom")
+    canvas = Image.alpha_composite(canvas, grass_layer)
 
-    grass = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    # Side bushes for depth — small accents only.
     for spr, x, y, sc, op in [
-        ("sprite_0058.png", W * 0.18, H * 0.92, 1.15, 1.0),
-        ("sprite_0052.png", W * 0.42, H * 0.94, 1.2, 1.0),
-        ("sprite_0057.png", W * 0.68, H * 0.93, 1.15, 1.0),
-        ("sprite_0059.png", W * 0.9, H * 0.92, 1.1, 0.95),
+        ("bushOrange2.png", W * 0.06, H * 0.72, 1.35, 0.7),
+        ("bush1.png", W * 0.94, H * 0.74, 1.25, 0.68),
     ]:
-        paste_sprite(grass, load_sprite(spr), x, y, sc, op)
-    grass = ImageEnhance.Color(grass).enhance(1.15)
-    canvas = Image.alpha_composite(canvas, grass)
+        paste_sprite(canvas, load_rgba(os.path.join(SRC_REMASTERED_SPR, spr)), x, y, sc, op, anchor="bottom")
 
-    if overlay:
-        canvas = Image.alpha_composite(canvas, Image.new("RGBA", (W, H), overlay))
-    if vignette > 0:
-        v = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        d = ImageDraw.Draw(v)
-        d.ellipse([-W * 0.1, -H * 0.05, W * 1.1, H * 1.05], fill=(0, 0, 0, int(255 * vignette)))
-        canvas = Image.alpha_composite(canvas, v)
+    if brightness != 1.0 or saturation != 1.0:
+        rgb = canvas.convert("RGB")
+        if saturation != 1.0:
+            rgb = ImageEnhance.Color(rgb).enhance(saturation)
+        if brightness != 1.0:
+            rgb = ImageEnhance.Brightness(rgb).enhance(brightness)
+        canvas = Image.merge("RGBA", (*rgb.split(), canvas.split()[3]))
 
-    canvas.convert("RGB").save(os.path.join(ART_DIR, filename), "JPEG", quality=88, optimize=True)
+    if color_overlay:
+        canvas = Image.alpha_composite(canvas, overlay_color(color_overlay))
+
+    if add_moon:
+        moon = load_rgba(os.path.join(SRC_REMASTERED_SPR, "moonFull.png"))
+        paste_sprite(canvas, moon, W * 0.78, H * 0.18, scale=1.1, opacity=0.95)
+
+    canvas = apply_vignette(canvas, vignette)
+    return canvas
 
 
-def build_cow_sprite(filename: str, flip: bool = False, size: int = 256) -> None:
-    im = Image.open(SRC_COW).convert("RGBA")
+def save_background(filename: str, canvas: Image.Image) -> None:
+    canvas.convert("RGB").save(os.path.join(ART_DIR, filename), "JPEG", quality=90, optimize=True)
+
+
+def build_cow_sprite(filename: str, flip: bool = False, size: int = 256, y_offset: int = 0) -> None:
+    im = load_rgba(SRC_COW)
     if flip:
         im = im.transpose(Image.FLIP_LEFT_RIGHT)
-    im.resize((size, size), Image.NEAREST).save(os.path.join(ART_DIR, filename), "PNG")
+    if y_offset:
+        padded = Image.new("RGBA", (im.width, im.height + abs(y_offset)), (0, 0, 0, 0))
+        padded.alpha_composite(im, (0, max(0, y_offset)))
+        im = padded
+    im.resize((size, size), Image.LANCZOS).save(os.path.join(ART_DIR, filename), "PNG")
 
 
 def build_star() -> None:
+    """Evening star — soft glow derived from the remastered moon palette."""
     star = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
     d = ImageDraw.Draw(star)
     cx, cy, r = 64, 64, 28
@@ -116,6 +194,7 @@ def build_star() -> None:
         points.append((cx + rad * math.cos(ang), cy - rad * math.sin(ang)))
     d.polygon(points, fill=(255, 245, 180, 240))
     d.ellipse([cx - 8, cy - 8, cx + 8, cy + 8], fill=(255, 255, 220, 255))
+    star = star.filter(ImageFilter.GaussianBlur(radius=0.6))
     star.save(os.path.join(ART_DIR, "star.png"), "PNG")
 
 
@@ -165,15 +244,52 @@ def emit_typescript_bytes() -> None:
 
 def main() -> None:
     os.makedirs(ART_DIR, exist_ok=True)
-    build_background("pasture-morning.jpg", (135, 206, 250), (180, 220, 170), (255, 240, 200, 35))
-    build_background("pasture-afternoon.jpg", (100, 180, 255), (120, 190, 100), (255, 255, 220, 20))
-    build_background("pasture-sunset.jpg", (255, 140, 60), (80, 50, 90), (255, 120, 40, 55), vignette=0.12)
-    build_background("pasture-night.jpg", (15, 20, 45), (10, 25, 35), (20, 30, 80, 90), vignette=0.25)
+
+    save_background(
+        "pasture-morning.jpg",
+        compose_pasture(
+            "backgroundColorGrass.png",
+            color_overlay=(255, 235, 190, 45),
+            brightness=1.05,
+            saturation=1.08,
+        ),
+    )
+    save_background(
+        "pasture-afternoon.jpg",
+        compose_pasture(
+            "backgroundColorGrass.png",
+            color_overlay=(255, 248, 210, 25),
+            brightness=1.0,
+            saturation=1.12,
+        ),
+    )
+    save_background(
+        "pasture-sunset.jpg",
+        compose_pasture(
+            "backgroundColorFall.png",
+            color_overlay=(255, 120, 40, 40),
+            brightness=0.98,
+            saturation=1.15,
+            vignette=0.1,
+        ),
+    )
+    save_background(
+        "pasture-night.jpg",
+        compose_pasture(
+            "backgroundColorGrass.png",
+            color_overlay=(15, 25, 70, 130),
+            brightness=0.42,
+            saturation=0.55,
+            creek_opacity=0.65,
+            vignette=0.22,
+            add_moon=True,
+        ),
+    )
 
     build_cow_sprite("cow-idle.png")
-    build_cow_sprite("cow-graze.png", size=240)
+    build_cow_sprite("cow-graze.png", size=240, y_offset=12)
     build_cow_sprite("cow-walk.png", flip=True)
-    build_cow_sprite("cow-drink.png", flip=True, size=240)
+    build_cow_sprite("cow-drink.png", flip=True, size=240, y_offset=16)
     build_star()
     emit_typescript_bytes()
     print(f"Wrote {len(ASSET_FILES)} art files and {OUT_TS}")

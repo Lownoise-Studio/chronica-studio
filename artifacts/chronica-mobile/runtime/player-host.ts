@@ -49,6 +49,8 @@ export class PlayerHost {
 
   /** Uri -> warning, populated by verifyAssets(); consulted by snapshot(). */
   private missingAssets: Map<string, AssetWarning> = new Map();
+  /** URIs confirmed present on disk — skip redundant getInfoAsync during play. */
+  private verifiedAssetUris: Set<string> = new Set();
   private runtimeWarnings: RuntimeWarning[] = [];
 
   constructor(game: CompiledGame) {
@@ -65,12 +67,14 @@ export class PlayerHost {
 
   startNew(): boolean {
     this.missingAssets = new Map();
+    this.verifiedAssetUris = new Set();
     this.runtimeWarnings = [];
     return this.runtime.start();
   }
 
   tryResume(save: RuntimeSave): ResumeResult {
     this.missingAssets = new Map();
+    this.verifiedAssetUris = new Set();
     this.runtimeWarnings = [];
     try {
       return this.runtime.tryResume(save);
@@ -112,24 +116,30 @@ export class PlayerHost {
     this.runtime.setRuntimeState(next);
   }
 
-  /**
-   * Verifies on-disk existence of the current scene's referenced assets
-   * (background, audio, current dialogue portrait) and caches the result.
-   * Missing files are omitted from the next snapshot() rather than crashing
-   * presentation — gameplay continues, the asset is just dropped with a warning.
-   */
-  async verifyAssets(): Promise<void> {
+  private collectAssetVerificationCandidates(): {
+    uri: string;
+    field: AssetWarningField;
+    reference: string;
+  }[] {
     const fragment = this.runtime.currentFragment;
     const candidates: { uri: string; field: AssetWarningField; reference: string }[] = [];
 
     const backgroundUri = this.runtime.getBackgroundUri();
     if (backgroundUri) {
-      candidates.push({ uri: backgroundUri, field: 'backgroundImage', reference: fragment?.backgroundImage ?? backgroundUri });
+      candidates.push({
+        uri: backgroundUri,
+        field: 'backgroundImage',
+        reference: fragment?.backgroundImage ?? backgroundUri,
+      });
     }
 
     const audioUri = this.runtime.getAudioUri();
     if (audioUri) {
-      candidates.push({ uri: audioUri, field: 'backgroundAudio', reference: fragment?.backgroundAudio ?? audioUri });
+      candidates.push({
+        uri: audioUri,
+        field: 'backgroundAudio',
+        reference: fragment?.backgroundAudio ?? audioUri,
+      });
     }
 
     const dialogue = this.runtime.getDialoguePresentation();
@@ -154,17 +164,50 @@ export class PlayerHost {
       });
     }
 
-    const next = new Map<string, AssetWarning>();
-    await Promise.all(candidates.map(async candidate => {
+    return candidates;
+  }
+
+  /**
+   * Verifies on-disk existence of the current scene's referenced assets
+   * (background, audio, current dialogue portrait) and caches the result.
+   * Missing files are omitted from the next snapshot() rather than crashing
+   * presentation — gameplay continues, the asset is just dropped with a warning.
+   *
+   * URIs confirmed present are cached in verifiedAssetUris so repeated calls
+   * during dialogue advance / hotspot taps skip bridge filesystem checks.
+   */
+  async verifyAssets(options: { force?: boolean } = {}): Promise<void> {
+    const candidates = this.collectAssetVerificationCandidates();
+    const pending = options.force
+      ? candidates
+      : candidates.filter(candidate => !this.verifiedAssetUris.has(candidate.uri));
+
+    if (!pending.length && !options.force) {
+      return;
+    }
+
+    const next = options.force ? new Map<string, AssetWarning>() : new Map(this.missingAssets);
+
+    await Promise.all(pending.map(async candidate => {
       const exists = await fileExists(candidate.uri);
-      if (!exists) {
-        next.set(candidate.uri, {
-          field: candidate.field,
-          reference: candidate.reference,
-          message: `${ASSET_FIELD_LABEL[candidate.field]} "${candidate.reference}" file is missing on this device.`,
-        });
+      if (exists) {
+        this.verifiedAssetUris.add(candidate.uri);
+        next.delete(candidate.uri);
+        return;
       }
+      this.verifiedAssetUris.delete(candidate.uri);
+      next.set(candidate.uri, {
+        field: candidate.field,
+        reference: candidate.reference,
+        message: `${ASSET_FIELD_LABEL[candidate.field]} "${candidate.reference}" file is missing on this device.`,
+      });
     }));
+
+    for (const candidate of candidates) {
+      if (this.verifiedAssetUris.has(candidate.uri)) {
+        next.delete(candidate.uri);
+      }
+    }
 
     this.missingAssets = next;
   }

@@ -17,7 +17,7 @@ type DialogueBubbleProps = {
   onAdvance?: () => void;
 };
 
-export function DialogueBubble({
+function DialogueBubbleInner({
   dialogue,
   variant = 'card',
   colors,
@@ -134,3 +134,5 @@ const styles = StyleSheet.create({
   tapHint: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   text: { fontSize: 16, fontFamily: 'Inter_400Regular', lineHeight: 24 },
 });
+
+export const DialogueBubble = React.memo(DialogueBubbleInner);

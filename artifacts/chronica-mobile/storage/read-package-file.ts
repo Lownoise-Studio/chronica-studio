@@ -1,8 +1,4 @@
-import {
-  readBytes,
-  readPickableBytes,
-  shouldSkipFilesystemExistenceCheck,
-} from '@/storage/fileSystem';
+import { readPickableBytes } from '@/storage/fileSystem';
 
 /** Maximum .chronica package size the player will load into memory. */
 export const MAX_CHRONICA_PACKAGE_BYTES = 100 * 1024 * 1024;
@@ -32,17 +28,10 @@ export function assertPackageSize(bytes: Uint8Array, maxBytes = MAX_CHRONICA_PAC
 
 /**
  * Read a picked or shared game file as raw bytes (ZIP package or JSON backup).
- * Uses expo-file-system File.bytes() for local file:// URIs only.
- * content:// and other picker URIs use legacy readAsStringAsync — never File.exists.
+ * Routes all picker URIs through readPickableBytes (file://, content://, etc.).
  */
 export async function readPackageFileBytes(uri: string): Promise<Uint8Array> {
-  if (shouldSkipFilesystemExistenceCheck(uri)) {
-    const bytes = await readPickableBytes(uri);
-    assertPackageSize(bytes);
-    return bytes;
-  }
-
-  const bytes = await readBytes(uri);
+  const bytes = await readPickableBytes(uri);
   assertPackageSize(bytes);
   return bytes;
 }

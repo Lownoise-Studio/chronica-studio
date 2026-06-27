@@ -257,6 +257,33 @@ describe('PlayerHost', () => {
     expect(host.snapshot().assetWarnings).toHaveLength(0);
   });
 
+  test('verifyAssets caches confirmed URIs and skips repeat getInfoAsync', async () => {
+    const project = makeProject([
+      { ...fragments[0], backgroundImage: 'forest.jpg' },
+      fragments[1],
+    ], {
+      assets: [{
+        id: 'a-bg',
+        name: 'forest.jpg',
+        type: 'image',
+        uri: 'file:///data/mock/pse_assets/install-1/forest.jpg',
+        mimeType: 'image/jpeg',
+        size: 0,
+        importedAt: '',
+      }],
+    });
+    const host = PlayerHost.create(buildCompiledGame(project));
+    host.startNew();
+    mockGetInfoAsync.mockClear();
+
+    await host.verifyAssets({ force: true });
+    expect(mockGetInfoAsync).toHaveBeenCalledTimes(1);
+
+    mockGetInfoAsync.mockClear();
+    await host.verifyAssets();
+    expect(mockGetInfoAsync).not.toHaveBeenCalled();
+  });
+
   test('verifyAssets keeps content:// backgrounds without calling getInfoAsync', async () => {
     const project = makeProject([
       { ...fragments[0], backgroundImage: 'pasture.jpg' },

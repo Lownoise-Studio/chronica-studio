@@ -41,7 +41,7 @@ export function toLocalFileUri(path: string): string {
 export function isFileSystemCheckableUri(uri: string): boolean {
   const trimmed = uri.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith('file://')) return true;
+  if (trimmed.startsWith('file:')) return true;
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true;
   return false;
 }

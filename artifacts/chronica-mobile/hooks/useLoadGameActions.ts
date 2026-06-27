@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useProjects } from '@/context/ProjectsContext';
 import { pickAndLoadGame, loadGameFromPackageBytes } from '@/storage/load-game';
-import { buildPasturePackageBytes } from '@/demo/pasture-package';
+import { PASTURE_GAME_ID } from '@/demo/pasture-project';
 import type { Project } from '@/engine/types';
 
 import type { Router } from 'expo-router';
@@ -19,7 +19,7 @@ function formatLoadError(error: string, diagnostics?: { message: string }[]): st
 }
 
 export function useLoadGameActions() {
-  const { importProject, importProjectPackage } = useProjects();
+  const { importProject, importProjectPackage, projects } = useProjects();
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
 
@@ -62,8 +62,16 @@ export function useLoadGameActions() {
       Alert.alert('Not supported', 'Try Demo is not available in the web preview. Use the native mobile app.');
       return null;
     }
+
+    const existing = projects.find(project => project.gameId === PASTURE_GAME_ID);
+    if (existing) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { projectId: existing.id, autoStart: true };
+    }
+
     setLoadingDemo(true);
     try {
+      const { buildPasturePackageBytes } = await import('@/demo/pasture-package');
       const bytes = buildPasturePackageBytes();
       const result = await loadGameFromPackageBytes(bytes, { importProject, importProjectPackage });
       if (!result.ok) {

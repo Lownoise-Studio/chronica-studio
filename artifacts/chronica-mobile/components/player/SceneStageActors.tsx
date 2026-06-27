@@ -8,7 +8,7 @@ type SceneStageActorsProps = {
   style?: ViewStyle;
 };
 
-export function SceneStageActors({ actors, style }: SceneStageActorsProps) {
+function SceneStageActorsInner({ actors, style }: SceneStageActorsProps) {
   const [layout, setLayout] = React.useState({ width: 0, height: 0 });
 
   const onLayout = (event: LayoutChangeEvent) => {
@@ -46,9 +46,12 @@ export function SceneStageActors({ actors, style }: SceneStageActorsProps) {
               zIndex: actor.zIndex,
             }}
             contentFit="contain"
+            cachePolicy="memory-disk"
           />
         );
       })}
     </View>
   );
 }
+
+export const SceneStageActors = React.memo(SceneStageActorsInner);

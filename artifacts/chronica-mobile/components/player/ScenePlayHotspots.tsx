@@ -70,7 +70,7 @@ function InvisibleHotspotRegion({
 }
 
 /** Invisible tap targets for adventure play — no editor chrome. */
-export function ScenePlayHotspots({
+function ScenePlayHotspotsInner({
   hotspots,
   onActivate,
   showGuidance = false,
@@ -121,3 +121,5 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
 });
+
+export const ScenePlayHotspots = React.memo(ScenePlayHotspotsInner);

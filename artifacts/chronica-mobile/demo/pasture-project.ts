@@ -116,7 +116,6 @@ function timeFragment(
     choices: [],
     hotspots: pastureHotspots(nextTime),
     backgroundImage,
-    backgroundAudio: 'pasture-ambience.mp3',
     stageActors: time === 'night' ? [cowActor, nightStar] : [cowActor],
   });
 }
@@ -147,7 +146,6 @@ export function getPastureProject(): Project {
       demoAsset('asset-cow-walk', 'cow-walk.png'),
       demoAsset('asset-cow-drink', 'cow-drink.png'),
       demoAsset('asset-star', 'star.png'),
-      demoAsset('asset-ambience', 'pasture-ambience.mp3', 'audio'),
     ],
     characters: [],
     fragments: [

@@ -12,6 +12,8 @@ import {
 
 const mockGetInfoAsync = FS.getInfoAsync as jest.Mock;
 const mockReadAsStringAsync = FS.readAsStringAsync as jest.Mock;
+const mockCopyAsync = FS.copyAsync as jest.Mock;
+const mockDeleteAsync = FS.deleteAsync as jest.Mock;
 const MockFile = File as unknown as jest.Mock;
 
 function lastFileUri(): string | undefined {
@@ -24,6 +26,10 @@ beforeEach(() => {
   mockGetInfoAsync.mockResolvedValue({ exists: true });
   mockReadAsStringAsync.mockReset();
   mockReadAsStringAsync.mockResolvedValue('');
+  mockCopyAsync.mockReset();
+  mockCopyAsync.mockResolvedValue(undefined);
+  mockDeleteAsync.mockReset();
+  mockDeleteAsync.mockResolvedValue(undefined);
   MockFile.mockClear();
   MockFile.mockImplementation((uri: string) => ({
     _uri: uri,
@@ -37,8 +43,9 @@ beforeEach(() => {
 });
 
 describe('isFileSystemCheckableUri', () => {
-  test('accepts file:// and absolute paths only', () => {
+  test('accepts file://, file:/, and absolute paths', () => {
     expect(isFileSystemCheckableUri('file:///data/user/0/app/pasture.jpg')).toBe(true);
+    expect(isFileSystemCheckableUri('file:/data/user/0/app/pasture.jpg')).toBe(true);
     expect(isFileSystemCheckableUri('/data/user/0/app/pasture.jpg')).toBe(true);
     expect(isFileSystemCheckableUri('asset:///pasture.jpg')).toBe(false);
     expect(isFileSystemCheckableUri('content://media/external/images/1')).toBe(false);
@@ -132,9 +139,28 @@ describe('readPickableBytes', () => {
   test('delegates file:// URIs to readBytes', async () => {
     await expect(readPickableBytes('file:///cache/game.chronica')).resolves.toEqual(new Uint8Array([1, 2, 3]));
     expect(lastFileUri()).toBe('file:///cache/game.chronica');
+    expect(mockCopyAsync).not.toHaveBeenCalled();
   });
 
-  test('reads content:// URIs via legacy readAsStringAsync without File', async () => {
+  test('normalizes file:/ URIs and reads through File.bytes()', async () => {
+    await expect(readPickableBytes('file:/cache/game.chronica')).resolves.toEqual(new Uint8Array([1, 2, 3]));
+    expect(lastFileUri()).toBe('file:///cache/game.chronica');
+  });
+
+  test('reads content:// URIs by copying to cache then reading as local file', async () => {
+    await expect(readPickableBytes('content://media/external/file/1')).resolves.toEqual(
+      new Uint8Array([1, 2, 3]),
+    );
+    expect(mockCopyAsync).toHaveBeenCalledWith({
+      from: 'content://media/external/file/1',
+      to: expect.stringMatching(/^file:\/\/\/mock\/documents\/pick_\d+\.chronica$/),
+    });
+    expect(mockDeleteAsync).toHaveBeenCalled();
+    expect(mockReadAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  test('falls back to base64 when copy fails', async () => {
+    mockCopyAsync.mockRejectedValueOnce(new Error('copy failed'));
     mockReadAsStringAsync.mockResolvedValueOnce(btoa('PK'));
     await expect(readPickableBytes('content://media/external/file/1')).resolves.toEqual(
       new Uint8Array([80, 75]),
@@ -143,7 +169,6 @@ describe('readPickableBytes', () => {
       'content://media/external/file/1',
       { encoding: 'base64' },
     );
-    expect(MockFile).not.toHaveBeenCalled();
   });
 });
 

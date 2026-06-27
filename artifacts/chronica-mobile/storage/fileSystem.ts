@@ -57,6 +57,10 @@ export function toLocalFileUri(path: string): string {
   const trimmed = path.trim();
   if (!trimmed) return trimmed;
   if (trimmed.startsWith('file://')) return trimmed;
+  if (trimmed.startsWith('file:/')) {
+    const rest = trimmed.slice(5);
+    return rest.startsWith('/') ? `file://${rest}` : `file:///${rest}`;
+  }
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return `file://${trimmed}`;
   return trimmed;
 }
@@ -65,7 +69,7 @@ export function toLocalFileUri(path: string): string {
 export function isFileSystemCheckableUri(uri: string): boolean {
   const trimmed = uri.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith('file://')) return true;
+  if (trimmed.startsWith('file:')) return true;
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return true;
   return false;
 }
@@ -92,6 +96,10 @@ export function shouldSkipFilesystemExistenceCheck(uri: string): boolean {
 function normalizeFileSystemUri(uri: string): string {
   const trimmed = uri.trim();
   if (trimmed.startsWith('file://')) return trimmed;
+  if (trimmed.startsWith('file:/')) {
+    const path = trimmed.slice(5);
+    return path.startsWith('/') ? `file://${path}` : `file:///${path}`;
+  }
   if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return `file://${trimmed}`;
   return trimmed;
 }
@@ -121,9 +129,6 @@ export async function readBytes(uri: string): Promise<Uint8Array> {
     throw new Error('readBytes requires a local file URI.');
   }
   const file = openLocalFile(uri, 'readBytes');
-  if (!file.exists) {
-    throw new Error('File not found.');
-  }
   return file.bytes();
 }
 
@@ -134,15 +139,31 @@ export async function readBytes(uri: string): Promise<Uint8Array> {
 export async function readPickableBytes(uri: string): Promise<Uint8Array> {
   if (!isNative) throw new Error('readPickableBytes is not available on web');
   const trimmed = uri.trim();
+
   if (isFileSystemCheckableUri(trimmed)) {
-    return readBytes(trimmed);
+    try {
+      return await readBytes(trimmed);
+    } catch {
+      throw new Error('Could not read the selected file.');
+    }
   }
 
   logFileSystemAccess('readPickableBytes', trimmed);
+  const cacheUri = toLocalFileUri(`${documentDirectory}pick_${Date.now()}.chronica`);
+
   try {
-    return decodeBase64(await FS.readAsStringAsync(trimmed, { encoding: FS.EncodingType.Base64 }));
+    await FS.copyAsync({ from: trimmed, to: cacheUri });
+    return await readBytes(cacheUri);
   } catch {
-    throw new Error('Could not read the selected file.');
+    try {
+      const encoded = await FS.readAsStringAsync(trimmed, { encoding: FS.EncodingType.Base64 });
+      if (!encoded) throw new Error('empty file');
+      return decodeBase64(encoded);
+    } catch {
+      throw new Error('Could not read the selected file.');
+    }
+  } finally {
+    await FS.deleteAsync(cacheUri, { idempotent: true }).catch(() => {});
   }
 }
 
