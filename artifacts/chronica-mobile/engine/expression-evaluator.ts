@@ -44,6 +44,11 @@ function resolvePath(path: string, state: ChronicaState): VariableValue {
   }
 }
 
+/** Read a gameplay state path (variables.*, memory.*, or core fields). */
+export function resolveStatePath(path: string, state: ChronicaState): VariableValue {
+  return resolvePath(path.trim(), state);
+}
+
 function compare(left: VariableValue, op: string, right: VariableValue): boolean {
   switch (op) {
     // Ordering comparisons are numeric; coerce both sides deterministically so a

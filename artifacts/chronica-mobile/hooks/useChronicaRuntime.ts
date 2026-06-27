@@ -21,6 +21,7 @@ const EMPTY_SNAPSHOT = {
   assetWarnings: [] as ReturnType<PlayerHost['snapshot']>['assetWarnings'],
   runtimeWarnings: [] as ReturnType<PlayerHost['snapshot']>['runtimeWarnings'],
   dialogue: null as ReturnType<PlayerHost['snapshot']>['dialogue'],
+  stageActors: [] as ReturnType<PlayerHost['snapshot']>['stageActors'],
 };
 
 export function useChronicaRuntime(project: Project | undefined) {

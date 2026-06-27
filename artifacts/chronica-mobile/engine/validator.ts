@@ -6,6 +6,7 @@ import { validateProjectActions } from './actions/validate-actions';
 import { isValidHotspotBounds } from './hotspots';
 import { validateCharacters, validateCharacterAssetRefs } from './characters';
 import { validateFragmentDialogue } from './validate-dialogue';
+import { validateFragmentStageActors } from './stage-actors';
 
 function assetExists(assets: ProjectAsset[], name: string): boolean {
   const asset = findAssetByName(assets, name);
@@ -55,6 +56,17 @@ export function validateFragment(fragment: Fragment): ValidationError[] {
       }
     }
   }
+  for (const actor of fragment.stageActors ?? []) {
+    for (const cond of (actor.visibleWhen ?? [])) {
+      if (!isValidCondition(cond)) {
+        errors.push({
+          ...meta,
+          type: 'invalid-condition',
+          message: `Stage actor "${actor.label || actor.uid}" — invalid condition: "${cond}"`,
+        });
+      }
+    }
+  }
   return errors;
 }
 
@@ -78,21 +90,30 @@ export function findBrokenLinks(project: Project): ValidationError[] {
   return errors;
 }
 
-/** Flag duplicate locationId values across fragments. */
+/** Flag duplicate locationId values when multiple unconditional variants share the same id. */
 export function findDuplicateLocations(project: Project): ValidationError[] {
-  const seen = new Map<string, Fragment>();
-  const errors: ValidationError[] = [];
+  const byLocation = new Map<string, Fragment[]>();
   for (const frag of project.fragments) {
-    const prev = seen.get(frag.locationId);
-    if (prev) {
-      const meta = { fragmentUid: frag.uid, fragmentTitle: frag.title || frag.locationId };
+    const bucket = byLocation.get(frag.locationId) ?? [];
+    bucket.push(frag);
+    byLocation.set(frag.locationId, bucket);
+  }
+
+  const errors: ValidationError[] = [];
+  for (const [locationId, frags] of byLocation) {
+    if (frags.length <= 1) continue;
+    const unconditional = frags.filter(f => !f.conditions?.length);
+    if (unconditional.length <= 1) continue;
+
+    const primary = unconditional[0];
+    for (let i = 1; i < unconditional.length; i++) {
+      const frag = unconditional[i];
       errors.push({
-        ...meta,
+        fragmentUid: frag.uid,
+        fragmentTitle: frag.title || locationId,
         type: 'duplicate-location',
-        message: `Duplicate scene ID "${frag.locationId}" (also used by "${prev.title || prev.locationId}")`,
+        message: `Duplicate scene ID "${locationId}" with no unlock conditions (also used by "${primary.title || primary.locationId}")`,
       });
-    } else {
-      seen.set(frag.locationId, frag);
     }
   }
   return errors;
@@ -117,6 +138,7 @@ export function findMissingAssetRefs(project: Project): ValidationError[] {
         message: `Background audio "${frag.backgroundAudio}" is not in the asset library`,
       });
     }
+    errors.push(...validateFragmentStageActors(frag, project.assets));
   }
   return errors;
 }

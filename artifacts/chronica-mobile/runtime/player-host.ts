@@ -1,6 +1,7 @@
 import { CompiledGame } from '@/engine/compiler/types';
 import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
 import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
+import { StageActorPresentation, resolveStageActorPresentations } from '@/engine/stage-actors';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
 import { fileExists } from '@/storage/fileSystem';
 import { ChronicaRuntime, HistoryEntry, RuntimeInvariantError, RuntimeSave } from './chronica-runtime';
@@ -26,6 +27,7 @@ export type PlayerSnapshot = {
   assetWarnings: AssetWarning[];
   runtimeWarnings: RuntimeWarning[];
   dialogue: DialoguePresentation | null;
+  stageActors: StageActorPresentation[];
 };
 
 const ASSET_FIELD_LABEL: Record<AssetWarningField, string> = {
@@ -200,6 +202,22 @@ export class PlayerHost {
       dialogue = { ...dialogue, portraitUri: undefined };
     }
 
+    const stageActors = resolveStageActorPresentations(
+      fragment,
+      this.runtime.runtimeState,
+      this.game.assets,
+    ).map(actor => {
+      if (actor.spriteUri && this.missingAssets.has(actor.spriteUri)) {
+        missingWarnings.push({
+          field: 'backgroundImage',
+          reference: actor.assetName,
+          message: `Sprite "${actor.assetName}" file is missing on this device.`,
+        });
+        return { ...actor, spriteUri: undefined };
+      }
+      return actor;
+    });
+
     return {
       started: this.runtime.isStarted,
       state: this.runtime.runtimeState,
@@ -212,6 +230,7 @@ export class PlayerHost {
       assetWarnings: [...libraryWarnings, ...missingWarnings],
       runtimeWarnings: this.runtimeWarnings,
       dialogue,
+      stageActors,
     };
   }
 

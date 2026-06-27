@@ -155,7 +155,7 @@ describe('validateProject', () => {
 });
 
 describe('findDuplicateLocations', () => {
-  test('flags duplicate locationId', () => {
+  test('flags duplicate locationId when both variants are unconditional', () => {
     const project = makeProject([
       makeFragment('f1', 'intro'),
       makeFragment('f2', 'intro'),
@@ -163,6 +163,16 @@ describe('findDuplicateLocations', () => {
     project.startLocation = 'intro';
     const errors = validateProject(project);
     expect(errors.some(e => e.type === 'duplicate-location')).toBe(true);
+  });
+
+  test('allows duplicate locationId when variants have unlock conditions', () => {
+    const project = makeProject([
+      makeFragment('f1', 'pasture', { conditions: ['variables.time == "morning"'] }),
+      makeFragment('f2', 'pasture', { conditions: ['variables.time == "evening"'] }),
+    ]);
+    project.startLocation = 'pasture';
+    const errors = validateProject(project);
+    expect(errors.some(e => e.type === 'duplicate-location')).toBe(false);
   });
 });
 

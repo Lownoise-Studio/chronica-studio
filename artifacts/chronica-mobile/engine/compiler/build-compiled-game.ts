@@ -105,6 +105,11 @@ export function buildCompiledGame(project: Project): CompiledGame {
       ...h,
       conditions: [...(h.conditions ?? [])],
     })),
+    stageActors: (f.stageActors ?? []).map(a => ({
+      ...a,
+      expressions: (a.expressions ?? []).map(e => ({ ...e })),
+      visibleWhen: [...(a.visibleWhen ?? [])],
+    })),
     dialogue: (f.dialogue ?? []).map(line => ({ ...line })),
   }));
 

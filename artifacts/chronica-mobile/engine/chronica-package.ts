@@ -251,6 +251,12 @@ export function collectReferencedAssetNames(project: Project): string[] {
   for (const frag of project.fragments) {
     if (frag.backgroundImage?.trim()) names.add(frag.backgroundImage.trim());
     if (frag.backgroundAudio?.trim()) names.add(frag.backgroundAudio.trim());
+    for (const actor of frag.stageActors ?? []) {
+      if (actor.asset?.trim()) names.add(actor.asset.trim());
+      for (const expression of actor.expressions ?? []) {
+        if (expression.asset?.trim()) names.add(expression.asset.trim());
+      }
+    }
   }
   for (const character of project.characters ?? []) {
     if (character.defaultPortrait?.trim()) names.add(character.defaultPortrait.trim());
@@ -611,6 +617,38 @@ export function hydrateImportedPackageProject(
         importedAt: new Date().toISOString(),
       });
       knownNames.add(name.toLowerCase());
+    }
+  }
+
+  for (const frag of story.fragments) {
+    for (const actor of frag.stageActors ?? []) {
+      for (const ref of [
+        actor.asset,
+        ...(actor.expressions ?? []).map(expression => expression.asset),
+      ]) {
+        const name = ref?.trim();
+        if (!name || knownNames.has(name.toLowerCase())) continue;
+
+        const localUri = lookupLocalUri(
+          localUriByPackagePath,
+          packageAssetPath(name),
+          packageAssetPath(safeName(name)),
+          safeName(name),
+          name,
+        );
+        if (!localUri) continue;
+
+        assets.push({
+          id: name,
+          name,
+          type: 'image',
+          uri: normalizeAssetUri(localUri),
+          mimeType: '',
+          size: 0,
+          importedAt: new Date().toISOString(),
+        });
+        knownNames.add(name.toLowerCase());
+      }
     }
   }
 

@@ -91,6 +91,11 @@ function migrateFragmentFields(f: Fragment): Fragment {
       ...h,
       conditions: h.conditions ?? [],
     })),
+    stageActors: (f.stageActors ?? []).map(a => ({
+      ...a,
+      expressions: a.expressions ?? [],
+      visibleWhen: a.visibleWhen ?? [],
+    })),
   };
 }
 

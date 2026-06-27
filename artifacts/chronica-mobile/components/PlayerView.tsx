@@ -10,8 +10,10 @@ import { HistoryEntry } from '@/runtime';
 import { EmptyState } from '@/components/EmptyState';
 import { DialogueBubble } from '@/components/DialogueBubble';
 import { SceneHotspotOverlay } from '@/components/player/SceneHotspotOverlay';
+import { SceneStageActors } from '@/components/player/SceneStageActors';
 import { getHotspotDisplayLabel, summarizeHotspotAction } from '@/engine/hotspot-helpers';
 import type { SceneOption } from '@/engine/editor-helpers';
+import type { StageActorPresentation } from '@/engine/stage-actors';
 import {
   BACKGROUND_OVERLAY_OPACITY,
   CONTENT_PANEL_BG,
@@ -41,6 +43,7 @@ export type PlayerViewProps = {
   fragment: Fragment | null;
   visibleChoices: Choice[];
   visibleHotspots?: SceneHotspot[];
+  stageActors?: StageActorPresentation[];
   history: HistoryEntry[];
   gameState: ChronicaState | null;
   backgroundUri: string | undefined;
@@ -63,6 +66,7 @@ export function PlayerView({
   fragment: currentFragment,
   visibleChoices,
   visibleHotspots = [],
+  stageActors = [],
   history,
   gameState,
   backgroundUri: bgUri,
@@ -89,7 +93,10 @@ export function PlayerView({
   useSceneAudio(audioUri, currentFragment?.uid);
 
   const showBackground = shouldShowSceneBackground(bgUri, bgLoadFailed);
-  const useAdventureLayout = showBackground && (currentFragment?.hotspots?.length ?? 0) > 0;
+  const hasStageContent = (currentFragment?.hotspots?.length ?? 0) > 0
+    || (currentFragment?.stageActors?.length ?? 0) > 0
+    || stageActors.length > 0;
+  const useAdventureLayout = showBackground && hasStageContent;
   const storyTextColor = getStoryTextColor(showBackground && !useAdventureLayout, colors.foreground);
   const choiceSurfaceColor = getChoiceSurfaceColor(showBackground && !useAdventureLayout, colors.secondary);
   const endCardSurfaceColor = getEndCardSurfaceColor(showBackground && !useAdventureLayout, colors.secondary);
@@ -265,6 +272,9 @@ export function PlayerView({
             contentFit="cover"
             onError={() => setBgLoadFailed(true)}
           />
+          {stageActors.length > 0 && (
+            <SceneStageActors actors={stageActors} />
+          )}
           {visibleHotspots.length > 0 && onActivateHotspot && (
             <SceneHotspotOverlay
               hotspots={visibleHotspots}

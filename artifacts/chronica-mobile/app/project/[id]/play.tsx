@@ -43,6 +43,7 @@ export default function PlayScreen() {
     audioUri,
     assetWarnings,
     dialogue,
+    stageActors,
     start,
     tryResume,
     choose,
@@ -214,6 +215,7 @@ export default function PlayScreen() {
       fragment={currentFragment}
       visibleChoices={visibleChoices}
       visibleHotspots={visibleHotspots}
+      stageActors={stageActors}
       history={history}
       gameState={gameState}
       backgroundUri={bgUri}

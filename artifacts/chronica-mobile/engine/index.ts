@@ -16,4 +16,5 @@ export * from './player-presentation';
 export * from './chronica-package';
 export * from './hotspot-helpers';
 export * from './hotspots';
+export * from './stage-actors';
 export * from './load-game';
