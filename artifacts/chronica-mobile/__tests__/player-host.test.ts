@@ -231,6 +231,57 @@ describe('PlayerHost', () => {
     expect(snap.assetWarnings.some(w => w.field === 'backgroundImage' && w.reference.includes('forest.jpg'))).toBe(true);
   });
 
+  test('verifyAssets keeps asset:// backgrounds without calling getInfoAsync', async () => {
+    const project = makeProject([
+      { ...fragments[0], backgroundImage: 'pasture.jpg' },
+      fragments[1],
+    ], {
+      assets: [{
+        id: 'a-bg',
+        name: 'pasture.jpg',
+        type: 'image',
+        uri: 'asset:///pasture-morning.jpg',
+        mimeType: 'image/jpeg',
+        size: 0,
+        importedAt: '',
+      }],
+    });
+    const host = PlayerHost.create(buildCompiledGame(project));
+    host.startNew();
+    mockGetInfoAsync.mockClear();
+
+    await host.verifyAssets();
+
+    expect(mockGetInfoAsync).not.toHaveBeenCalled();
+    expect(host.snapshot().backgroundUri).toBe('asset:///pasture-morning.jpg');
+    expect(host.snapshot().assetWarnings).toHaveLength(0);
+  });
+
+  test('verifyAssets keeps content:// backgrounds without calling getInfoAsync', async () => {
+    const project = makeProject([
+      { ...fragments[0], backgroundImage: 'pasture.jpg' },
+      fragments[1],
+    ], {
+      assets: [{
+        id: 'a-bg',
+        name: 'pasture.jpg',
+        type: 'image',
+        uri: 'content://media/external/images/1',
+        mimeType: 'image/jpeg',
+        size: 0,
+        importedAt: '',
+      }],
+    });
+    const host = PlayerHost.create(buildCompiledGame(project));
+    host.startNew();
+    mockGetInfoAsync.mockClear();
+
+    await host.verifyAssets();
+
+    expect(mockGetInfoAsync).not.toHaveBeenCalled();
+    expect(host.snapshot().backgroundUri).toBe('content://media/external/images/1');
+  });
+
   test('snapshot omits missing background audio after verifyAssets and adds a warning', async () => {
     const project = makeProject([
       { ...fragments[0], backgroundAudio: 'theme.mp3' },

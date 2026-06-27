@@ -3,7 +3,7 @@ import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
 import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { StageActorPresentation, resolveStageActorPresentations } from '@/engine/stage-actors';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
-import { fileExists } from '@/storage/fileSystem';
+import { fileExists, isFileSystemCheckableUri } from '@/storage/fileSystem';
 import { ChronicaRuntime, HistoryEntry, RuntimeInvariantError, RuntimeSave } from './chronica-runtime';
 import {
   AssetWarning,
@@ -35,10 +35,6 @@ const ASSET_FIELD_LABEL: Record<AssetWarningField, string> = {
   backgroundAudio: 'Audio',
   portrait: 'Portrait',
 };
-
-function isLocalFileUri(uri: string): boolean {
-  return uri.startsWith('file://');
-}
 
 /**
  * Thin orchestration layer over ChronicaRuntime for playtest, Load Game, and future standalone players.
@@ -145,15 +141,23 @@ export class PlayerHost {
       });
     }
 
+    for (const actor of resolveStageActorPresentations(
+      fragment,
+      this.runtime.runtimeState,
+      this.game.assets,
+    )) {
+      if (!actor.spriteUri) continue;
+      candidates.push({
+        uri: actor.spriteUri,
+        field: 'backgroundImage',
+        reference: actor.assetName,
+      });
+    }
+
     const next = new Map<string, AssetWarning>();
     await Promise.all(candidates.map(async candidate => {
-      if (!isLocalFileUri(candidate.uri)) return;
-      let exists: boolean;
-      try {
-        exists = await fileExists(candidate.uri);
-      } catch {
-        exists = false;
-      }
+      if (!isFileSystemCheckableUri(candidate.uri)) return;
+      const exists = await fileExists(candidate.uri);
       if (!exists) {
         next.set(candidate.uri, {
           field: candidate.field,
