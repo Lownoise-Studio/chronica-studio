@@ -1,33 +1,30 @@
 import React from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
-import { HotspotPreviewCanvas } from '@/components/HotspotPreviewCanvas';
 import { SceneHotspot } from '@/engine/types';
-import type { SceneOption } from '@/engine/editor-helpers';
+import { ScenePlayHotspots } from '@/components/player/ScenePlayHotspots';
 
 type SceneHotspotOverlayProps = {
   hotspots: SceneHotspot[];
-  sceneOptions?: SceneOption[];
   onActivate: (hotspot: SceneHotspot) => void;
+  showGuidance?: boolean;
   style?: ViewStyle;
 };
 
-/** Tap regions over a parent-provided scene stage during playtest. */
+/** Tap regions over a parent-provided scene stage during play. */
 export function SceneHotspotOverlay({
   hotspots,
-  sceneOptions,
   onActivate,
+  showGuidance = false,
   style,
 }: SceneHotspotOverlayProps) {
   if (!hotspots.length) return null;
 
   return (
     <View style={[StyleSheet.absoluteFillObject, style]} pointerEvents="box-none">
-      <HotspotPreviewCanvas
+      <ScenePlayHotspots
         hotspots={hotspots}
-        mode="play"
-        regionsOnly
-        sceneOptions={sceneOptions}
         onActivate={onActivate}
+        showGuidance={showGuidance}
       />
     </View>
   );

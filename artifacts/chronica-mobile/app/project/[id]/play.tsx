@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import {
   Alert, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -14,7 +14,6 @@ import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
 import { Choice, SceneHotspot } from '@/engine';
-import { getSceneOptions } from '@/engine/editor-helpers';
 import { isPlayerApp, getAppHomeHref } from '@/config/app-mode';
 import { loadRuntimeSaveResult, loadSaveFailureMessage, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
 
@@ -26,10 +25,6 @@ export default function PlayScreen() {
   const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
-  const sceneOptions = useMemo(
-    () => (project ? getSceneOptions(project.fragments) : []),
-    [project?.id, project?.updatedAt],
-  );
   const {
     compileOk,
     compileDiagnostics,
@@ -62,18 +57,10 @@ export default function PlayScreen() {
     router.back();
   };
 
-  const [showLoadedBanner, setShowLoadedBanner] = useState(loaded === '1');
-
   useEffect(() => {
     if (loaded !== '1' || started || !project?.fragments.length) return;
     start();
   }, [loaded, started, project, start]);
-
-  useEffect(() => {
-    if (!showLoadedBanner) return;
-    const timer = setTimeout(() => setShowLoadedBanner(false), 3000);
-    return () => clearTimeout(timer);
-  }, [showLoadedBanner]);
 
   const resetGame = () => {
     Alert.alert('Restart', 'Start the story over from the beginning?', [
@@ -220,7 +207,6 @@ export default function PlayScreen() {
       gameState={gameState}
       backgroundUri={bgUri}
       audioUri={audioUri}
-      showLoadedBanner={showLoadedBanner}
       onBack={exitPlay}
       onRestart={resetGame}
       onSave={saveGame}
@@ -228,7 +214,6 @@ export default function PlayScreen() {
       onActivateHotspot={handleHotspot}
       dialogue={dialogue}
       onAdvanceDialogue={handleAdvanceDialogue}
-      sceneOptions={sceneOptions}
       debugPanel={
         advancedMode && gameState && currentFragment ? (
           <View style={{ marginTop: 8, gap: 8 }}>

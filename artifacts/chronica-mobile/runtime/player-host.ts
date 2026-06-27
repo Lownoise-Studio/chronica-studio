@@ -3,7 +3,7 @@ import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
 import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { StageActorPresentation, resolveStageActorPresentations } from '@/engine/stage-actors';
 import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
-import { fileExists, isFileSystemCheckableUri } from '@/storage/fileSystem';
+import { fileExists } from '@/storage/fileSystem';
 import { ChronicaRuntime, HistoryEntry, RuntimeInvariantError, RuntimeSave } from './chronica-runtime';
 import {
   AssetWarning,
@@ -156,7 +156,6 @@ export class PlayerHost {
 
     const next = new Map<string, AssetWarning>();
     await Promise.all(candidates.map(async candidate => {
-      if (!isFileSystemCheckableUri(candidate.uri)) return;
       const exists = await fileExists(candidate.uri);
       if (!exists) {
         next.set(candidate.uri, {

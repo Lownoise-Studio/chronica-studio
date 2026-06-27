@@ -2,6 +2,12 @@
  * Web stub for the file-system storage adapter.
  * All file operations are no-ops on web — only native (Android/iOS) has real FS.
  */
+import type { FileSystemOperation } from '@/storage/fileSystem';
+
+export type { FileSystemOperation };
+
+export function logFileSystemAccess(_operation: string, _uri: string): void {}
+
 export const documentDirectory: string = '';
 
 export async function ensureDir(_dir: string): Promise<void> {}
@@ -15,6 +21,10 @@ export async function readText(_uri: string): Promise<string> {
 }
 
 export async function readBytes(_uri: string): Promise<Uint8Array> {
+  return new Uint8Array();
+}
+
+export async function readPickableBytes(_uri: string): Promise<Uint8Array> {
   return new Uint8Array();
 }
 
@@ -49,8 +59,12 @@ export function isTrustedResourceUri(uri: string): boolean {
   );
 }
 
+export function shouldSkipFilesystemExistenceCheck(uri: string): boolean {
+  return isTrustedResourceUri(uri) || !isFileSystemCheckableUri(uri);
+}
+
 export async function fileExists(uri: string): Promise<boolean> {
-  if (isTrustedResourceUri(uri) || !isFileSystemCheckableUri(uri)) return true;
+  if (shouldSkipFilesystemExistenceCheck(uri)) return true;
   return false;
 }
 
