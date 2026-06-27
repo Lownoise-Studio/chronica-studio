@@ -9,6 +9,11 @@ import {
 } from '@/engine/chronica-package';
 import { decodeZip, encodeZip, getZipTextFile, zipEntryMap } from '@/storage/zip-store';
 import { DEMO_PNG_BYTES, getPastureProject } from './pasture-project';
+import { PASTURE_ART_BYTES } from './pasture-art-bytes';
+
+function bytesForPastureAsset(assetName: string): Uint8Array {
+  return PASTURE_ART_BYTES[assetName] ?? DEMO_PNG_BYTES;
+}
 
 /** Build an in-memory .chronica package for the bundled Pasture visual demo. */
 export function buildPasturePackageBytes(exportedAt = new Date().toISOString()): Uint8Array {
@@ -17,7 +22,7 @@ export function buildPasturePackageBytes(exportedAt = new Date().toISOString()):
 
   const assetEntries = plan.assetFiles.map(file => ({
     path: file.packagePath,
-    data: DEMO_PNG_BYTES,
+    data: bytesForPastureAsset(file.asset.name),
   }));
 
   const manifest = {

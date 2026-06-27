@@ -33,7 +33,7 @@ describe('pasture demo package', () => {
     const bytes = buildPasturePackageBytes('2026-06-22T12:00:00.000Z');
     expect(isChronicaPackageBytes(bytes)).toBe(true);
 
-    const { manifest, story, assets } = validatePasturePackageBytes(bytes);
+    const { manifest, story, assets, map } = validatePasturePackageBytes(bytes);
     expect(manifest.ok).toBe(true);
     expect(story.ok).toBe(true);
     expect(assets.ok).toBe(true);
@@ -42,6 +42,17 @@ describe('pasture demo package', () => {
     expect(story.story.gameId).toBe(PASTURE_GAME_ID);
     expect(story.story.fragments.filter(f => f.locationId === 'pasture')).toHaveLength(4);
     expect(story.story.fragments[0]?.stageActors?.length).toBeGreaterThan(0);
+
+    const morningBg = map.get('assets/pasture-morning.jpg');
+    expect(morningBg).toBeTruthy();
+    expect(morningBg!.length).toBeGreaterThan(1000);
+    expect(morningBg![0]).toBe(0xff);
+    expect(morningBg![1]).toBe(0xd8);
+
+    const cowIdle = map.get('assets/cow-idle.png');
+    expect(cowIdle).toBeTruthy();
+    expect(cowIdle!.length).toBeGreaterThan(100);
+    expect(cowIdle!.slice(0, 4)).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
   });
 
   test('compiles after import', async () => {

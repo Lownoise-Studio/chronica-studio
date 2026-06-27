@@ -9,6 +9,7 @@
     "serve": "node server/serve.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest",
+    "build:pasture-art": "python3 scripts/build-pasture-art.py",
     "start:player": "CHRONICA_APP_MODE=player EXPO_PUBLIC_CHRONICA_APP_MODE=player pnpm exec expo start",
     "build:player:android": "pnpm exec eas build --profile player --platform android"
   },

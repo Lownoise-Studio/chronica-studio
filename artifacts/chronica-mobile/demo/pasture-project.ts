@@ -2,6 +2,7 @@ import { syncFragmentTextFromDialogue } from '@/engine/dialogue';
 import { PROJECT_SCHEMA_VERSION } from '@/engine/project-migration';
 import type { DialogueLine, Fragment, Project, StageActor } from '@/engine/types';
 import { DEMO_PNG_BYTES } from './showcase-project';
+import { PASTURE_ART_SIZES } from './pasture-art-bytes';
 
 export { DEMO_PNG_BYTES };
 
@@ -10,13 +11,16 @@ export const PASTURE_GAME_ID = 'e3000003-0000-4000-8000-000000000003';
 const EXPORTED_AT = '2026-06-22T12:00:00.000Z';
 
 function demoAsset(id: string, name: string, type: 'image' | 'audio' = 'image') {
+  const size = type === 'audio'
+    ? DEMO_PNG_BYTES.length
+    : (PASTURE_ART_SIZES[name] ?? DEMO_PNG_BYTES.length);
   return {
     id,
     name,
     type,
     uri: `file:///demo/${name}`,
     mimeType: type === 'audio' ? 'audio/mpeg' : (name.endsWith('.png') ? 'image/png' : 'image/jpeg'),
-    size: DEMO_PNG_BYTES.length,
+    size,
     importedAt: EXPORTED_AT,
   };
 }
