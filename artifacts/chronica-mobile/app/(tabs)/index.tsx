@@ -157,7 +157,7 @@ export default function HomeScreen() {
               {loadingDemo && <ActivityIndicator size="small" color={colors.primary} />}
             </View>
             <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
-              Play Engine Showcase — a guided tour with dialogue, hotspots, branching paths, and state-driven unlocks.
+              Play Pasture — a quiet scene with a cow, tap hotspots, and watch the day pass from morning to night.
             </Text>
           </TouchableOpacity>
         }

@@ -3,7 +3,7 @@ import { Alert, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useProjects } from '@/context/ProjectsContext';
 import { pickAndLoadGame, loadGameFromPackageBytes } from '@/storage/load-game';
-import { buildShowcasePackageBytes } from '@/demo/showcase-package';
+import { buildPasturePackageBytes } from '@/demo/pasture-package';
 import type { Project } from '@/engine/types';
 
 import type { Router } from 'expo-router';
@@ -64,7 +64,7 @@ export function useLoadGameActions() {
     }
     setLoadingDemo(true);
     try {
-      const bytes = buildShowcasePackageBytes();
+      const bytes = buildPasturePackageBytes();
       const result = await loadGameFromPackageBytes(bytes, { importProject, importProjectPackage });
       if (!result.ok) {
         Alert.alert(
