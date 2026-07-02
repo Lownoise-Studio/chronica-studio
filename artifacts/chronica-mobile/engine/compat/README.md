@@ -72,4 +72,26 @@ still commits. Order across modules is deterministic (registration order).
 | `module-registry.ts` | Register / dispatch / save / load — with error isolation. |
 | `chronica-session.ts` | Top-level session — composes everything, drives the flow. |
 | `save-load.ts` | Envelope shape check + `RuntimeSave` adapters. |
+| `modules/` | First-party gameplay modules (see below). |
 | `index.ts` | Public surface. |
+
+## First-party gameplay modules
+
+Modules are optional. A ChronicaSession runs fine with none attached — every
+hook has a default of "do nothing." The compat layer ships two first-party
+gameplay modules under `engine/compat/modules/`:
+
+- `InstabilityModule` (id `chronica.instability`) — tracks instability and
+  the derived reality layer (0/1/2/3 at 60/100/150), applies a +0.5 baseline
+  on player-driven turns, clamps to zero, and emits `instability_changed` /
+  `reality_layer_changed` when the tracked values move. Save version 1.
+- `EchoModule` (id `chronica.echoes`) — advances echoes through Dormant →
+  Active → Manifested based on the current instability, honoring per-echo
+  thresholds. Resolved echoes are locked. Emits `echo_state_changed`. Save
+  version 1. Reads instability from InstabilityModule when attached, falls
+  back to `ChronicaState.instability` otherwise.
+
+Together they prepare mobile for portable main-engine games: their contract
+matches the main Chronica engine, so gameplay authored against these modules
+plays identically on both runtimes. `TurnResolver` and the pure engine
+functions stay untouched — modules extend behavior only through hooks.

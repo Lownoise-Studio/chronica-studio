@@ -17,6 +17,17 @@ export type RuntimeEventPayloads = {
   state_changed: { state: ChronicaState };
   fragment_changed: { from: Fragment | null; to: Fragment | null };
   module_error: ModuleErrorEvent;
+
+  // Emitted by first-party gameplay modules (engine/compat/modules/*).
+  // Listeners are only invoked when the corresponding module is attached, so
+  // the events sit dormant on the bus for consumers that skip these modules.
+  instability_changed: { previous: number; current: number };
+  reality_layer_changed: { previous: number; current: number };
+  echo_state_changed: {
+    echoId: string;
+    previousState: 'Dormant' | 'Active' | 'Manifested' | 'Resolved';
+    currentState: 'Dormant' | 'Active' | 'Manifested' | 'Resolved';
+  };
 };
 
 export type RuntimeEventName = keyof RuntimeEventPayloads;

@@ -40,3 +40,26 @@ export {
   isCompatSaveShape,
   toRuntimeSave,
 } from './save-load';
+
+// First-party gameplay modules. Optional — attach only for games that use
+// these mechanics. They compose over ChronicaSession via the standard
+// ChronicaModule contract; the core TurnResolver is not modified.
+export {
+  DEFAULT_INSTABILITY_LAYER_THRESHOLDS,
+  ECHO_MODULE_ID,
+  INSTABILITY_MODULE_ID,
+  clampInstability,
+  computeRealityLayer,
+  createEchoModule,
+  createInstabilityModule,
+  normalizeEcho,
+} from './modules';
+export type {
+  EchoInstance,
+  EchoModuleConfig,
+  EchoSavePayload,
+  EchoState,
+  InstabilityData,
+  InstabilityModuleConfig,
+  InstabilitySavePayload,
+} from './modules';
