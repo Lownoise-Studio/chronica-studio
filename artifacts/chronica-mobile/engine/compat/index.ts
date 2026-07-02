@@ -14,28 +14,24 @@ export { TurnResolver } from './turn-resolver';
 export { ExpressionEvaluator } from './expression-evaluator';
 export { ActionResolver } from './action-resolver';
 export { ChronicaEventBus } from './event-bus';
+export { ChronicaRuntimeContext } from './context';
 export { ModuleRegistry } from './module-registry';
+export type { ModuleHookArgs } from './module-registry';
 
-export type {
-  ChoiceResolvedEvent,
-  HotspotResolvedEvent,
-  ModuleContext,
-  RuntimeModule,
-  SessionResumeEvent,
-  SessionStartEvent,
-  TurnResolvedEvent,
-} from './module';
+export type { ChronicaModule } from './module';
 
-export {
-  COMPAT_SAVE_VERSION,
-} from './types';
+export { COMPAT_SAVE_VERSION } from './types';
 export type {
   CompatSave,
+  ModuleErrorEvent,
+  ModuleHookName,
   ModuleSavePayload,
   RuntimeEventListener,
   RuntimeEventName,
   RuntimeEventPayloads,
   RuntimeEventUnsubscribe,
+  SessionSavedEvent,
+  TurnResult,
   TurnSource,
 } from './types';
 

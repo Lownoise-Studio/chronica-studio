@@ -12,17 +12,19 @@ import {
 } from '../dialogue';
 import type { Choice, Fragment, SceneHotspot } from '../types';
 import { ActionResolver } from './action-resolver';
+import { ChronicaRuntimeContext } from './context';
 import { ChronicaState } from './chronica-state';
 import { ChronicaEventBus } from './event-bus';
 import { ExpressionEvaluator } from './expression-evaluator';
 import { FragmentStore } from './fragment-store';
-import type { RuntimeModule } from './module';
+import type { ChronicaModule } from './module';
 import { ModuleRegistry } from './module-registry';
 import { TurnResolver } from './turn-resolver';
 import {
   COMPAT_SAVE_VERSION,
   type CompatSave,
   type ModuleSavePayload,
+  type TurnResult,
   type TurnSource,
 } from './types';
 
@@ -41,7 +43,7 @@ export interface HistoryEntry {
 }
 
 export type SessionChooseResult =
-  | { ok: true; fragment: Fragment | null }
+  | { ok: true; result: TurnResult }
   | { ok: false; reason: 'not-started' | 'dead-end' | 'unknown-action' };
 
 export type SessionAdvanceDialogueResult =
@@ -57,16 +59,20 @@ export type SessionResumeResult =
   | { ok: false; reason: 'wrong-game' | 'stale-content' | 'corrupt-state' };
 
 /**
- * Top-level compat facade for a Chronica play session. Mirrors the Godot
- * engine's `ChronicaSession` object shape: owns `ChronicaState`,
- * `FragmentStore`, `TurnResolver`, `ExpressionEvaluator`, `ActionResolver`,
- * an `EventBus`, and an optional `ModuleRegistry`.
+ * Top-level compat facade for a Chronica play session.
  *
- * This class does NOT replace {@link ChronicaRuntime}; it is a parallel
- * object-oriented surface that composes the same pure engine functions. The
- * existing runtime + PlayerHost pipeline continues to power playtest and
- * Load Game today; the compat layer is the target for future portability with
- * the main engine's `.chronica` runtime.
+ * Owns the shared services (state, fragment store, turn resolver, evaluator,
+ * action resolver, event bus, module registry) and drives the deterministic
+ * turn flow specified by the runtime compatibility spec:
+ *
+ * 1. `emit choice_selected`
+ * 2. `await` module `onChoiceSelected`
+ * 3. resolve turn via {@link TurnResolver}
+ * 4. commit state + fragment
+ * 5. `await` module `onTurnResolved`
+ * 6. `emit turn_resolved`
+ * 7. `emit state_changed` if state changed
+ * 8. `emit fragment_changed` if fragment changed
  */
 export class ChronicaSession {
   readonly game: CompiledGame;
@@ -75,7 +81,8 @@ export class ChronicaSession {
   readonly actions: ActionResolver = new ActionResolver();
   readonly fragments: FragmentStore;
   readonly turns: TurnResolver;
-  readonly modules: ModuleRegistry;
+  readonly modules: ModuleRegistry = new ModuleRegistry();
+  readonly context: ChronicaRuntimeContext;
 
   private _state: ChronicaState;
   private _fragment: Fragment | null = null;
@@ -89,7 +96,13 @@ export class ChronicaSession {
     this._state = new ChronicaState(
       createInitialState(game.startLocation, game.initialVariables, game.initialMemory),
     );
-    this.modules = new ModuleRegistry(game, this._state.raw);
+    this.context = new ChronicaRuntimeContext(
+      game,
+      this.bus,
+      () => this._state,
+      () => this._fragment,
+      this.fragments,
+    );
   }
 
   get state(): ChronicaState {
@@ -118,31 +131,39 @@ export class ChronicaSession {
     return this.turns.visibleHotspots(this._fragment, this._state.raw);
   }
 
-  attachModule(module: RuntimeModule): void {
-    this.modules.attach(module);
+  /** Register a module. Same as `session.modules.register(...)`. */
+  register(module: ChronicaModule): void {
+    this.modules.register(module);
   }
 
-  detachModule(moduleId: string): boolean {
-    return this.modules.detach(moduleId);
+  /** Unregister a module. Same as `session.modules.unregister(...)`. */
+  unregister(moduleId: string): boolean {
+    return this.modules.unregister(moduleId);
   }
 
-  /** Bootstrap a new session: reset state, enter startLocation, apply entry effects. */
-  start(): boolean {
+  /**
+   * Bootstrap a new session:
+   * - reset state to the compiled game's initial values
+   * - enter `startLocation`, apply the fragment's entry effects
+   * - `initializeAll` any newly-registered modules
+   * - emit `session_started` / `fragment_changed` / `state_changed`
+   * - run `onSessionStart` hooks
+   */
+  async start(): Promise<boolean> {
     if (!this.game.fragments.length) return false;
 
-    const nextState = new ChronicaState(
+    const previousFragment = this._fragment;
+    this._state.replace(
       createInitialState(
         this.game.startLocation,
         this.game.initialVariables,
         this.game.initialMemory,
       ),
     );
-    this._state = nextState;
-    this.modules.setContext(this.game, nextState.raw);
 
-    const fragment = this.fragments.active(this.game.startLocation, nextState.raw);
+    const fragment = this.fragments.active(this.game.startLocation, this._state.raw);
     if (fragment) {
-      for (const effect of fragment.effects) applyEffect(effect, nextState.raw);
+      for (const effect of fragment.effects) applyEffect(effect, this._state.raw);
     }
 
     this._fragment = fragment;
@@ -151,53 +172,104 @@ export class ChronicaSession {
       : [];
     this._started = true;
 
-    this.bus.emit('session-start', { fragment });
-    this.bus.emit('fragment-changed', { from: null, to: fragment });
-    this.bus.emit('state-changed', { state: nextState.raw });
-    this.modules.dispatchSessionStart({ fragment });
-    this.emitTurnResolved(fragment, 'entry');
+    await this.modules.initializeAll(this.context);
+
+    this.bus.emit('session_started', { fragment });
+    this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
+    this.bus.emit('state_changed', { state: this._state.raw });
+
+    await this.modules.callHook('onSessionStart', this.context);
+    await this.emitTurnResolved({
+      source: 'entry',
+      fragment,
+      previousFragment,
+      stateChanged: true,
+      fragmentChanged: previousFragment?.uid !== fragment?.uid,
+    });
     return true;
   }
 
-  choose(choice: Choice): SessionChooseResult {
+  /**
+   * Resolve a choice under the spec'd turn flow. See class-level JSDoc.
+   */
+  async choose(choice: Choice): Promise<SessionChooseResult> {
     if (!this._started) return { ok: false, reason: 'not-started' };
     if (!(choice.uid in this.game.choiceActions)) {
       return { ok: false, reason: 'unknown-action' };
     }
 
-    const previous = this._fragment;
-    this.bus.emit('choice-selected', { choice });
+    const previousFragment = this._fragment;
+    const stateBefore = serializeState(this._state.raw);
+
+    this.bus.emit('choice_selected', { choice });
+    await this.modules.callHook('onChoiceSelected', this.context, choice);
+
     const fragment = this.turns.applyChoice(choice, this._state.raw);
     if (!fragment) return { ok: false, reason: 'dead-end' };
 
     this.pushHistory(fragment);
-    this.setFragment(previous, fragment);
-    this.modules.dispatchChoiceResolved({ choice, fragment });
-    this.emitTurnResolved(fragment, 'choice');
-    return { ok: true, fragment };
+    this._fragment = fragment;
+
+    const stateAfter = serializeState(this._state.raw);
+    const stateChanged = stateBefore !== stateAfter;
+    const fragmentChanged = previousFragment?.uid !== fragment.uid;
+
+    const result: TurnResult = {
+      source: 'choice',
+      fragment,
+      previousFragment,
+      choice,
+      stateChanged,
+      fragmentChanged,
+    };
+
+    await this.modules.callHook('onTurnResolved', this.context, result);
+    this.bus.emit('turn_resolved', { result });
+    if (stateChanged) this.bus.emit('state_changed', { state: this._state.raw });
+    if (fragmentChanged) this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
+    return { ok: true, result };
   }
 
-  activateHotspot(hotspot: SceneHotspot): SessionChooseResult {
+  async activateHotspot(hotspot: SceneHotspot): Promise<SessionChooseResult> {
     if (!this._started) return { ok: false, reason: 'not-started' };
     if (!(hotspot.uid in this.game.hotspotActions)) {
       return { ok: false, reason: 'unknown-action' };
     }
 
-    const previous = this._fragment;
-    this.bus.emit('hotspot-activated', { hotspot });
+    const previousFragment = this._fragment;
+    const stateBefore = serializeState(this._state.raw);
+
+    this.bus.emit('hotspot_activated', { hotspot });
+
     const fragment = this.turns.applyHotspot(hotspot, this._state.raw);
     if (!fragment) return { ok: false, reason: 'dead-end' };
 
-    if (previous?.locationId !== fragment.locationId) {
+    if (previousFragment?.locationId !== fragment.locationId) {
       this.pushHistory(fragment);
     }
-    this.setFragment(previous, fragment);
-    this.modules.dispatchHotspotResolved({ hotspot, fragment });
-    this.emitTurnResolved(fragment, 'hotspot');
-    return { ok: true, fragment };
+    this._fragment = fragment;
+
+    const stateAfter = serializeState(this._state.raw);
+    const stateChanged = stateBefore !== stateAfter;
+    const fragmentChanged = previousFragment?.uid !== fragment.uid;
+
+    const result: TurnResult = {
+      source: 'hotspot',
+      fragment,
+      previousFragment,
+      hotspot,
+      stateChanged,
+      fragmentChanged,
+    };
+
+    await this.modules.callHook('onTurnResolved', this.context, result);
+    this.bus.emit('turn_resolved', { result });
+    if (stateChanged) this.bus.emit('state_changed', { state: this._state.raw });
+    if (fragmentChanged) this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
+    return { ok: true, result };
   }
 
-  advanceDialogue(): SessionAdvanceDialogueResult {
+  async advanceDialogue(): Promise<SessionAdvanceDialogueResult> {
     if (!this._started || !this._fragment) {
       return { ok: false, reason: 'not-started' };
     }
@@ -212,9 +284,15 @@ export class ChronicaSession {
     }
     const next = advanceDialogueIndex(index, lines.length);
     this._state.dialogueLineIndex = next;
-    this.bus.emit('dialogue-advanced', { fromIndex: index, toIndex: next });
-    this.bus.emit('state-changed', { state: this._state.raw });
-    this.emitTurnResolved(this._fragment, 'dialogue');
+    this.bus.emit('dialogue_advanced', { fromIndex: index, toIndex: next });
+    this.bus.emit('state_changed', { state: this._state.raw });
+    await this.emitTurnResolved({
+      source: 'dialogue',
+      fragment: this._fragment,
+      previousFragment: this._fragment,
+      stateChanged: true,
+      fragmentChanged: false,
+    });
     return { ok: true, advanced: true };
   }
 
@@ -225,9 +303,16 @@ export class ChronicaSession {
     return isDialogueExhausted(this._state.dialogueLineIndex, lines.length);
   }
 
+  /**
+   * Build a compat save envelope for the current session.
+   *
+   * Returns null before {@link ChronicaSession.start} has been called.
+   * After building, emits `session_saved` with the moduleIds that contributed
+   * a payload — subscribers can persist the save to storage from there.
+   */
   toSave(projectId: string): CompatSave | null {
     if (!this._started) return null;
-    const modulePayloads = this.modules.serialize();
+    const modulePayloads = this.modules.saveAll(this.context);
     const save: CompatSave = {
       compatVersion: COMPAT_SAVE_VERSION,
       projectId,
@@ -237,14 +322,21 @@ export class ChronicaSession {
       history: [...this._history],
       savedAt: new Date().toISOString(),
     };
-    if (modulePayloads) {
-      save.modules = modulePayloads;
-    }
-    this.bus.emit('save-created', { moduleIds: Object.keys(modulePayloads ?? {}) });
+    if (this._fragment) save.fragmentId = this._fragment.uid;
+    if (modulePayloads) save.modules = modulePayloads;
+    this.bus.emit('session_saved', {
+      moduleIds: Object.keys(modulePayloads ?? {}),
+      save,
+    });
     return save;
   }
 
-  tryResume({ save }: SessionResumeInput): SessionResumeResult {
+  /**
+   * Restore a session from a save envelope. Legacy saves (no `modules` block,
+   * no `fragmentId`) are supported — modules receive `undefined` payloads and
+   * the fragment is re-resolved from `state.location`.
+   */
+  async tryResume({ save }: SessionResumeInput): Promise<SessionResumeResult> {
     if (!save.gameId?.trim() || save.gameId !== this.game.gameId) {
       return { ok: false, reason: 'wrong-game' };
     }
@@ -273,34 +365,45 @@ export class ChronicaSession {
       return { ok: false, reason: 'corrupt-state' };
     }
 
-    this._state = restored;
-    this.modules.setContext(this.game, restored.raw);
-    this.modules.deserialize(save.modules);
+    const previousFragment = this._fragment;
+    this._state.replace(restored.raw);
     this._fragment = fragment;
     this._history = save.history ? [...save.history] : [];
     this._started = true;
 
-    this.bus.emit('session-resume', { fragment });
-    this.bus.emit('fragment-changed', { from: null, to: fragment });
-    this.bus.emit('state-changed', { state: restored.raw });
-    this.modules.dispatchSessionResume({ fragment });
-    this.emitTurnResolved(fragment, 'resume');
+    await this.modules.initializeAll(this.context);
+    await this.modules.loadAll(this.context, save.modules);
+
+    this.bus.emit('session_loaded', { fragment });
+    this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
+    this.bus.emit('state_changed', { state: this._state.raw });
+    await this.emitTurnResolved({
+      source: 'resume',
+      fragment,
+      previousFragment,
+      stateChanged: true,
+      fragmentChanged: previousFragment?.uid !== fragment?.uid,
+    });
     return { ok: true, fragment };
   }
 
   reset(): void {
-    this._state = new ChronicaState(
+    const previousFragment = this._fragment;
+    this._state.replace(
       createInitialState(
         this.game.startLocation,
         this.game.initialVariables,
         this.game.initialMemory,
       ),
     );
-    this.modules.setContext(this.game, this._state.raw);
     this._fragment = null;
     this._history = [];
     this._started = false;
-    this.bus.emit('session-reset', {});
+    this.context.clearModuleData();
+    this.bus.emit('session_reset', {});
+    if (previousFragment) {
+      this.bus.emit('fragment_changed', { from: previousFragment, to: null });
+    }
   }
 
   snapshot(): SessionSnapshot {
@@ -321,19 +424,16 @@ export class ChronicaSession {
     ];
   }
 
-  private setFragment(previous: Fragment | null, next: Fragment | null): void {
-    const changed = previous?.uid !== next?.uid || previous?.locationId !== next?.locationId;
-    this._fragment = next;
-    if (changed) {
-      this.bus.emit('fragment-changed', { from: previous, to: next });
-    }
-    this.bus.emit('state-changed', { state: this._state.raw });
-  }
-
-  private emitTurnResolved(fragment: Fragment | null, source: TurnSource): void {
-    this.bus.emit('turn-resolved', { fragment, source });
-    this.modules.dispatchTurnResolved({ fragment, source });
+  /**
+   * Dispatch `onTurnResolved` to modules and emit `turn_resolved` on the bus.
+   * Used from lifecycle points other than `choose` / `activateHotspot` (entry,
+   * resume, dialogue advance) where the bus event alone is not enough — the
+   * hook must fire too so modules see every turn, not just choice/hotspot turns.
+   */
+  private async emitTurnResolved(result: TurnResult): Promise<void> {
+    await this.modules.callHook('onTurnResolved', this.context, result);
+    this.bus.emit('turn_resolved', { result });
   }
 }
 
-export type { ModuleSavePayload };
+export type { ModuleSavePayload, TurnResult, TurnSource };

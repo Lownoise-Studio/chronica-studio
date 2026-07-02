@@ -1,25 +1,63 @@
 import type { Choice, ChronicaState, Fragment, SceneHotspot, VariableValue } from '../types';
 
 /**
- * Payload shapes emitted by the compat event bus. Keep these serializable —
- * no engine internals, no compiled action steps, no live class references.
+ * Snake-case event names emitted by {@link ChronicaEventBus}. The snake_case
+ * form matches the naming convention used by the main Chronica engine so
+ * cross-engine tooling can subscribe with a shared vocabulary.
  */
 export type RuntimeEventPayloads = {
-  'session-start': { fragment: Fragment | null };
-  'session-resume': { fragment: Fragment | null };
-  'session-reset': Record<string, never>;
-  'choice-selected': { choice: Choice };
-  'hotspot-activated': { hotspot: SceneHotspot };
-  'dialogue-advanced': { fromIndex: number; toIndex: number };
-  'fragment-changed': { from: Fragment | null; to: Fragment | null };
-  'state-changed': { state: ChronicaState };
-  'turn-resolved': { fragment: Fragment | null; source: TurnSource };
-  'save-created': { moduleIds: string[] };
+  session_started: { fragment: Fragment | null };
+  session_loaded: { fragment: Fragment | null };
+  session_saved: SessionSavedEvent;
+  session_reset: Record<string, never>;
+  choice_selected: { choice: Choice };
+  hotspot_activated: { hotspot: SceneHotspot };
+  dialogue_advanced: { fromIndex: number; toIndex: number };
+  turn_resolved: { result: TurnResult };
+  state_changed: { state: ChronicaState };
+  fragment_changed: { from: Fragment | null; to: Fragment | null };
+  module_error: ModuleErrorEvent;
 };
 
 export type RuntimeEventName = keyof RuntimeEventPayloads;
 
 export type TurnSource = 'choice' | 'hotspot' | 'dialogue' | 'entry' | 'resume';
+
+/**
+ * Outcome of a single turn — shared with modules via `onTurnResolved` and via
+ * the `turn_resolved` bus event.
+ */
+export interface TurnResult {
+  source: TurnSource;
+  fragment: Fragment | null;
+  previousFragment: Fragment | null;
+  choice?: Choice;
+  hotspot?: SceneHotspot;
+  stateChanged: boolean;
+  fragmentChanged: boolean;
+}
+
+/** Payload for the `module_error` event — one entry per failed module hook. */
+export interface ModuleErrorEvent {
+  moduleId: string;
+  hook: ModuleHookName;
+  error: unknown;
+}
+
+/** Payload for the `session_saved` event. */
+export interface SessionSavedEvent {
+  moduleIds: string[];
+  save: CompatSave;
+}
+
+/** Names of hooks the module registry can invoke via `callHook`. */
+export type ModuleHookName =
+  | 'initialize'
+  | 'onSessionStart'
+  | 'onChoiceSelected'
+  | 'onTurnResolved'
+  | 'onSessionSave'
+  | 'onSessionLoad';
 
 export type RuntimeEventListener<E extends RuntimeEventName> = (
   payload: RuntimeEventPayloads[E],
@@ -48,6 +86,12 @@ export interface CompatSave {
   projectId: string;
   gameId: string;
   contentHash: string;
+  /**
+   * Fragment.uid active when the save was written. Purely a hint — resume
+   * re-resolves the fragment through the compiled index so authored conditions
+   * always win.
+   */
+  fragmentId?: string;
   /** Serialized {@link ChronicaState}. */
   state: Record<string, unknown>;
   /** History entries for UI. */

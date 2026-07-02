@@ -1,6 +1,7 @@
 import { compileProject } from '../engine/compiler';
 import { ChronicaSession } from '../engine/compat/chronica-session';
-import type { RuntimeModule } from '../engine/compat/module';
+import type { ChronicaModule } from '../engine/compat/module';
+import type { ModuleErrorEvent } from '../engine/compat/types';
 import type { Fragment, Project } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
@@ -53,99 +54,211 @@ function compileOrThrow(project: Project) {
   return result.game;
 }
 
-interface AchievementsState {
+interface AchievementsPayload {
   unlocked: string[];
 }
 
-function achievementsModule(store: AchievementsState): RuntimeModule<AchievementsState> {
+function achievementsModule(store: { unlocked: string[] }): ChronicaModule<AchievementsPayload> {
   return {
     id: 'achievements',
-    onSessionStart() {
+    initialize() {
       store.unlocked = [];
     },
-    onChoiceResolved(_ctx, { choice }) {
+    onChoiceSelected(_ctx, choice) {
       if (choice.uid === 'c1') store.unlocked.push('reached-forest');
     },
-    onSerialize() {
+    onSessionSave() {
       return { unlocked: [...store.unlocked] };
     },
-    onDeserialize(_ctx, payload) {
+    onSessionLoad(_ctx, payload) {
       store.unlocked = payload?.unlocked ? [...payload.unlocked] : [];
     },
   };
 }
 
-describe('ModuleRegistry through ChronicaSession', () => {
-  test('module lifecycle hooks fire in order', () => {
-    const store: AchievementsState = { unlocked: [] };
-    const module = achievementsModule(store);
+describe('ModuleRegistry (through ChronicaSession)', () => {
+  test('hook order is deterministic and matches registration order', async () => {
+    const calls: string[] = [];
+    const mkModule = (id: string): ChronicaModule => ({
+      id,
+      initialize: () => { calls.push(`init:${id}`); },
+      onSessionStart: () => { calls.push(`start:${id}`); },
+      onChoiceSelected: () => { calls.push(`choice:${id}`); },
+      onTurnResolved: () => { calls.push(`turn:${id}`); },
+    });
+
     const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    session.attachModule(module);
+    session.register(mkModule('a'));
+    session.register(mkModule('b'));
 
-    const hooks: string[] = [];
-    session.bus.on('session-start', () => hooks.push('start'));
-    session.bus.on('choice-selected', () => hooks.push('choice'));
-    session.bus.on('turn-resolved', ({ source }) => hooks.push(`turn:${source}`));
+    await session.start();
+    await session.choose(session.visibleChoices[0]);
 
-    session.start();
-    expect(store.unlocked).toEqual([]);
-    session.choose(session.visibleChoices[0]);
-    expect(store.unlocked).toEqual(['reached-forest']);
-    expect(hooks).toEqual(['start', 'turn:entry', 'choice', 'turn:choice']);
+    expect(calls).toEqual([
+      'init:a', 'init:b',
+      'start:a', 'start:b',
+      'turn:a', 'turn:b',       // entry turn
+      'choice:a', 'choice:b',
+      'turn:a', 'turn:b',       // choice turn
+    ]);
   });
 
-  test('save includes module payload and resume restores it', () => {
-    const sourceStore: AchievementsState = { unlocked: [] };
+  test('save/load round-trip preserves module payload', async () => {
+    const sourceStore = { unlocked: [] as string[] };
     const source = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    source.attachModule(achievementsModule(sourceStore));
-    source.start();
-    source.choose(source.visibleChoices[0]);
+    source.register(achievementsModule(sourceStore));
+    await source.start();
+    await source.choose(source.visibleChoices[0]);
 
     const save = source.toSave('p-modules')!;
     expect(save.modules?.achievements).toEqual({ unlocked: ['reached-forest'] });
 
-    const targetStore: AchievementsState = { unlocked: [] };
+    const targetStore = { unlocked: [] as string[] };
     const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    target.attachModule(achievementsModule(targetStore));
-    const resume = target.tryResume({ save });
+    target.register(achievementsModule(targetStore));
+    const resume = await target.tryResume({ save });
     expect(resume.ok).toBe(true);
     expect(targetStore.unlocked).toEqual(['reached-forest']);
   });
 
-  test('legacy save without modules block deserializes with empty payload', () => {
+  test('legacy save without modules block delivers undefined payload', async () => {
     const source = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    source.start();
-    source.choose(source.visibleChoices[0]);
+    await source.start();
+    await source.choose(source.visibleChoices[0]);
     const save = source.toSave('p-modules')!;
     expect(save.modules).toBeUndefined();
 
-    const targetStore: AchievementsState = { unlocked: ['stale'] };
+    const targetStore = { unlocked: ['stale'] };
     const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    target.attachModule(achievementsModule(targetStore));
-    expect(target.tryResume({ save }).ok).toBe(true);
+    target.register(achievementsModule(targetStore));
+    await expect(target.tryResume({ save })).resolves.toEqual(
+      expect.objectContaining({ ok: true }),
+    );
     expect(targetStore.unlocked).toEqual([]);
   });
 
-  test('detach removes further dispatches', () => {
-    const store: AchievementsState = { unlocked: [] };
-    const module = achievementsModule(store);
+  test('module hook errors are isolated and surfaced via module_error', async () => {
+    const good = jest.fn();
+    const bad = jest.fn(() => { throw new Error('bad module'); });
+    const badAsync = jest.fn(async () => { throw new Error('bad async'); });
+
     const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    session.attachModule(module);
-    session.detachModule('achievements');
-    session.start();
-    session.choose(session.visibleChoices[0]);
+    const errors: ModuleErrorEvent[] = [];
+    session.bus.on('module_error', payload => errors.push(payload));
+
+    session.register({ id: 'good', initialize: good });
+    session.register({
+      id: 'bad',
+      initialize: () => {},
+      onChoiceSelected: bad,
+    });
+    session.register({
+      id: 'bad-async',
+      initialize: () => {},
+      onTurnResolved: badAsync,
+    });
+
+    await session.start();
+    const result = await session.choose(session.visibleChoices[0]);
+
+    expect(result.ok).toBe(true);
+    expect(good).toHaveBeenCalledTimes(1);
+    expect(bad).toHaveBeenCalledTimes(1);
+    expect(badAsync).toHaveBeenCalledTimes(2); // entry turn + choice turn
+    expect(errors.map(e => `${e.moduleId}:${e.hook}`)).toEqual([
+      'bad-async:onTurnResolved', // entry turn — bad-async throws
+      'bad:onChoiceSelected',
+      'bad-async:onTurnResolved', // choice turn — bad-async throws again
+    ]);
+  });
+
+  test('onSessionSave failure isolates without corrupting the save', async () => {
+    const errors: ModuleErrorEvent[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.bus.on('module_error', p => errors.push(p));
+    session.register({
+      id: 'saver',
+      initialize: () => {},
+      onSessionSave: () => { throw new Error('cannot serialize'); },
+    });
+    session.register({
+      id: 'other',
+      initialize: () => {},
+      onSessionSave: () => ({ value: 42 }),
+    });
+
+    await session.start();
+    const save = session.toSave('p-modules')!;
+
+    expect(save.modules?.saver).toBeUndefined();
+    expect(save.modules?.other).toEqual({ value: 42 });
+    expect(errors[0]).toEqual(
+      expect.objectContaining({ moduleId: 'saver', hook: 'onSessionSave' }),
+    );
+  });
+
+  test('unregister stops future dispatches', async () => {
+    const store = { unlocked: [] as string[] };
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register(achievementsModule(store));
+    session.unregister('achievements');
+    await session.start();
+    await session.choose(session.visibleChoices[0]);
     expect(store.unlocked).toEqual([]);
   });
 
-  test('duplicate module id replaces the earlier registration', () => {
-    const first: RuntimeModule = { id: 'dup', onAttach: jest.fn(), onDetach: jest.fn() };
-    const second: RuntimeModule = { id: 'dup', onAttach: jest.fn() };
+  test('duplicate id replaces earlier registration', async () => {
+    const first: ChronicaModule = { id: 'dup', initialize: jest.fn() };
+    const second: ChronicaModule = { id: 'dup', initialize: jest.fn() };
     const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
-    session.attachModule(first);
-    session.attachModule(second);
+    session.register(first);
+    session.register(second);
 
-    expect(first.onDetach).toHaveBeenCalledTimes(1);
-    expect(second.onAttach).toHaveBeenCalledTimes(1);
+    await session.start();
+    expect(first.initialize).not.toHaveBeenCalled();
+    expect(second.initialize).toHaveBeenCalledTimes(1);
     expect(session.modules.list()).toHaveLength(1);
+  });
+
+  test('context.updateState mutates state and emits state_changed', async () => {
+    const events: unknown[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.bus.on('state_changed', p => events.push(p));
+    session.register({
+      id: 'poker',
+      initialize: ctx => {
+        ctx.updateState(s => s.setVariable('poked', true));
+      },
+    });
+    await session.start();
+    expect(session.state.getVariable('poked')).toBe(true);
+    // At least one state_changed from the updateState call, plus one from start().
+    expect(events.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('turn resolution proceeds normally with zero modules', async () => {
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    await session.start();
+    const result = await session.choose(session.visibleChoices[0]);
+    expect(result.ok).toBe(true);
+    expect(session.fragment?.locationId).toBe('forest');
+  });
+
+  test('turn resolution proceeds with one test module', async () => {
+    const seen: string[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register({
+      id: 'watcher',
+      initialize: () => { seen.push('init'); },
+      onSessionStart: () => { seen.push('start'); },
+      onChoiceSelected: (_ctx, choice) => { seen.push(`choice:${choice.uid}`); },
+      onTurnResolved: (_ctx, result) => { seen.push(`turn:${result.source}`); },
+    });
+    await session.start();
+    const result = await session.choose(session.visibleChoices[0]);
+
+    expect(result.ok).toBe(true);
+    expect(session.fragment?.locationId).toBe('forest');
+    expect(seen).toEqual(['init', 'start', 'turn:entry', 'choice:c1', 'turn:choice']);
   });
 });

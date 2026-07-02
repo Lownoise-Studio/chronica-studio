@@ -22,7 +22,8 @@ export function isCompatSaveShape(value: unknown): value is CompatSave {
 
 /**
  * Adapt a legacy {@link RuntimeSave} (produced by ChronicaRuntime.toSave) into
- * the compat envelope. Legacy saves have no per-module payloads.
+ * the compat envelope. Legacy saves have no per-module payloads and no
+ * `fragmentId`; both fields are simply omitted.
  */
 export function fromRuntimeSave(save: RuntimeSave): CompatSave {
   return {
@@ -38,7 +39,8 @@ export function fromRuntimeSave(save: RuntimeSave): CompatSave {
 
 /**
  * Reduce a compat save back to the shape ChronicaRuntime already understands.
- * Module payloads are dropped — legacy runtime does not know about modules.
+ * Module payloads and fragmentId are dropped — legacy runtime does not know
+ * about either.
  */
 export function toRuntimeSave(save: CompatSave): RuntimeSave {
   return {
