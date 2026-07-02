@@ -89,3 +89,27 @@ export type {
   CompatibilityResult,
   CreateCompatManifestOptions,
 } from './package';
+
+// Non-UI ingestion pipeline: takes a parsed .chronica package, validates
+// mobile-player compatibility, normalizes content, compiles to CompiledGame,
+// and optionally hands back a ChronicaSession with first-party modules
+// attached. The real archive reader and any import UI remain out of scope.
+export {
+  createMobileSessionFromChronicaPackage,
+  ingestChronicaPackageForMobilePlayer,
+  normalizeAsset,
+  normalizeCharacter,
+  normalizeFragment,
+} from './ingest';
+export type {
+  CreateMobileSessionOptions,
+  IngestionFailure,
+  IngestionFailureReason,
+  IngestionOptions,
+  IngestionResult,
+  IngestionSuccess,
+  MobileSessionResult,
+  MobileSessionSuccess,
+  ParsedChronicaPackage,
+  UnsupportedContentReport,
+} from './ingest';

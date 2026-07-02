@@ -74,6 +74,7 @@ still commits. Order across modules is deterministic (registration order).
 | `save-load.ts` | Envelope shape check + `RuntimeSave` adapters. |
 | `modules/` | First-party gameplay modules (see below). |
 | `package/` | Cross-engine package compatibility model (see below). |
+| `ingest/` | Non-UI mobile-player ingestion pipeline (see below). |
 | `index.ts` | Public surface. |
 
 ## First-party gameplay modules
@@ -137,3 +138,37 @@ Existing mobile packages remain compatible: legacy manifests without a
 `runtimeTargets` array fall back to root-level capabilities and
 `entryFragmentId`, so nothing that used to import still needs to advertise
 a runtime target to keep working.
+
+## Mobile-player ingestion pipeline (non-UI)
+
+`engine/compat/ingest/` is the first non-UI ingestion path for cross-runtime
+`.chronica` packages. It takes a **parsed** package-like object (structure
+described by `ParsedChronicaPackage`) and turns it into a runnable
+`ChronicaSession` — without touching the existing mobile importer, the UI, or
+`TurnResolver`.
+
+Scope of this step:
+
+- **In scope**: manifest compatibility check, runtime-target selection,
+  defensive normalization of fragments/choices/characters/assets into the
+  strict mobile shapes, compilation to `CompiledGame`, optional session
+  factory that also attaches first-party modules.
+- **Out of scope (later steps)**: reading `.chronica` ZIP bytes, hydrating
+  asset files to local URIs, and any user-facing import UI. Those keep using
+  `engine/chronica-package.ts` / `storage/chronica-package-io.ts`.
+
+Entry points:
+
+- `ingestChronicaPackageForMobilePlayer(pkg, options)` — pure. Returns a
+  discriminated union: `{ ok: true, game, project, compatibility, warnings,
+  unsupportedContent, ... }` on success, or `{ ok: false, reason, errors, ... }`
+  when compat rejects the package, the entry fragment is missing, no fragments
+  survive normalization, or compilation fails.
+- `createMobileSessionFromChronicaPackage(pkg, options)` — awaits the ingest,
+  then wraps the compiled game in a `ChronicaSession`, optionally attaches
+  `InstabilityModule` / `EchoModule` (using package-supplied hints when
+  present), and optionally auto-starts the session.
+
+Normalization is defensive: anything the mobile runtime cannot consume is
+dropped and collected into `unsupportedContent[]` (typed by
+`UnsupportedContentReport`). Ingestion never throws on unknown fields.
