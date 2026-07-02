@@ -63,3 +63,29 @@ export type {
   InstabilityModuleConfig,
   InstabilitySavePayload,
 } from './modules';
+
+// Cross-engine package compatibility: manifest, runtime target model, and the
+// validator that decides playable / limited / editor_only / unsupported.
+// Kept separate from `engine/chronica-package.ts` (the ZIP/story format), and
+// used by hosts that want to reason about packages before importing them.
+export {
+  MOBILE_PLAYER_CAPABILITIES,
+  MOBILE_PLAYER_COMPATIBILITY_OPTIONS,
+  MOBILE_PLAYER_TARGET,
+  MOBILE_PLAYER_TARGET_ID,
+  createCompatManifestFromMobileProject,
+  findEntryFragmentId,
+  inferMobilePlayerRuntimeTarget,
+  inferProjectCapabilities,
+  validateChronicaPackageCompatibility,
+} from './package';
+export type {
+  ChronicaAssetProfile,
+  ChronicaPackageManifest,
+  ChronicaPresentation,
+  ChronicaRuntimeTarget,
+  CompatibilityLevel,
+  CompatibilityOptions,
+  CompatibilityResult,
+  CreateCompatManifestOptions,
+} from './package';

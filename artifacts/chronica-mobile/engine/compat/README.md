@@ -73,6 +73,7 @@ still commits. Order across modules is deterministic (registration order).
 | `chronica-session.ts` | Top-level session — composes everything, drives the flow. |
 | `save-load.ts` | Envelope shape check + `RuntimeSave` adapters. |
 | `modules/` | First-party gameplay modules (see below). |
+| `package/` | Cross-engine package compatibility model (see below). |
 | `index.ts` | Public surface. |
 
 ## First-party gameplay modules
@@ -95,3 +96,44 @@ Together they prepare mobile for portable main-engine games: their contract
 matches the main Chronica engine, so gameplay authored against these modules
 plays identically on both runtimes. `TurnResolver` and the pure engine
 functions stay untouched — modules extend behavior only through hooks.
+
+## Package compatibility (runtime targets)
+
+`engine/compat/package/` adds a **cross-engine package model** on top of the
+existing format-level manifest in `engine/chronica-package.ts`. The two are
+deliberately separate:
+
+- The **format manifest** answers "is this a valid Chronica package archive?"
+  It stays untouched, and the existing mobile importer keeps using it.
+- The **compat manifest** answers "can this runtime play this package?" —
+  by listing modules the package needs, capability tags, and a set of
+  `ChronicaRuntimeTarget`s.
+
+A single `.chronica` package can now advertise multiple targets. For example,
+a 3D-authored main-engine project can ship both a `godot-3d` target (full
+experience) and a `mobile-player` target (narrative + stage2d fallback). The
+validator picks the first target it can satisfy — so a mobile host does not
+reject the whole package just because a 3D-only target exists alongside a
+mobile-compatible one.
+
+`validateChronicaPackageCompatibility(manifest, options)` returns:
+
+| Level | Meaning |
+|-------|---------|
+| `playable` | A fully compatible target is available; `selectedRuntimeTarget` is set. |
+| `limited` | A target matches by id, but some of its capabilities are unsupported — you can play with reduced features. |
+| `editor_only` | No runnable target, but the core narrative data is loadable for editing. |
+| `unsupported` | Nothing usable — a required target or module is missing, the schema is out of range, or the manifest is malformed. |
+
+Mobile hosts pass `MOBILE_PLAYER_COMPATIBILITY_OPTIONS` to advertise the
+mobile-player target id and its capability set (`narrative`, `dialogue`,
+`variables`, `choices`, `hotspots`, `stage2d`, `touch`, `modules`,
+`save-load`). Bridge helpers (`createCompatManifestFromMobileProject`,
+`inferMobilePlayerRuntimeTarget`) build compat manifests from authored mobile
+projects so mobile-exported packages advertise themselves in the same
+vocabulary as main-engine exports.
+
+Existing mobile packages remain compatible: legacy manifests without a
+`runtimeTargets` array fall back to root-level capabilities and
+`entryFragmentId`, so nothing that used to import still needs to advertise
+a runtime target to keep working.
