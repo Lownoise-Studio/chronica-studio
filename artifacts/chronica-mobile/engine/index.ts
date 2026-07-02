@@ -18,3 +18,10 @@ export * from './hotspot-helpers';
 export * from './hotspots';
 export * from './stage-actors';
 export * from './load-game';
+
+// Runtime compatibility layer — object-oriented facade that mirrors the main
+// Chronica engine's runtime shape (ChronicaSession, ChronicaState,
+// FragmentStore, TurnResolver, ExpressionEvaluator, ActionResolver, EventBus,
+// Module system, save envelope). Wraps existing pure functions; introduces no
+// new gameplay rules and no Godot-specific concepts.
+export * as compat from './compat';
