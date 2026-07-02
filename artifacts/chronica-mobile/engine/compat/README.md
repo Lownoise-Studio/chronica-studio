@@ -172,3 +172,29 @@ Entry points:
 Normalization is defensive: anything the mobile runtime cannot consume is
 dropped and collected into `unsupportedContent[]` (typed by
 `UnsupportedContentReport`). Ingestion never throws on unknown fields.
+
+## Developer bridge (provisional)
+
+`dev/` at the app root hosts a **temporary developer-only** path that
+exercises the compat pipeline in-app so we can iterate on parity with the
+main engine before shipping the real archive reader and import UX:
+
+- `dev/fixtures/godot-hybrid-package.ts` — a small, hand-authored parsed
+  package that mimics a main-engine export with both a `godot-3d` and a
+  `mobile-player` runtime target, two fragments, one choice, and hints for
+  the instability / echo modules.
+- `dev/chronica-compat-import.ts` — `importChronicaPackageForDeveloper(pkg,
+  options?)` wraps `createMobileSessionFromChronicaPackage` and returns a
+  display-friendly summary (title, compatibility level, selected target,
+  current fragment text, choices, warnings count) alongside the raw session.
+- `components/ChronicaCompatDevPanel.tsx` — a minimal panel mounted next to
+  the existing `DeveloperMenu` on the About tab. It appears only when
+  `isStudioApp() && (__DEV__ || advancedMode)`. Tapping **Import hybrid
+  fixture** runs the pipeline and shows the summary; **Advance first
+  choice** exercises the session.
+
+This bridge is intentionally provisional. It reproduces the compat behavior
+we expect the main engine to match — but parity is **expected, not
+guaranteed**. Do not depend on it from product code; the shipping importer
+(`engine/chronica-package.ts` + `storage/chronica-package-io.ts`),
+`PlayerHost`, and every project flow remain untouched.

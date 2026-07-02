@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { DeveloperMenu } from '@/components/DeveloperMenu';
+import { ChronicaCompatDevPanel } from '@/components/ChronicaCompatDevPanel';
 import { isStudioApp } from '@/config/app-mode';
 
 const features = [
@@ -109,7 +110,12 @@ export default function AboutScreen() {
         </View>
       )}
 
-      {isStudioApp() && (__DEV__ || advancedMode) && <DeveloperMenu />}
+      {isStudioApp() && (__DEV__ || advancedMode) && (
+        <>
+          <DeveloperMenu />
+          <ChronicaCompatDevPanel />
+        </>
+      )}
 
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.foreground }]}>Credits</Text>
