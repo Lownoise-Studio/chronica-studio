@@ -16,6 +16,10 @@ package may be corrupt, truncated, partially transferred, hand-edited, foreign,
 or hostile. Import never throws a raw exception to a UI caller: every failure
 returns a typed `{ ok: false, reason, error }`.
 
+The first **spec-compliance sample game package** for the compat ingest path
+(not the ZIP importer) lives at `demo/harbor-lantern-sample.ts` — see
+`engine/compat/README.md` § Spec-compliance sample package.
+
 ## Required `manifest.json` fields
 
 | Field | Rule |

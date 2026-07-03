@@ -233,6 +233,20 @@ Normalization is defensive: anything the mobile runtime cannot consume is
 dropped and collected into `unsupportedContent[]` (typed by
 `UnsupportedContentReport`). Ingestion never throws on unknown fields.
 
+## Spec-compliance sample package
+
+`demo/harbor-lantern-sample.ts` is the **first spec-compliance sample game
+package** for the compat pipeline. It extends the v3 compatibility fixture
+into a five-fragment playable demo (Harbor Lantern) with dialogue, hotspots,
+conditional choices, module hints, portable asset references, and catalog
+metadata (title, description, cover placeholder). Tests in
+`__tests__/harbor-lantern-sample.test.ts` validate, ingest, play the main path,
+save canonical v2, resume, and reach the ending fragment.
+
+This sample is consumed via `ingestChronicaPackageForMobilePlayer` /
+`createMobileSessionFromChronicaPackage` — not the shipping ZIP importer yet.
+It is intended to ship with the app as a bundled demo once the import UX lands.
+
 ## Developer bridge (provisional)
 
 `dev/` at the app root hosts a **temporary developer-only** path that
