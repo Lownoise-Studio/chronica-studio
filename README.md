@@ -67,16 +67,34 @@ Open a package in **Chronica Player** or import via **Load Game**. See [package 
 
 ## Local development
 
+Clone the repository:
+
+```bash
+git clone https://github.com/Lownoise-Studio/chronica-studio.git
+cd chronica-studio
+```
+
+Install dependencies:
+
 ```bash
 pnpm install
+```
+
+Run Chronica Mobile Studio:
+
+```bash
 cd artifacts/chronica-mobile
+
 pnpm typecheck
 pnpm test
-pnpm exec expo start          # Chronica Mobile Studio (authoring)
-pnpm start:player           # Chronica Player
+pnpm exec expo start
 ```
 
 See [docs/local-dev.md](docs/local-dev.md) for platform build details.
+
+> **Note**
+>
+> All commands assume your current working directory is the root of the cloned `chronica-studio` repository unless otherwise specified.
 
 ## Documentation
 
