@@ -74,6 +74,81 @@ export interface StageActor {
   visibleWhen?: string[];
 }
 
+/** Kind of interactable in the top-down adventure runtime. */
+export type AdventureInteractableKind = 'npc' | 'pickup' | 'door' | 'trigger';
+
+/** Rectangle in normalized 0–1 room coordinates that blocks player movement. */
+export interface AdventureCollider {
+  uid: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Persistent object the player can walk near and interact with. */
+export interface AdventureInteractable {
+  uid: string;
+  kind: AdventureInteractableKind;
+  label: string;
+  /** Center X in 0–1 room coordinates. */
+  x: number;
+  /** Feet / bottom anchor Y in 0–1 room coordinates. */
+  y: number;
+  /** Interaction proximity radius in normalized units (default 0.08). */
+  radius?: number;
+  /** Optional asset name for a sprite marker. */
+  sprite?: string;
+  /** Sprite width as a fraction of room width (default 0.08). */
+  width?: number;
+  /** Same action grammar as choices — compiled to ActionStep[] at build time. */
+  action: string;
+  /** All conditions must pass for the interactable to appear / be usable. */
+  conditions: string[];
+  /** When true, the interactable triggers automatically when the player enters range. */
+  autoTrigger?: boolean;
+  /** When true, the interactable's bounds also block movement while its conditions hold. */
+  solid?: boolean;
+  /** Optional SFX key override — defaults chosen per kind. */
+  sfx?: string;
+}
+
+/** Where the player spawns when entering this scene. */
+export interface AdventureEntry {
+  /** Optional per-source-location overrides. Key = the previous locationId. */
+  from?: Record<string, { x: number; y: number }>;
+  /** Default spawn point, used when no from-override matches. */
+  default: { x: number; y: number };
+}
+
+/** SFX asset overrides for the adventure runtime. Values are asset names. */
+export interface AdventureSfxSet {
+  footstep?: string;
+  interact?: string;
+  pickup?: string;
+  transition?: string;
+}
+
+/** Top-down playable-room description attached to a Fragment. */
+export interface SceneAdventure {
+  /** Where the player appears when the scene loads. */
+  entry: AdventureEntry;
+  /** Solid rectangles that block movement (walls, furniture). */
+  colliders?: AdventureCollider[];
+  /** NPCs, pickups, doors, and trigger zones for this room. */
+  interactables?: AdventureInteractable[];
+  /** Movement speed in normalized units per second (default 0.35). */
+  speed?: number;
+  /** Optional player sprite asset name. */
+  playerSprite?: string;
+  /** Player sprite width as a fraction of room width (default 0.09). */
+  playerWidth?: number;
+  /** Optional aspect ratio hint (width/height) for the stage. Defaults to 16/9. */
+  aspectRatio?: number;
+  /** SFX asset overrides. */
+  sfx?: AdventureSfxSet;
+}
+
 export interface Fragment {
   uid: string;
   /** human-readable name, shown in the editor list */
@@ -91,6 +166,8 @@ export interface Fragment {
   stageActors?: StageActor[];
   backgroundImage?: string;
   backgroundAudio?: string;
+  /** Top-down playable room data. When present, the runtime renders the adventure stage. */
+  adventure?: SceneAdventure;
 }
 
 export interface ChronicaState {
@@ -101,6 +178,12 @@ export interface ChronicaState {
   variables: Record<string, VariableValue>;
   /** Index into the current fragment's dialogue lines (tap-to-advance). */
   dialogueLineIndex: number;
+  /** Player X in 0–1 room coordinates. Present for adventure scenes. */
+  playerX?: number;
+  /** Player Y in 0–1 room coordinates. Present for adventure scenes. */
+  playerY?: number;
+  /** Previous locationId — used to pick a spawn point when entering a scene. */
+  lastLocationId?: string;
 }
 
 export interface ProjectAsset {

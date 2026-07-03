@@ -17,6 +17,7 @@ export * from './chronica-package';
 export * from './hotspot-helpers';
 export * from './hotspots';
 export * from './stage-actors';
+export * from './adventure';
 export * from './load-game';
 
 // Runtime compatibility layer — object-oriented facade that mirrors the main

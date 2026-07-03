@@ -31,6 +31,8 @@ export interface CompiledGame {
   choiceActions: Readonly<Record<string, readonly ActionStep[]>>;
   /** Compiled action steps keyed by hotspot.uid */
   hotspotActions: Readonly<Record<string, readonly ActionStep[]>>;
+  /** Compiled action steps keyed by adventure interactable uid */
+  interactableActions: Readonly<Record<string, readonly ActionStep[]>>;
 }
 
 export type CompileResult =

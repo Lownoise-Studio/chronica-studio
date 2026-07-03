@@ -28,7 +28,14 @@ export default function PlayerHomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { projects, deleteProject, isLoaded, importProject, importProjectPackage } = useProjects();
-  const { loadingGame, loadingDemo, handleLoadGame, handleTryDemo } = useLoadGameActions();
+  const {
+    loadingGame,
+    loadingDemo,
+    loadingAdventure,
+    handleLoadGame,
+    handleTryDemo,
+    handleTryHarborAdventure,
+  } = useLoadGameActions();
 
   const openGame = useCallback(async () => {
     const nav = await handleLoadGame();
@@ -39,6 +46,11 @@ export default function PlayerHomeScreen() {
     const nav = await handleTryDemo();
     if (nav) navigateToPlay(router, nav);
   }, [handleTryDemo]);
+
+  const openHarborAdventure = useCallback(async () => {
+    const nav = await handleTryHarborAdventure();
+    if (nav) navigateToPlay(router, nav);
+  }, [handleTryHarborAdventure]);
 
   const openIncomingUri = useCallback(
     async (uri: string | null) => {
@@ -143,6 +155,22 @@ export default function PlayerHomeScreen() {
               </View>
               <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
                 Play Pasture — a quiet scene with a cow, tap hotspots, and watch the day pass from morning to night.
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.demoCard, { backgroundColor: colors.card, borderColor: colors.accent + '55' }]}
+              onPress={openHarborAdventure}
+              disabled={loadingAdventure || loadingGame}
+              activeOpacity={0.85}
+            >
+              <View style={styles.demoHeader}>
+                <Feather name="compass" size={18} color={colors.accent} />
+                <Text style={[styles.demoTitle, { color: colors.foreground }]}>Harbor Lantern (Adventure)</Text>
+                {loadingAdventure && <ActivityIndicator size="small" color={colors.accent} />}
+              </View>
+              <Text style={[styles.demoDesc, { color: colors.mutedForeground }]}>
+                A playable top-down adventure: walk the dock, meet the Lamplighter, take the lantern, unlock the gate, and light the tower.
               </Text>
             </TouchableOpacity>
 

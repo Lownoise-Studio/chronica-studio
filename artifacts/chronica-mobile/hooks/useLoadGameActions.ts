@@ -4,6 +4,10 @@ import * as Haptics from 'expo-haptics';
 import { useProjects } from '@/context/ProjectsContext';
 import { pickAndLoadGame, loadGameFromPackageBytes } from '@/storage/load-game';
 import { PASTURE_GAME_ID } from '@/demo/pasture-project';
+import {
+  HARBOR_LANTERN_ADVENTURE_GAME_ID,
+  getHarborLanternAdventureProject,
+} from '@/demo/harbor-lantern-adventure';
 import type { Project } from '@/engine/types';
 
 import type { Router } from 'expo-router';
@@ -22,6 +26,7 @@ export function useLoadGameActions() {
   const { importProject, importProjectPackage, projects } = useProjects();
   const [loadingGame, setLoadingGame] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [loadingAdventure, setLoadingAdventure] = useState(false);
 
   const loadProjectBytes = async (bytes: Uint8Array): Promise<LoadGameNavigation | null> => {
     const result = await loadGameFromPackageBytes(bytes, { importProject, importProjectPackage });
@@ -92,12 +97,40 @@ export function useLoadGameActions() {
     }
   };
 
+  const handleTryHarborAdventure = async (): Promise<LoadGameNavigation | null> => {
+    const existing = projects.find(project => project.gameId === HARBOR_LANTERN_ADVENTURE_GAME_ID);
+    if (existing) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { projectId: existing.id, autoStart: true };
+    }
+
+    setLoadingAdventure(true);
+    try {
+      const project = getHarborLanternAdventureProject();
+      const result = importProject(JSON.stringify(project));
+      if (!result.ok || !result.project) {
+        Alert.alert('Could not load adventure', result.error ?? 'Unknown error.');
+        return null;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return { projectId: result.project.id, autoStart: true };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Could not load adventure.';
+      Alert.alert('Could not load adventure', msg);
+      return null;
+    } finally {
+      setLoadingAdventure(false);
+    }
+  };
+
   return {
     loadingGame,
     loadingDemo,
+    loadingAdventure,
     loadProjectBytes,
     handleLoadGame,
     handleTryDemo,
+    handleTryHarborAdventure,
   };
 }
 

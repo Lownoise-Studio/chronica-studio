@@ -88,6 +88,22 @@ function buildHotspotActions(project: Project): Record<string, ActionStep[]> {
   return hotspotActions;
 }
 
+function buildInteractableActions(project: Project): Record<string, ActionStep[]> {
+  const interactableActions: Record<string, ActionStep[]> = {};
+  for (const frag of project.fragments) {
+    for (const interactable of frag.adventure?.interactables ?? []) {
+      const parsed = parseActionString(interactable.action ?? '');
+      if (!parsed.ok) {
+        throw new Error(
+          `buildCompiledGame: invalid action for interactable ${interactable.uid}: ${parsed.error}`,
+        );
+      }
+      interactableActions[interactable.uid] = [...parsed.steps];
+    }
+  }
+  return interactableActions;
+}
+
 /**
  * Build a CompiledGame from a Project without running validation.
  * Use compileProject() at product boundaries; this is for tests and internal reuse.
@@ -111,6 +127,25 @@ export function buildCompiledGame(project: Project): CompiledGame {
       visibleWhen: [...(a.visibleWhen ?? [])],
     })),
     dialogue: (f.dialogue ?? []).map(line => ({ ...line })),
+    adventure: f.adventure
+      ? {
+          ...f.adventure,
+          entry: {
+            default: { ...f.adventure.entry.default },
+            from: f.adventure.entry.from
+              ? Object.fromEntries(
+                  Object.entries(f.adventure.entry.from).map(([k, v]) => [k, { ...v }]),
+                )
+              : undefined,
+          },
+          colliders: (f.adventure.colliders ?? []).map(c => ({ ...c })),
+          interactables: (f.adventure.interactables ?? []).map(i => ({
+            ...i,
+            conditions: [...(i.conditions ?? [])],
+          })),
+          sfx: f.adventure.sfx ? { ...f.adventure.sfx } : undefined,
+        }
+      : undefined,
   }));
 
   return {
@@ -133,5 +168,6 @@ export function buildCompiledGame(project: Project): CompiledGame {
     fragmentIndex: buildFragmentIndex(fragments),
     choiceActions: buildChoiceActions(project),
     hotspotActions: buildHotspotActions(project),
+    interactableActions: buildInteractableActions(project),
   };
 }

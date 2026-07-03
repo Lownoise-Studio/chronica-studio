@@ -4,6 +4,10 @@ export {
   type ChooseResult,
   type HistoryEntry,
   type RuntimeSave,
+  type ActivateInteractableResult,
+  type AdventureInteractionEvent,
+  type MovePlayerResult,
+  type AdvanceDialogueResult,
 } from './chronica-runtime';
 export {
   validateRuntimeSave,
