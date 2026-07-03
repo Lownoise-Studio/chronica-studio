@@ -1,8 +1,22 @@
-import { Choice, ChronicaState, Fragment, SceneHotspot, VariableValue } from './types';
+import {
+  AdventureInteractable,
+  Choice,
+  ChronicaState,
+  Fragment,
+  SceneHotspot,
+  VariableValue,
+} from './types';
 import { CompiledGame } from './compiler/types';
 import { getActiveFragmentFromIndex } from './compiler/fragment-index';
 import { applyEffect } from './expression-evaluator';
-import { resolveTurn, resolveHotspotActivation, getVisibleChoices, getVisibleHotspots } from './turn-resolver';
+import {
+  resolveTurn,
+  resolveHotspotActivation,
+  resolveInteractableActivation,
+  getVisibleChoices,
+  getVisibleHotspots,
+} from './turn-resolver';
+import { getVisibleInteractables } from './adventure';
 
 export function createInitialState(
   startLocation: string,
@@ -17,6 +31,9 @@ export function createInitialState(
     memory: { ...initialMemory },
     variables,
     dialogueLineIndex: 0,
+    playerX: undefined,
+    playerY: undefined,
+    lastLocationId: undefined,
   };
 }
 
@@ -59,19 +76,49 @@ export function activateHotspot(
   return { fragment, visibleChoices, visibleHotspots };
 }
 
+export function activateInteractable(
+  interactable: AdventureInteractable,
+  state: ChronicaState,
+  game: CompiledGame,
+): {
+  fragment: Fragment | null;
+  visibleChoices: Choice[];
+  visibleHotspots: SceneHotspot[];
+  visibleInteractables: AdventureInteractable[];
+} {
+  const fragment = resolveInteractableActivation(interactable, state, game);
+  const visibleChoices = fragment ? getVisibleChoices(fragment, state) : [];
+  const visibleHotspots = fragment ? getVisibleHotspots(fragment, state) : [];
+  const visibleInteractables = fragment ? getVisibleInteractables(fragment, state) : [];
+  return { fragment, visibleChoices, visibleHotspots, visibleInteractables };
+}
+
 export function serializeState(state: ChronicaState): string {
-  return JSON.stringify({
+  const payload: Record<string, unknown> = {
     location: state.location,
     instability: state.instability,
     reality_layer: state.reality_layer,
     memory: state.memory,
     variables: state.variables,
     dialogueLineIndex: state.dialogueLineIndex ?? 0,
-  });
+  };
+  if (typeof state.playerX === 'number' && Number.isFinite(state.playerX)) {
+    payload.playerX = state.playerX;
+  }
+  if (typeof state.playerY === 'number' && Number.isFinite(state.playerY)) {
+    payload.playerY = state.playerY;
+  }
+  if (typeof state.lastLocationId === 'string' && state.lastLocationId) {
+    payload.lastLocationId = state.lastLocationId;
+  }
+  return JSON.stringify(payload);
 }
 
 export function deserializeState(data: Record<string, unknown>): ChronicaState | null {
   try {
+    const px = typeof data.playerX === 'number' && Number.isFinite(data.playerX) ? data.playerX : undefined;
+    const py = typeof data.playerY === 'number' && Number.isFinite(data.playerY) ? data.playerY : undefined;
+    const last = typeof data.lastLocationId === 'string' ? data.lastLocationId : undefined;
     return {
       location: (data.location as string) ?? '',
       instability: (data.instability as number) ?? 0,
@@ -79,6 +126,9 @@ export function deserializeState(data: Record<string, unknown>): ChronicaState |
       memory: (data.memory as Record<string, VariableValue>) ?? {},
       variables: (data.variables as Record<string, VariableValue>) ?? {},
       dialogueLineIndex: typeof data.dialogueLineIndex === 'number' ? data.dialogueLineIndex : 0,
+      playerX: px,
+      playerY: py,
+      lastLocationId: last,
     };
   } catch {
     return null;

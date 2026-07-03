@@ -1,4 +1,4 @@
-import { Fragment, Choice, ChronicaState, SceneHotspot } from './types';
+import { Fragment, Choice, ChronicaState, SceneHotspot, AdventureInteractable } from './types';
 import { CompiledGame } from './compiler/types';
 import { ActionStep } from './actions/types';
 import { resolveActionSteps } from './actions/resolve-action';
@@ -16,6 +16,9 @@ function cloneState(s: ChronicaState): ChronicaState {
     memory: { ...s.memory },
     variables: { ...s.variables },
     dialogueLineIndex: s.dialogueLineIndex ?? 0,
+    playerX: s.playerX,
+    playerY: s.playerY,
+    lastLocationId: s.lastLocationId,
   };
 }
 
@@ -26,6 +29,9 @@ function commitState(target: ChronicaState, source: ChronicaState): void {
   target.memory = { ...source.memory };
   target.variables = { ...source.variables };
   target.dialogueLineIndex = source.dialogueLineIndex ?? 0;
+  target.playerX = source.playerX;
+  target.playerY = source.playerY;
+  target.lastLocationId = source.lastLocationId;
 }
 
 /**
@@ -81,6 +87,17 @@ export function resolveHotspotActivation(
   game: CompiledGame,
 ): Fragment | null {
   const steps = game.hotspotActions[hotspot.uid];
+  if (!steps) return null;
+  return applyCompiledInteraction(steps, state, game);
+}
+
+/** Applies an adventure interactable's compiled action steps — same execution path as choices. */
+export function resolveInteractableActivation(
+  interactable: AdventureInteractable,
+  state: ChronicaState,
+  game: CompiledGame,
+): Fragment | null {
+  const steps = game.interactableActions[interactable.uid];
   if (!steps) return null;
   return applyCompiledInteraction(steps, state, game);
 }

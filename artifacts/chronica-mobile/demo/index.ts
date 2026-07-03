@@ -12,3 +12,10 @@ export {
   harborLanternSamplePackage,
   playHarborLanternMainPath,
 } from './harbor-lantern-sample';
+export {
+  HARBOR_LANTERN_ADVENTURE_DESCRIPTION,
+  HARBOR_LANTERN_ADVENTURE_GAME_ID,
+  HARBOR_LANTERN_ADVENTURE_INSTALL_ID,
+  HARBOR_LANTERN_ADVENTURE_TITLE,
+  getHarborLanternAdventureProject,
+} from './harbor-lantern-adventure';

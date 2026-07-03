@@ -5,12 +5,20 @@ import {
 import { Image } from 'expo-image';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
+import {
+  AdventureInteractable,
+  Choice,
+  ChronicaState,
+  Fragment,
+  ProjectAsset,
+  SceneHotspot,
+} from '@/engine/types';
 import { HistoryEntry } from '@/runtime';
 import { EmptyState } from '@/components/EmptyState';
 import { DialogueBubble } from '@/components/DialogueBubble';
 import { SceneHotspotOverlay } from '@/components/player/SceneHotspotOverlay';
 import { SceneStageActors } from '@/components/player/SceneStageActors';
+import { AdventureRuntimeView } from '@/components/player/AdventureRuntimeView';
 import { getHotspotDisplayLabel } from '@/engine/hotspot-helpers';
 import type { StageActorPresentation } from '@/engine/stage-actors';
 import {
@@ -47,16 +55,21 @@ export type PlayerViewProps = {
   fragment: Fragment | null;
   visibleChoices: Choice[];
   visibleHotspots?: SceneHotspot[];
+  visibleInteractables?: AdventureInteractable[];
   stageActors?: StageActorPresentation[];
   history: HistoryEntry[];
   gameState: ChronicaState | null;
   backgroundUri: string | undefined;
   audioUri: string | undefined;
+  assets?: readonly ProjectAsset[];
   onBack: () => void;
   onRestart: () => void;
   onSave: () => void;
   onChoose: (choice: Choice) => void;
   onActivateHotspot?: (hotspot: SceneHotspot) => void;
+  onActivateInteractable?: (interactable: AdventureInteractable) => void;
+  onMovePlayer?: (dxNorm: number, dyNorm: number, seconds: number) => void;
+  onFootstep?: () => void;
   dialogue?: DialoguePresentation | null;
   onAdvanceDialogue?: () => void;
   debugPanel?: React.ReactNode;
@@ -68,16 +81,21 @@ export function PlayerView({
   fragment: currentFragment,
   visibleChoices,
   visibleHotspots = [],
+  visibleInteractables = [],
   stageActors = [],
   history,
   gameState,
   backgroundUri: bgUri,
   audioUri,
+  assets = [],
   onBack,
   onRestart,
   onSave,
   onChoose,
   onActivateHotspot,
+  onActivateInteractable,
+  onMovePlayer,
+  onFootstep,
   dialogue,
   onAdvanceDialogue,
   debugPanel,
@@ -277,6 +295,94 @@ export function PlayerView({
     </>
   );
 
+  const isPlayableAdventure =
+    !!currentFragment?.adventure && !!gameState && !!onMovePlayer && !!onActivateInteractable;
+
+  if (isPlayableAdventure && currentFragment && gameState) {
+    const dialogueBubble = dialogue ? (
+      <View style={styles.adventureDialogueWrap}>
+        <DialogueBubble
+          dialogue={dialogue}
+          variant="caption"
+          colors={colors}
+          onAdvance={onAdvanceDialogue}
+        />
+      </View>
+    ) : null;
+    const endCard =
+      dialogueDone && !visibleInteractables.length && !visibleChoices.length ? (
+        <View
+          style={[
+            styles.endCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Feather name="flag" size={20} color={colors.primary} />
+          <Text style={[styles.endText, { color: colors.foreground }]}>End of this path</Text>
+          <TouchableOpacity
+            style={[styles.restartBtn, { backgroundColor: colors.primary }]}
+            onPress={onRestart}
+          >
+            <Text style={styles.restartBtnText}>Restart</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null;
+    const choicesOverlay =
+      dialogueDone && visibleChoices.length > 0 ? (
+        <View style={styles.adventureChoiceList} pointerEvents="box-none">
+          {visibleChoices.map(choice => (
+            <TouchableOpacity
+              key={choice.uid}
+              style={[
+                styles.choiceBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={() => onChoose(choice)}
+              activeOpacity={0.8}
+            >
+              <Feather name="chevron-right" size={14} color={colors.primary} />
+              <Text style={[styles.choiceText, { color: colors.foreground }]}>
+                {choice.label || '(unlabeled)'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null;
+
+    return (
+      <View style={[styles.fill, { backgroundColor: colors.background }]}>
+        <View style={styles.adventureRuntimeWrap}>
+          <AdventureRuntimeView
+            fragment={currentFragment}
+            state={gameState}
+            interactables={visibleInteractables}
+            assets={assets}
+            colors={colors}
+            backgroundUri={bgUri}
+            onMove={onMovePlayer}
+            onInteract={onActivateInteractable}
+            onFootstep={onFootstep}
+            overlay={
+              <View pointerEvents="box-none" style={styles.adventureRuntimeOverlay}>
+                {dialogueBubble}
+                {choicesOverlay}
+                {endCard}
+              </View>
+            }
+          />
+          <View style={styles.adventureHeaderStack} pointerEvents="box-none">
+            {header}
+            {historyPanel}
+          </View>
+        </View>
+        {debugPanel ? <View style={styles.debugPanelWrap}>{debugPanel}</View> : null}
+      </View>
+    );
+  }
+
   if (useAdventureLayout && bgUri) {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -448,4 +554,27 @@ const styles = StyleSheet.create({
   endSub: { fontSize: 12, fontFamily: 'Inter_400Regular' },
   restartBtn: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8, marginTop: 4 },
   restartBtnText: { color: '#fff', fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  adventureRuntimeWrap: { flex: 1 },
+  adventureRuntimeOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 12,
+    paddingBottom: 160,
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  adventureDialogueWrap: {
+    backgroundColor: 'rgba(6, 8, 18, 0.78)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 4,
+  },
+  adventureChoiceList: {
+    gap: 8,
+  },
+  debugPanelWrap: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 60,
+  },
 });

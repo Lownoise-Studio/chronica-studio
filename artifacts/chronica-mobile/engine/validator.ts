@@ -157,6 +157,11 @@ export function findOrphanScenes(project: Project): ValidationError[] {
         if (target) targets.add(target);
       }
     }
+    for (const interactable of frag.adventure?.interactables ?? []) {
+      for (const target of getGotoTargetsFromAction(interactable.action)) {
+        if (target) targets.add(target);
+      }
+    }
   }
 
   const start = project.startLocation?.trim();

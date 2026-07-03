@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { compileProject } from '@/engine/compiler';
-import { Choice, ChronicaState, Project, SceneHotspot, ValidationError } from '@/engine/types';
 import {
+  AdventureInteractable,
+  Choice,
+  ChronicaState,
+  Project,
+  SceneHotspot,
+  ValidationError,
+} from '@/engine/types';
+import {
+  ActivateInteractableResult,
+  MovePlayerResult,
   PlayerHost,
   PlayerActionResult,
   PlayerAdvanceDialogueResult,
@@ -16,6 +25,7 @@ const EMPTY_SNAPSHOT: PlayerSnapshot = {
   fragment: null,
   visibleChoices: [],
   visibleHotspots: [],
+  visibleInteractables: [],
   history: [],
   backgroundUri: undefined,
   audioUri: undefined,
@@ -89,6 +99,28 @@ export function useChronicaRuntime(project: Project | undefined) {
     return result;
   }, [host, syncView, verifyAndRefresh]);
 
+  const activateInteractable = useCallback(
+    (interactable: AdventureInteractable): ActivateInteractableResult | PlayerActionResult => {
+      if (!host) return { ok: false, reason: 'not-started' as const };
+      const result = host.activateInteractable(interactable);
+      syncView();
+      void verifyAndRefresh();
+      return result;
+    },
+    [host, syncView, verifyAndRefresh],
+  );
+
+  const movePlayer = useCallback(
+    (dxNorm: number, dyNorm: number, seconds: number): MovePlayerResult => {
+      if (!host) return { ok: false, reason: 'not-started' as const };
+      const result = host.movePlayer(dxNorm, dyNorm, seconds);
+      // Position updates are frequent — sync without re-verifying assets.
+      syncView();
+      return result;
+    },
+    [host, syncView],
+  );
+
   const advanceDialogue = useCallback((): PlayerAdvanceDialogueResult => {
     if (!host) return { ok: false, reason: 'not-started' };
     const result = host.advanceDialogue();
@@ -120,6 +152,8 @@ export function useChronicaRuntime(project: Project | undefined) {
     tryResume,
     choose,
     activateHotspot,
+    activateInteractable,
+    movePlayer,
     advanceDialogue,
     setRuntimeState,
     toSave,

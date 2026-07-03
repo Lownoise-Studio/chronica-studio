@@ -13,9 +13,10 @@ import { useChronicaRuntime } from '@/hooks/useChronicaRuntime';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
-import { Choice, SceneHotspot } from '@/engine';
+import { AdventureInteractable, Choice, SceneHotspot } from '@/engine';
 import { isPlayerApp, getAppHomeHref } from '@/config/app-mode';
 import { loadRuntimeSaveResult, loadSaveFailureMessage, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
+import { useAdventureSfx } from '@/components/player/useAdventureSfx';
 
 export default function PlayScreen() {
   const { id: projectId, loaded } = useLocalSearchParams<{ id: string; loaded?: string }>();
@@ -33,6 +34,7 @@ export default function PlayScreen() {
     fragment: currentFragment,
     visibleChoices,
     visibleHotspots,
+    visibleInteractables,
     history,
     backgroundUri: bgUri,
     audioUri,
@@ -43,10 +45,14 @@ export default function PlayScreen() {
     tryResume,
     choose,
     activateHotspot,
+    activateInteractable,
+    movePlayer,
     advanceDialogue,
     setRuntimeState,
     toSave,
   } = useChronicaRuntime(project);
+
+  const sfx = useAdventureSfx(project?.assets ?? []);
 
   const playerMode = isPlayerApp();
   const exitPlay = () => {
@@ -138,6 +144,36 @@ export default function PlayScreen() {
     advanceDialogue();
   };
 
+  const handleInteract = (interactable: AdventureInteractable) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const result = activateInteractable(interactable);
+    if (!result.ok) {
+      if ('reason' in result && result.reason === 'dead-end') {
+        Alert.alert(
+          'Nothing happens',
+          advancedMode
+            ? 'Interactable action did not resolve to a valid scene.'
+            : 'This action has no destination yet.',
+        );
+      }
+      return;
+    }
+    if ('events' in result) {
+      for (const event of result.events) {
+        if (event.sfx) void sfx.play(event.sfx);
+      }
+    }
+  };
+
+  const handleMovePlayer = (dxNorm: number, dyNorm: number, seconds: number) => {
+    movePlayer(dxNorm, dyNorm, seconds);
+  };
+
+  const handleFootstep = () => {
+    const stepAsset = currentFragment?.adventure?.sfx?.footstep;
+    if (stepAsset) void sfx.play(stepAsset);
+  };
+
   if (!project) {
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -202,16 +238,21 @@ export default function PlayScreen() {
       fragment={currentFragment}
       visibleChoices={visibleChoices}
       visibleHotspots={visibleHotspots}
+      visibleInteractables={visibleInteractables}
       stageActors={stageActors}
       history={history}
       gameState={gameState}
       backgroundUri={bgUri}
       audioUri={audioUri}
+      assets={project.assets}
       onBack={exitPlay}
       onRestart={resetGame}
       onSave={saveGame}
       onChoose={handleChoice}
       onActivateHotspot={handleHotspot}
+      onActivateInteractable={handleInteract}
+      onMovePlayer={handleMovePlayer}
+      onFootstep={handleFootstep}
       dialogue={dialogue}
       onAdvanceDialogue={handleAdvanceDialogue}
       debugPanel={

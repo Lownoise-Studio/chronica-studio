@@ -2,9 +2,22 @@ import { CompiledGame } from '@/engine/compiler/types';
 import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
 import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { StageActorPresentation, resolveStageActorPresentations } from '@/engine/stage-actors';
-import { Choice, ChronicaState, Fragment, SceneHotspot } from '@/engine/types';
+import {
+  AdventureInteractable,
+  Choice,
+  ChronicaState,
+  Fragment,
+  SceneHotspot,
+} from '@/engine/types';
 import { fileExists } from '@/storage/fileSystem';
-import { ChronicaRuntime, HistoryEntry, RuntimeInvariantError, RuntimeSave } from './chronica-runtime';
+import {
+  ActivateInteractableResult,
+  ChronicaRuntime,
+  HistoryEntry,
+  MovePlayerResult,
+  RuntimeInvariantError,
+  RuntimeSave,
+} from './chronica-runtime';
 import {
   AssetWarning,
   AssetWarningField,
@@ -21,6 +34,7 @@ export type PlayerSnapshot = {
   fragment: Fragment | null;
   visibleChoices: Choice[];
   visibleHotspots: SceneHotspot[];
+  visibleInteractables: AdventureInteractable[];
   history: HistoryEntry[];
   backgroundUri: string | undefined;
   audioUri: string | undefined;
@@ -101,6 +115,19 @@ export class PlayerHost {
     } catch (err) {
       return this.recordFailure(err);
     }
+  }
+
+  activateInteractable(interactable: AdventureInteractable): ActivateInteractableResult | { ok: false; reason: PlayerFailureReason; message: string } {
+    this.runtimeWarnings = [];
+    try {
+      return this.runtime.activateInteractable(interactable);
+    } catch (err) {
+      return this.recordFailure(err);
+    }
+  }
+
+  movePlayer(dxNorm: number, dyNorm: number, seconds: number): MovePlayerResult {
+    return this.runtime.movePlayerByDelta(dxNorm, dyNorm, seconds);
   }
 
   advanceDialogue(): PlayerAdvanceDialogueResult {
@@ -270,6 +297,7 @@ export class PlayerHost {
       fragment,
       visibleChoices: this.runtime.visibleChoices,
       visibleHotspots: this.runtime.visibleHotspots,
+      visibleInteractables: this.runtime.visibleInteractables,
       history: this.runtime.pathHistory,
       backgroundUri,
       audioUri,
