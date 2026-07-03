@@ -19,21 +19,34 @@ export interface ChronicaModule<TPayload extends ModuleSavePayload = ModuleSaveP
   /** Stable identifier — also used as the save-payload key. */
   readonly id: string;
 
+  /**
+   * Hook dispatch order — lower values run first. Defaults to `0`. Modules
+   * with the same priority run in registration order; replacing a module by id
+   * keeps its original registration slot.
+   */
+  readonly priority?: number;
+
   /** Called once when the module is first attached to the session. */
   initialize(ctx: ChronicaRuntimeContext): void | Promise<void>;
 
   /** Called after {@link ChronicaSession.start} bootstraps and applies entry effects. */
   onSessionStart?(ctx: ChronicaRuntimeContext): void | Promise<void>;
 
-  /** Called after `choice_selected` is emitted and before the turn resolves. */
+  /** Called after the turn resolves and before `choice_selected` is emitted. */
   onChoiceSelected?(ctx: ChronicaRuntimeContext, choice: Choice): void | Promise<void>;
 
   /** Called after the turn resolves and state/fragment updates are applied. */
   onTurnResolved?(ctx: ChronicaRuntimeContext, result: TurnResult): void | Promise<void>;
 
-  /** Return a JSON-compatible payload persisted alongside the core save. */
+  /** Return module registry config persisted alongside runtime data. */
+  onSessionSaveConfig?(ctx: ChronicaRuntimeContext): unknown;
+
+  /** Return a JSON-compatible runtime payload persisted alongside the core save. */
   onSessionSave?(ctx: ChronicaRuntimeContext): TPayload | undefined;
 
-  /** Restore state from the payload written by `onSessionSave` — undefined for legacy saves. */
+  /** Reapply registry config before {@link ChronicaModule.onSessionLoad}. */
+  onSessionLoadConfig?(ctx: ChronicaRuntimeContext, config: unknown): void | Promise<void>;
+
+  /** Restore runtime state from the payload written by `onSessionSave`. */
   onSessionLoad?(ctx: ChronicaRuntimeContext, payload: TPayload | undefined): void | Promise<void>;
 }

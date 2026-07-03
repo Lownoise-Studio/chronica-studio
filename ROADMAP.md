@@ -2,7 +2,7 @@
 
 Roadmap organized by phase. Items marked ✅ are implemented in the current mobile app (`artifacts/chronica-mobile`).
 
-Phases map to **gameplay models** on the core engine (compiler, runtime, state, packages). See [ENGINE_SPEC.md](./ENGINE_SPEC.md) and [VISION.md](./VISION.md) for architecture principles.
+Phases map to **gameplay models** on the Chronica platform (compiler, runtime, state, packages). See the [Chronica Specification](docs/spec/README.md) and [VISION.md](./VISION.md) for architecture principles.
 
 | Layer | Phases |
 |-------|--------|
@@ -37,7 +37,7 @@ Phases map to **gameplay models** on the core engine (compiler, runtime, state, 
 | Engine tests (expressions, validator, turn resolver, runtime, packages) | ✅ |
 | Advanced Mode (raw IDs, conditions syntax, state inspector) | ✅ |
 | Onboarding for first-time creators | ✅ |
-| ENGINE_SPEC.md + RUNTIME_SPEC.md | ✅ |
+| Chronica Specification (`docs/spec/`) | ✅ |
 
 **Remaining in Phase 1**
 

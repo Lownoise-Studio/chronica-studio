@@ -156,6 +156,30 @@ describe('validateChronicaPackageCompatibility', () => {
     expect(result.ok).toBe(false);
     expect(result.compatibilityLevel).toBe('unsupported');
     expect(result.errors.some(e => e.includes('schemaVersion'))).toBe(true);
+    expect(result.schemaVersionSupport).toBeUndefined();
+  });
+
+  test('schemaVersion 3 is recognized as known-limited, not playable', () => {
+    const manifest = makeManifest({
+      schemaVersion: 3,
+      runtimeTargets: [mobilePlayerTarget],
+    });
+    const result = validateChronicaPackageCompatibility(manifest, mobileOptions());
+    expect(result.ok).toBe(true);
+    expect(result.compatibilityLevel).toBe('limited');
+    expect(result.schemaVersionSupport).toBe('known-limited');
+    expect(result.warnings.some(w => w.includes('schemaVersion 3'))).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('schemaVersion 2 remains fully enabled and playable', () => {
+    const manifest = makeManifest({
+      schemaVersion: 2,
+      runtimeTargets: [mobilePlayerTarget],
+    });
+    const result = validateChronicaPackageCompatibility(manifest, mobileOptions());
+    expect(result.compatibilityLevel).toBe('playable');
+    expect(result.schemaVersionSupport).toBe('fully-enabled');
   });
 
   test('missing packageId, title, and entryFragmentId all error', () => {

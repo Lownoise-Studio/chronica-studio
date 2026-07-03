@@ -13,6 +13,7 @@ import {
   createInstabilityModule,
   type InstabilityData,
 } from '../engine/compat/modules/instability-module';
+import { moduleSaveDataFromCompat } from '../engine/compat/module-save';
 import type { Fragment, Project } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
@@ -173,7 +174,7 @@ describe('EchoModule', () => {
     await source.start();
     await source.choose(source.visibleChoices[0]);
     const save = source.toSave('p-echo')!;
-    const payload = save.modules?.[ECHO_MODULE_ID] as EchoSavePayload;
+    const payload = moduleSaveDataFromCompat(save.modules, ECHO_MODULE_ID) as EchoSavePayload;
     expect(payload.version).toBe(1);
     expect(payload.echoes.find(e => e.id === 'e1')?.state).toBe('Active');
     expect(payload.echoes.find(e => e.id === 'e2')?.state).toBe('Dormant');

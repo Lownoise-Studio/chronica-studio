@@ -34,18 +34,22 @@ same names and interaction shape so:
 ## Turn flow (choice)
 
 ```
-emit  choice_selected
-await onChoiceSelected (all modules, isolated)
-      resolve turn via TurnResolver
-      commit state + fragment
-await onTurnResolved (all modules, isolated)
+validate session + choice
+snapshot previous state / fragment
+resolve turn via TurnResolver
+commit state + fragment
+await onChoiceSelected (all modules, priority order, isolated)
+await onTurnResolved   (all modules, priority order, isolated)
+emit  choice_selected  (full payload: choice, previous/current fragment & state, turnResult)
 emit  turn_resolved
-emit  state_changed      (only if state actually changed)
-emit  fragment_changed   (only if fragment actually changed)
+emit  state_changed      (unconditional on success)
+emit  fragment_changed   (unconditional on success)
 ```
 
 Module hook failures are caught and routed through `module_error`. The surrounding turn
-still commits. Order across modules is deterministic (registration order).
+still commits. Order across modules is deterministic: lower `priority` runs first;
+modules with the same priority run in registration order (duplicate id replacement
+keeps the original registration slot).
 
 ## What this layer is NOT
 
@@ -70,6 +74,7 @@ still commits. Order across modules is deterministic (registration order).
 | `context.ts` | `ChronicaRuntimeContext` shared with modules. |
 | `module.ts` | `ChronicaModule` hook contract. |
 | `module-registry.ts` | Register / dispatch / save / load — with error isolation. |
+| `module-save.ts` | `ModuleSaveEntry` normalization; legacy record compat on load. |
 | `chronica-session.ts` | Top-level session — composes everything, drives the flow. |
 | `save-load.ts` | Envelope shape check + `RuntimeSave` adapters. |
 | `modules/` | First-party gameplay modules (see below). |
@@ -98,7 +103,62 @@ matches the main Chronica engine, so gameplay authored against these modules
 plays identically on both runtimes. `TurnResolver` and the pure engine
 functions stay untouched — modules extend behavior only through hooks.
 
+## Module save / load
+
+Module payloads follow the Chronica Specification `ModuleSaveEntry` shape:
+
+```typescript
+{ id: string; config?: unknown; data: unknown }
+```
+
+- **`onSessionSave` / `onSessionLoad`** — runtime `data` (Instability and Echo use these today).
+- **`onSessionSaveConfig` / `onSessionLoadConfig`** — optional registry `config`, applied **before** data on resume.
+
+`ModuleRegistry.saveAll` emits an array of entries. `loadAll` accepts:
+
+- canonical arrays (`[{ id, config?, data }]`), or
+- legacy compat v1 records (`{ [moduleId]: data }`).
+
+Legacy record values may also be `{ config?, data }` objects. Missing module entries still pass `undefined` to load hooks. Hook failures remain isolated via `module_error`.
+
+The compat save envelope (`compatVersion: 1`) remains the **default write format** for `ChronicaSession.toSave()`. Module payloads are stored as `ModuleSaveEntry[]` in both v1 and canonical v2 writes.
+
+### Write formats
+
+```typescript
+// Default — compat v1 (compatVersion: 1)
+session.toSave(projectId);
+session.toSave(projectId, { format: 'compat-v1' });
+session.toSave({ projectId, format: 'compat-v1' });
+
+// Opt-in canonical v2 (formatVersion: 2, SAVE_SPEC)
+session.toSave(projectId, { format: 'canonical-v2' });
+session.toSave({ projectId, format: 'canonical-v2' });
+```
+
+Canonical v2 emits `formatVersion: 2`, ISO `savedAt`, and `modules: ModuleSaveEntry[]`. Both shapes resume through `normalizeSaveEnvelope` inside `tryResume`. Production `save-store` still uses legacy `RuntimeSave` — not switched yet.
+
+### Dual-read normalization
+
+`normalizeSaveEnvelope` (in `save-load.ts`) accepts RuntimeSave v0, CompatSave v1, canonical v2, and main-format `format_version: 2` on read. See `docs/spec/SAVE_SPEC.md`.
+
 ## Package compatibility (runtime targets)
+
+### Story schema versions
+
+Compat validation uses explicit tiers from `engine/schema-versions.ts`:
+
+| Constant | Value | Role |
+|----------|-------|------|
+| `CHRONICA_SCHEMA_VERSION_MIN` | 1 | Lowest recognized revision |
+| `CHRONICA_SCHEMA_VERSION_MOBILE_PLAYER_FULLY_ENABLED_MAX` | 2 | Compat ingest full parity |
+| `CHRONICA_SCHEMA_VERSION_KNOWN_MAX` | 3 | Spec ceiling (v3 = dialogue/hotspots/stage-actors schema) |
+
+- **v1–v2** — `schemaVersionSupport: fully-enabled`; may reach `playable`.
+- **v3** — `known-limited`: explicit warning, `playable` downgraded to `limited`. Not rejected, not silently fully enabled.
+- **> v3** — `unsupported` with typed error.
+
+The existing ZIP importer (`engine/chronica-package.ts`) still accepts all known versions (1–3) — unchanged.
 
 `engine/compat/package/` adds a **cross-engine package model** on top of the
 existing format-level manifest in `engine/chronica-package.ts`. The two are

@@ -1,6 +1,9 @@
 import { normalizeAssetUri } from './asset-resolver';
 import { computeProjectContentHash } from './compiler/build-compiled-game';
-import { PROJECT_SCHEMA_VERSION } from './project-migration';
+import {
+  CHRONICA_SCHEMA_VERSION_KNOWN_MAX,
+  CHRONICA_SCHEMA_VERSION_MIN,
+} from './schema-versions';
 import { crc32 } from './crc32';
 import { Project, ProjectAsset } from './types';
 
@@ -12,9 +15,13 @@ export const CHRONICA_PACKAGE_VERSION_MIN = 1;
 export const CHRONICA_PACKAGE_VERSION_MAX = 1;
 export const CHRONICA_PACKAGE_APP = 'Chronica Studio';
 
-/** Lowest/highest story schemaVersion an imported package may declare. */
-export const PACKAGE_SCHEMA_VERSION_MIN = 1;
-export const PACKAGE_SCHEMA_VERSION_MAX = PROJECT_SCHEMA_VERSION;
+/**
+ * Story schemaVersion bounds for the ZIP importer (`parseChronicaPackage`).
+ * Accepts all **known** spec revisions (currently 1–3). Compat ingest applies
+ * a stricter "fully enabled" ceiling — see `schema-versions.ts`.
+ */
+export const PACKAGE_SCHEMA_VERSION_MIN = CHRONICA_SCHEMA_VERSION_MIN;
+export const PACKAGE_SCHEMA_VERSION_MAX = CHRONICA_SCHEMA_VERSION_KNOWN_MAX;
 
 export const MANIFEST_PATH = 'manifest.json';
 export const STORY_PATH = 'story.json';

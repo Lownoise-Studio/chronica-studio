@@ -85,17 +85,58 @@ describe('ChronicaSession (zero modules)', () => {
     expect(fragmentChanged).toHaveLength(1);
   });
 
-  test('choose only emits state_changed when state actually changes', async () => {
-    // Fragment with no effects; choice sets a memory flag → state changes.
+  test('choose always emits state_changed and fragment_changed on success', async () => {
     const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
     await session.start();
 
-    // Now pick "Stay" — action is `set:idle` which mutates memory.
     const stateChanges: unknown[] = [];
+    const fragmentChanges: unknown[] = [];
     session.bus.on('state_changed', p => stateChanges.push(p));
+    session.bus.on('fragment_changed', p => fragmentChanges.push(p));
 
     await session.choose(session.visibleChoices[1]);
     expect(stateChanges).toHaveLength(1);
+    expect(fragmentChanges).toHaveLength(1);
+  });
+
+  test('choose emits events in spec order with full choice_selected payload', async () => {
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    await session.start();
+
+    const order: string[] = [];
+    session.bus.on('choice_selected', () => order.push('choice_selected'));
+    session.bus.on('turn_resolved', () => order.push('turn_resolved'));
+    session.bus.on('state_changed', () => order.push('state_changed'));
+    session.bus.on('fragment_changed', () => order.push('fragment_changed'));
+
+    let payload: unknown;
+    session.bus.on('choice_selected', p => { payload = p; });
+
+    const choice = session.visibleChoices[0];
+    await session.choose(choice);
+
+    expect(order).toEqual([
+      'choice_selected',
+      'turn_resolved',
+      'state_changed',
+      'fragment_changed',
+    ]);
+    expect(payload).toEqual(
+      expect.objectContaining({
+        choice,
+        previousFragment: expect.objectContaining({ uid: 'f1' }),
+        resultingFragment: expect.objectContaining({ uid: 'f2' }),
+        currentFragment: expect.objectContaining({ uid: 'f2' }),
+        previousState: expect.objectContaining({ location: 'intro' }),
+        currentState: expect.objectContaining({ location: 'forest' }),
+        turnResult: expect.objectContaining({
+          source: 'choice',
+          fragment: expect.objectContaining({ uid: 'f2' }),
+          stateChanged: true,
+          fragmentChanged: true,
+        }),
+      }),
+    );
   });
 
   test('choose without start reports not-started', async () => {
@@ -116,10 +157,14 @@ describe('ChronicaSession (zero modules)', () => {
     await source.start();
     await source.choose(source.visibleChoices[0]);
     const save = source.toSave('p-compat')!;
-    expect(save.compatVersion).toBe(1);
-    expect(save.projectId).toBe('p-compat');
-    expect(save.gameId).toBe('a0000001-0000-4000-8000-0000000000aa');
-    expect(save.fragmentId).toBe('f2');
+    expect(save).toEqual(
+      expect.objectContaining({
+        compatVersion: 1,
+        projectId: 'p-compat',
+        gameId: 'a0000001-0000-4000-8000-0000000000aa',
+        fragmentId: 'f2',
+      }),
+    );
 
     const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));
     const resume = await target.tryResume({ save });

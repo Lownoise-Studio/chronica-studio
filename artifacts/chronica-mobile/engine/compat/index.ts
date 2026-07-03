@@ -6,6 +6,7 @@ export type {
   SessionResumeInput,
   SessionResumeResult,
   SessionSnapshot,
+  SessionToSaveInput,
 } from './chronica-session';
 
 export { ChronicaState } from './chronica-state';
@@ -17,27 +18,59 @@ export { ChronicaEventBus } from './event-bus';
 export { ChronicaRuntimeContext } from './context';
 export { ModuleRegistry } from './module-registry';
 export type { ModuleHookArgs } from './module-registry';
+export {
+  isModuleSaveEntryShape,
+  isValidModuleSavePayloads,
+  moduleSaveDataFromCompat,
+  normalizeModuleSavePayloads,
+} from './module-save';
+export type { NormalizedModuleSave } from './module-save';
 
 export type { ChronicaModule } from './module';
 
-export { COMPAT_SAVE_VERSION } from './types';
+export { COMPAT_SAVE_VERSION, CANONICAL_SAVE_FORMAT_VERSION } from './types';
 export type {
+  CanonicalSaveV2,
+  ChoiceSelectedEvent,
   CompatSave,
+  LegacyModuleSaveRecord,
   ModuleErrorEvent,
   ModuleHookName,
+  ModuleSaveEntry,
   ModuleSavePayload,
+  ModuleSavePayloads,
+  NormalizeSaveContext,
+  NormalizeSaveFailureReason,
+  NormalizedSaveEnvelope,
+  NormalizeSaveResult,
   RuntimeEventListener,
   RuntimeEventName,
   RuntimeEventPayloads,
   RuntimeEventUnsubscribe,
+  SessionSaveEnvelope,
+  SessionSaveFormat,
   SessionSavedEvent,
+  SessionToSaveOptions,
   TurnResult,
   TurnSource,
 } from './types';
 
 export {
+  V3_COMPAT_FIXTURE_CONTENT_HASH,
+  V3_COMPAT_FIXTURE_GAME_ID,
+  V3_COMPAT_FIXTURE_INSTALL_ID,
+  v3CompatFixtureManifest,
+  v3CompatibilityFixturePackage,
+} from './fixtures';
+
+export {
   fromRuntimeSave,
+  isCanonicalSaveV2Shape,
   isCompatSaveShape,
+  isCompatSaveV1Shape,
+  isMainFormatSaveShape,
+  isRuntimeSaveV0Shape,
+  normalizeSaveEnvelope,
   toRuntimeSave,
 } from './save-load';
 

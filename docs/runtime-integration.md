@@ -2,7 +2,7 @@
 
 How a `.chronica` package becomes a playable session in Chronica Studio and Chronica Player.
 
-Related: [RUNTIME_SPEC.md](../RUNTIME_SPEC.md), [docs/package-round-trip.md](./package-round-trip.md).
+Related: [Runtime specification](../docs/spec/RUNTIME_SPEC.md), [docs/package-round-trip.md](./package-round-trip.md).
 
 ---
 

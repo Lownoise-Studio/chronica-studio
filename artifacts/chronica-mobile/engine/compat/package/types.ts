@@ -1,3 +1,8 @@
+import {
+  CHRONICA_SCHEMA_VERSION_KNOWN_MAX,
+  CHRONICA_SCHEMA_VERSION_MIN,
+} from './schema-versions';
+
 /**
  * Compat-side package manifest — describes a `.chronica` package's runtime
  * targets, required/optional modules, and capabilities so a host can decide
@@ -73,9 +78,9 @@ export interface CompatibilityOptions {
   supportedCapabilities?: readonly string[];
   /** Runtime target ids the host can select. */
   supportedRuntimeTargetIds?: readonly string[];
-  /** Lowest story schemaVersion the host understands. Defaults to 1. */
+  /** Lowest story schemaVersion the host recognizes. Defaults to {@link CHRONICA_SCHEMA_VERSION_MIN}. */
   minSchemaVersion?: number;
-  /** Highest story schemaVersion the host understands. Defaults to 2. */
+  /** Highest story schemaVersion the host recognizes. Defaults to {@link CHRONICA_SCHEMA_VERSION_KNOWN_MAX}. */
   maxSchemaVersion?: number;
 }
 
@@ -95,6 +100,8 @@ export interface CompatibilityResult {
   unsupportedCapabilities: string[];
   /** Runtime target ids the host has no matching entry for. */
   unsupportedRuntimeTargets: string[];
+  /** How the manifest schemaVersion maps to mobile-player ingest support. */
+  schemaVersionSupport?: 'fully-enabled' | 'known-limited';
 }
 
 // ------------------------------------------------------------------
@@ -131,4 +138,6 @@ export const MOBILE_PLAYER_TARGET: ChronicaRuntimeTarget = Object.freeze({
 export const MOBILE_PLAYER_COMPATIBILITY_OPTIONS: Readonly<CompatibilityOptions> = Object.freeze({
   supportedCapabilities: [...MOBILE_PLAYER_CAPABILITIES],
   supportedRuntimeTargetIds: [MOBILE_PLAYER_TARGET_ID],
+  minSchemaVersion: CHRONICA_SCHEMA_VERSION_MIN,
+  maxSchemaVersion: CHRONICA_SCHEMA_VERSION_KNOWN_MAX,
 });

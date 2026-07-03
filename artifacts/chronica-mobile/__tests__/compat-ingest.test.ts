@@ -7,6 +7,7 @@ import {
   ECHO_MODULE_ID,
   INSTABILITY_MODULE_ID,
 } from '../engine/compat/modules';
+import { moduleSaveDataFromCompat } from '../engine/compat/module-save';
 import {
   MOBILE_PLAYER_CAPABILITIES,
   MOBILE_PLAYER_TARGET_ID,
@@ -253,6 +254,18 @@ describe('ingestChronicaPackageForMobilePlayer', () => {
     if (result.ok) return;
     expect(result.reason).toBe('incompatible');
   });
+
+  test('schemaVersion 3 ingests as limited with explicit warning', () => {
+    const pkg = makePackage({
+      manifest: makeManifest({ schemaVersion: 3, runtimeTargets: [mobilePlayerTarget] }),
+    });
+    const result = ingestChronicaPackageForMobilePlayer(pkg);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.compatibility.compatibilityLevel).toBe('limited');
+    expect(result.compatibility.schemaVersionSupport).toBe('known-limited');
+    expect(result.warnings.some(w => w.includes('schemaVersion 3'))).toBe(true);
+  });
 });
 
 describe('createMobileSessionFromChronicaPackage', () => {
@@ -310,7 +323,7 @@ describe('createMobileSessionFromChronicaPackage', () => {
     if (!result.ok) return;
     await result.session.choose(result.session.visibleChoices[0]);
     const save = result.session.toSave(result.game.installId)!;
-    expect(save.modules?.[INSTABILITY_MODULE_ID]).toEqual(
+    expect(moduleSaveDataFromCompat(save.modules, INSTABILITY_MODULE_ID)).toEqual(
       expect.objectContaining({ version: 1 }),
     );
   });

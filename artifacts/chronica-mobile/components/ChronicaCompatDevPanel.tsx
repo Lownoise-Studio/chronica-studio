@@ -3,15 +3,24 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import {
+  advanceDevSession,
   importChronicaPackageForDeveloper,
-  summarizeSession,
+  refreshDevSummary,
+  sessionHasAdvanceAction,
+  type DevFixtureId,
   type DevImportResult,
 } from '@/dev/chronica-compat-import';
 import { godotHybridFixturePackage } from '@/dev/fixtures/godot-hybrid-package';
+import { v3CompatibilityFixturePackage } from '@/engine/compat/fixtures';
+
+const FIXTURES: { id: DevFixtureId; label: string; package: typeof godotHybridFixturePackage }[] = [
+  { id: 'hybrid', label: 'Hybrid (v2)', package: godotHybridFixturePackage },
+  { id: 'v3-compat', label: 'v3 compat fixture', package: v3CompatibilityFixturePackage },
+];
 
 /**
  * Developer-only debug panel that exercises the compat ingestion pipeline
- * against a bundled fixture. Not the shipping importer; not connected to
+ * against bundled fixtures. Not the shipping importer; not connected to
  * ProjectsContext or PlayerHost. Mounted only when the About screen is in
  * developer/advanced mode.
  */
@@ -20,10 +29,12 @@ export function ChronicaCompatDevPanel() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<DevImportResult | null>(null);
 
-  const runImport = useCallback(async () => {
+  const runImport = useCallback(async (fixtureId: DevFixtureId) => {
+    const fixture = FIXTURES.find(f => f.id === fixtureId);
+    if (!fixture) return;
     setBusy(true);
     try {
-      const next = await importChronicaPackageForDeveloper(godotHybridFixturePackage);
+      const next = await importChronicaPackageForDeveloper(fixture.package, fixtureId);
       setResult(next);
     } finally {
       setBusy(false);
@@ -32,28 +43,17 @@ export function ChronicaCompatDevPanel() {
 
   const advance = useCallback(async () => {
     if (!result?.session) return;
-    const first = result.session.visibleChoices[0];
-    if (!first) return;
     setBusy(true);
     try {
-      await result.session.choose(first);
-      setResult(current => (current
-        ? {
-            ...current,
-            summary: summarizeSession(
-              current.session!,
-              current.compatibility,
-              current.summary.title,
-              current.summary.warningsCount,
-            ),
-          }
-        : current));
+      await advanceDevSession(result.session);
+      const summary = await refreshDevSummary(result);
+      setResult(current => (current ? { ...current, summary } : current));
     } finally {
       setBusy(false);
     }
   }, [result]);
 
-  const hasChoice = (result?.summary.availableChoices.length ?? 0) > 0;
+  const canAdvance = result?.session ? sessionHasAdvanceAction(result.session) : false;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -62,35 +62,72 @@ export function ChronicaCompatDevPanel() {
         <Text style={[styles.title, { color: colors.foreground }]}>.chronica compat bridge</Text>
       </View>
       <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-        Provisional developer path — ingest a main-engine hybrid fixture through
-        the compat pipeline. Does not replace the shipping importer.
+        Provisional developer path — ingest bundled fixtures through the compat
+        pipeline. Does not replace the shipping importer.
       </Text>
 
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: colors.secondary, borderColor: colors.border }]}
-        onPress={runImport}
-        disabled={busy}
-        activeOpacity={0.8}
-        accessibilityLabel="Import Godot hybrid fixture through the compat bridge"
-        testID="chronica-compat-dev-run"
-      >
-        {busy && !result ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Feather name="play" size={14} color={colors.primary} />
-        )}
-        <Text style={[styles.buttonText, { color: colors.foreground }]}>
-          Import hybrid fixture
-        </Text>
-      </TouchableOpacity>
+      <View style={styles.fixtureRow}>
+        {FIXTURES.map(fixture => (
+          <TouchableOpacity
+            key={fixture.id}
+            style={[
+              styles.fixtureButton,
+              {
+                backgroundColor: result?.fixtureId === fixture.id ? colors.primary + '18' : colors.secondary,
+                borderColor: result?.fixtureId === fixture.id ? colors.primary : colors.border,
+              },
+            ]}
+            onPress={() => runImport(fixture.id)}
+            disabled={busy}
+            activeOpacity={0.8}
+            accessibilityLabel={`Import ${fixture.label} through the compat bridge`}
+            testID={`chronica-compat-dev-import-${fixture.id}`}
+          >
+            {busy && result?.fixtureId !== fixture.id ? null : busy && result?.fixtureId === fixture.id ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Feather name="play" size={13} color={colors.primary} />
+            )}
+            <Text style={[styles.buttonText, { color: colors.foreground }]}>{fixture.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       {result && (
         <View style={styles.result}>
           <SummaryRow label="Title" value={result.summary.title} colors={colors} />
           <SummaryRow label="Compat level" value={result.summary.compatibilityLevel} colors={colors} />
+          <SummaryRow label="Schema support" value={result.summary.schemaVersionSupport} colors={colors} />
           <SummaryRow label="Runtime target" value={result.summary.selectedRuntimeTarget} colors={colors} />
           <SummaryRow label="Warnings" value={String(result.summary.warningsCount)} colors={colors} />
           <SummaryRow label="Started" value={result.started ? 'yes' : 'no'} colors={colors} />
+
+          {result.warnings.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.miniLabel, { color: colors.mutedForeground }]}>Warning detail</Text>
+              {result.warnings.map((warning, i) => (
+                <Text key={i} style={[styles.warningItem, { color: colors.mutedForeground }]}>
+                  • {warning}
+                </Text>
+              ))}
+            </View>
+          )}
+
+          {result.summary.saveResumeSmoke && (
+            <View style={styles.section}>
+              <Text style={[styles.miniLabel, { color: colors.mutedForeground }]}>Save / resume (canonical v2)</Text>
+              <Text
+                style={[
+                  styles.smokeText,
+                  { color: result.summary.saveResumeSmoke.ok ? colors.foreground : colors.destructive },
+                ]}
+              >
+                {result.summary.saveResumeSmoke.ok
+                  ? `ok — format v${result.summary.saveResumeSmoke.formatVersion}, scene ${result.summary.saveResumeSmoke.fragmentLocationId ?? '(none)'}`
+                  : `failed — ${result.summary.saveResumeSmoke.reason}`}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.section}>
             <Text style={[styles.miniLabel, { color: colors.mutedForeground }]}>Current scene</Text>
@@ -99,24 +136,40 @@ export function ChronicaCompatDevPanel() {
             </Text>
           </View>
 
-          {hasChoice && (
+          {result.summary.availableChoices.length > 0 && (
             <View style={styles.section}>
               <Text style={[styles.miniLabel, { color: colors.mutedForeground }]}>Choices</Text>
               {result.summary.availableChoices.map(c => (
                 <Text key={c.uid} style={[styles.choice, { color: colors.foreground }]}>• {c.label}</Text>
               ))}
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.secondary, borderColor: colors.border, marginTop: 8 }]}
-                onPress={advance}
-                disabled={busy}
-                activeOpacity={0.8}
-                accessibilityLabel="Advance the first available choice"
-                testID="chronica-compat-dev-advance"
-              >
-                {busy ? <ActivityIndicator size="small" color={colors.primary} /> : <Feather name="arrow-right" size={13} color={colors.primary} />}
-                <Text style={[styles.buttonText, { color: colors.foreground }]}>Advance first choice</Text>
-              </TouchableOpacity>
             </View>
+          )}
+
+          {result.summary.availableHotspots.length > 0 && (
+            <View style={styles.section}>
+              <Text style={[styles.miniLabel, { color: colors.mutedForeground }]}>Hotspots</Text>
+              {result.summary.availableHotspots.map(h => (
+                <Text key={h.uid} style={[styles.choice, { color: colors.foreground }]}>• {h.label}</Text>
+              ))}
+            </View>
+          )}
+
+          {canAdvance && (
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: colors.secondary, borderColor: colors.border, marginTop: 8 }]}
+              onPress={advance}
+              disabled={busy}
+              activeOpacity={0.8}
+              accessibilityLabel="Advance dialogue, choice, or hotspot"
+              testID="chronica-compat-dev-advance"
+            >
+              {busy ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Feather name="arrow-right" size={13} color={colors.primary} />
+              )}
+              <Text style={[styles.buttonText, { color: colors.foreground }]}>Advance</Text>
+            </TouchableOpacity>
           )}
 
           {!result.ok && result.errors.length > 0 && (
@@ -155,6 +208,18 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 15, fontFamily: 'Inter_600SemiBold' },
   subtitle: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
+  fixtureRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fixtureButton: {
+    flex: 1,
+    minWidth: 140,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -178,5 +243,7 @@ const styles = StyleSheet.create({
   },
   sceneText: { fontSize: 13, fontFamily: 'Inter_400Regular', lineHeight: 18, marginTop: 2 },
   choice: { fontSize: 12, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  warningItem: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 17 },
+  smokeText: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   errorItem: { fontSize: 12, fontFamily: 'Inter_400Regular' },
 });

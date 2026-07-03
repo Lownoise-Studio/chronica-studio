@@ -10,7 +10,7 @@ export type RuntimeEventPayloads = {
   session_loaded: { fragment: Fragment | null };
   session_saved: SessionSavedEvent;
   session_reset: Record<string, never>;
-  choice_selected: { choice: Choice };
+  choice_selected: ChoiceSelectedEvent;
   hotspot_activated: { hotspot: SceneHotspot };
   dialogue_advanced: { fromIndex: number; toIndex: number };
   turn_resolved: { result: TurnResult };
@@ -33,6 +33,18 @@ export type RuntimeEventPayloads = {
 export type RuntimeEventName = keyof RuntimeEventPayloads;
 
 export type TurnSource = 'choice' | 'hotspot' | 'dialogue' | 'entry' | 'resume';
+
+/** Payload for the `choice_selected` event after a successful {@link ChronicaSession.choose}. */
+export interface ChoiceSelectedEvent {
+  choice: Choice;
+  previousFragment: Fragment | null;
+  resultingFragment: Fragment | null;
+  /** Alias of {@link ChoiceSelectedEvent.resultingFragment} for cross-engine parity. */
+  currentFragment: Fragment | null;
+  previousState: ChronicaState;
+  currentState: ChronicaState;
+  turnResult: TurnResult;
+}
 
 /**
  * Outcome of a single turn — shared with modules via `onTurnResolved` and via
@@ -58,17 +70,19 @@ export interface ModuleErrorEvent {
 /** Payload for the `session_saved` event. */
 export interface SessionSavedEvent {
   moduleIds: string[];
-  save: CompatSave;
+  save: SessionSaveEnvelope;
 }
 
-/** Names of hooks the module registry can invoke via `callHook`. */
+/** Names of hooks the module registry can invoke via `callHook` or save/load. */
 export type ModuleHookName =
   | 'initialize'
   | 'onSessionStart'
   | 'onChoiceSelected'
   | 'onTurnResolved'
   | 'onSessionSave'
-  | 'onSessionLoad';
+  | 'onSessionSaveConfig'
+  | 'onSessionLoad'
+  | 'onSessionLoadConfig';
 
 export type RuntimeEventListener<E extends RuntimeEventName> = (
   payload: RuntimeEventPayloads[E],
@@ -77,12 +91,26 @@ export type RuntimeEventListener<E extends RuntimeEventName> = (
 export type RuntimeEventUnsubscribe = () => void;
 
 /**
- * Module payload stored in a compat save envelope. Modules serialize their
- * own state to a JSON-compatible value; the shape is opaque to the runtime.
- * Typed as `unknown` so consumers can substitute their own concrete shape
- * without needing an index signature on the payload object.
+ * Module runtime payload from {@link ChronicaModule.onSessionSave}. Opaque to
+ * the core runtime; each module owns its internal versioning inside `data`.
  */
 export type ModuleSavePayload = unknown;
+
+/**
+ * Canonical module save entry per {@link ../docs/spec/SAVE_SPEC.md | SAVE_SPEC}.
+ * `config` is reapplied before `data` on resume.
+ */
+export interface ModuleSaveEntry {
+  id: string;
+  config?: unknown;
+  data: ModuleSavePayload;
+}
+
+/** Legacy compat v1 record: module id → opaque data payload. */
+export type LegacyModuleSaveRecord = Record<string, ModuleSavePayload>;
+
+/** Module payloads as written by {@link ModuleRegistry.saveAll} or read on resume. */
+export type ModuleSavePayloads = ModuleSaveEntry[] | LegacyModuleSaveRecord;
 
 /**
  * Save envelope version. Bump when the compat save shape changes in a way
@@ -107,9 +135,67 @@ export interface CompatSave {
   state: Record<string, unknown>;
   /** History entries for UI. */
   history: { locationId: string; title: string }[];
-  /** Per-module opaque payloads, keyed by moduleId. Absent for legacy saves. */
-  modules?: Record<string, ModuleSavePayload>;
+  /**
+   * Module save payloads. New saves use {@link ModuleSaveEntry}[]; legacy saves
+   * may use a record keyed by module id.
+   */
+  modules?: ModuleSavePayloads;
   savedAt: string;
 }
 
+/** Canonical save envelope v2 per SAVE_SPEC — written via {@link ChronicaSession.toSave}. */
+export interface CanonicalSaveV2 {
+  formatVersion: typeof CANONICAL_SAVE_FORMAT_VERSION;
+  projectId: string;
+  gameId: string;
+  contentHash: string;
+  savedAt: string;
+  state: Record<string, unknown>;
+  history: { locationId: string; title: string }[];
+  fragmentId?: string;
+  modules?: ModuleSaveEntry[];
+}
+
+/** Save envelope emitted or accepted by the compat session layer. */
+export type SessionSaveEnvelope = CompatSave | CanonicalSaveV2;
+
+export type SessionSaveFormat = 'compat-v1' | 'canonical-v2';
+
+export interface SessionToSaveOptions {
+  format?: SessionSaveFormat;
+}
+
 export type CompatVariableValue = VariableValue;
+
+/** Canonical save envelope version per SAVE_SPEC. */
+export const CANONICAL_SAVE_FORMAT_VERSION = 2 as const;
+
+/** Caller-supplied game identity when ingesting saves that omit it (e.g. main-format). */
+export interface NormalizeSaveContext {
+  gameId: string;
+  contentHash: string;
+  projectId?: string;
+}
+
+/** Normalized save envelope consumed by compat resume after dual-read normalization. */
+export interface NormalizedSaveEnvelope {
+  formatVersion: typeof CANONICAL_SAVE_FORMAT_VERSION;
+  projectId: string;
+  gameId: string;
+  contentHash: string;
+  savedAt: string;
+  state: Record<string, unknown>;
+  history: { locationId: string; title: string }[];
+  fragmentId?: string;
+  modules?: ModuleSaveEntry[];
+}
+
+export type NormalizeSaveFailureReason =
+  | 'wrong-game'
+  | 'stale-content'
+  | 'corrupt-state'
+  | 'missing-identity';
+
+export type NormalizeSaveResult =
+  | { ok: true; envelope: NormalizedSaveEnvelope; warnings: string[] }
+  | { ok: false; reason: NormalizeSaveFailureReason; message?: string };

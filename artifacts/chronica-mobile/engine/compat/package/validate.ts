@@ -5,9 +5,15 @@ import type {
   CompatibilityOptions,
   CompatibilityResult,
 } from './types';
+import {
+  CHRONICA_SCHEMA_VERSION_KNOWN_MAX,
+  CHRONICA_SCHEMA_VERSION_MIN,
+  classifyStorySchemaVersion,
+  knownLimitedSchemaWarning,
+} from './schema-versions';
 
-const DEFAULT_MIN_SCHEMA = 1;
-const DEFAULT_MAX_SCHEMA = 2;
+const DEFAULT_MIN_SCHEMA = CHRONICA_SCHEMA_VERSION_MIN;
+const DEFAULT_MAX_SCHEMA = CHRONICA_SCHEMA_VERSION_KNOWN_MAX;
 
 interface TargetEvaluation {
   target: ChronicaRuntimeTarget;
@@ -91,6 +97,8 @@ export function validateChronicaPackageCompatibility(
   const minSchema = options.minSchemaVersion ?? DEFAULT_MIN_SCHEMA;
   const maxSchema = options.maxSchemaVersion ?? DEFAULT_MAX_SCHEMA;
 
+  let schemaVersionSupport: CompatibilityResult['schemaVersionSupport'];
+
   // -------- structural checks --------
 
   if (typeof manifest.packageId !== 'string' || !manifest.packageId.trim()) {
@@ -101,10 +109,18 @@ export function validateChronicaPackageCompatibility(
   }
   if (typeof manifest.schemaVersion !== 'number' || !Number.isFinite(manifest.schemaVersion)) {
     errors.push('Manifest is missing schemaVersion.');
-  } else if (manifest.schemaVersion < minSchema || manifest.schemaVersion > maxSchema) {
-    errors.push(
-      `Unsupported schemaVersion ${manifest.schemaVersion} (host supports ${minSchema}–${maxSchema}).`,
-    );
+  } else {
+    const support = classifyStorySchemaVersion(manifest.schemaVersion);
+    if (support === 'unknown' || manifest.schemaVersion < minSchema || manifest.schemaVersion > maxSchema) {
+      errors.push(
+        `Unsupported schemaVersion ${manifest.schemaVersion} (host supports ${minSchema}–${maxSchema}).`,
+      );
+    } else if (support === 'known-limited') {
+      schemaVersionSupport = 'known-limited';
+      warnings.push(knownLimitedSchemaWarning(manifest.schemaVersion));
+    } else {
+      schemaVersionSupport = 'fully-enabled';
+    }
   }
 
   const targets = manifest.runtimeTargets ?? [];
@@ -231,6 +247,10 @@ export function validateChronicaPackageCompatibility(
 
   const ok = errors.length === 0 && compatibilityLevel !== 'unsupported';
 
+  if (schemaVersionSupport === 'known-limited' && compatibilityLevel === 'playable') {
+    compatibilityLevel = 'limited';
+  }
+
   return {
     ok,
     compatibilityLevel,
@@ -241,5 +261,6 @@ export function validateChronicaPackageCompatibility(
     missingOptionalModules,
     unsupportedCapabilities,
     unsupportedRuntimeTargets,
+    schemaVersionSupport,
   };
 }

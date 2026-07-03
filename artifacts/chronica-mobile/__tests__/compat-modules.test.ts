@@ -1,7 +1,8 @@
 import { compileProject } from '../engine/compiler';
 import { ChronicaSession } from '../engine/compat/chronica-session';
 import type { ChronicaModule } from '../engine/compat/module';
-import type { ModuleErrorEvent } from '../engine/compat/types';
+import { moduleSaveDataFromCompat } from '../engine/compat/module-save';
+import type { ModuleErrorEvent, ModuleSaveEntry } from '../engine/compat/types';
 import type { Fragment, Project } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
@@ -77,6 +78,101 @@ function achievementsModule(store: { unlocked: string[] }): ChronicaModule<Achie
 }
 
 describe('ModuleRegistry (through ChronicaSession)', () => {
+  test('module hooks complete before choice_selected event', async () => {
+    const order: string[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.bus.on('choice_selected', () => order.push('event:choice_selected'));
+    session.register({
+      id: 'hooks',
+      initialize: () => {},
+      onChoiceSelected: () => { order.push('hook:onChoiceSelected'); },
+      onTurnResolved: () => { order.push('hook:onTurnResolved'); },
+    });
+
+    await session.start();
+    order.length = 0;
+    await session.choose(session.visibleChoices[0]);
+
+    expect(order.indexOf('hook:onChoiceSelected')).toBeLessThan(
+      order.indexOf('event:choice_selected'),
+    );
+    expect(order.indexOf('hook:onTurnResolved')).toBeLessThan(
+      order.indexOf('event:choice_selected'),
+    );
+  });
+
+  test('lower priority modules run before higher priority', async () => {
+    const calls: string[] = [];
+    const mk = (id: string, priority?: number): ChronicaModule => ({
+      id,
+      priority,
+      initialize: () => { calls.push(id); },
+    });
+
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register(mk('zero', 0));
+    session.register(mk('neg', -1));
+    session.register(mk('pos', 1));
+
+    await session.start();
+    expect(calls).toEqual(['neg', 'zero', 'pos']);
+  });
+
+  test('same priority preserves registration order', async () => {
+    const calls: string[] = [];
+    const mk = (id: string): ChronicaModule => ({
+      id,
+      priority: 0,
+      initialize: () => { calls.push(id); },
+    });
+
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register(mk('first'));
+    session.register(mk('second'));
+
+    await session.start();
+    expect(calls).toEqual(['first', 'second']);
+  });
+
+  test('missing priority defaults to 0', async () => {
+    const calls: string[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register({
+      id: 'explicit-zero',
+      priority: 0,
+      initialize: () => { calls.push('explicit-zero'); },
+    });
+    session.register({
+      id: 'implicit-zero',
+      initialize: () => { calls.push('implicit-zero'); },
+    });
+    session.register({
+      id: 'negative',
+      priority: -1,
+      initialize: () => { calls.push('negative'); },
+    });
+
+    await session.start();
+    expect(calls).toEqual(['negative', 'explicit-zero', 'implicit-zero']);
+  });
+
+  test('duplicate id replacement preserves registration slot', async () => {
+    const calls: string[] = [];
+    const mk = (id: string, tag: string, priority = 0): ChronicaModule => ({
+      id,
+      priority,
+      initialize: () => { calls.push(tag); },
+    });
+
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register(mk('a', 'a-v1', 0));
+    session.register(mk('b', 'b-v1', 0));
+    session.register(mk('a', 'a-v2', 0));
+
+    await session.start();
+    expect(calls).toEqual(['a-v2', 'b-v1']);
+  });
+
   test('hook order is deterministic and matches registration order', async () => {
     const calls: string[] = [];
     const mkModule = (id: string): ChronicaModule => ({
@@ -111,7 +207,9 @@ describe('ModuleRegistry (through ChronicaSession)', () => {
     await source.choose(source.visibleChoices[0]);
 
     const save = source.toSave('p-modules')!;
-    expect(save.modules?.achievements).toEqual({ unlocked: ['reached-forest'] });
+    expect(save.modules).toEqual([
+      { id: 'achievements', data: { unlocked: ['reached-forest'] } },
+    ] satisfies ModuleSaveEntry[]);
 
     const targetStore = { unlocked: [] as string[] };
     const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));
@@ -190,8 +288,7 @@ describe('ModuleRegistry (through ChronicaSession)', () => {
     await session.start();
     const save = session.toSave('p-modules')!;
 
-    expect(save.modules?.saver).toBeUndefined();
-    expect(save.modules?.other).toEqual({ value: 42 });
+    expect(save.modules).toEqual([{ id: 'other', data: { value: 42 } }]);
     expect(errors[0]).toEqual(
       expect.objectContaining({ moduleId: 'saver', hook: 'onSessionSave' }),
     );
@@ -260,5 +357,109 @@ describe('ModuleRegistry (through ChronicaSession)', () => {
     expect(result.ok).toBe(true);
     expect(session.fragment?.locationId).toBe('forest');
     expect(seen).toEqual(['init', 'start', 'turn:entry', 'choice:c1', 'turn:choice']);
+  });
+
+  test('saveAll emits ModuleSaveEntry array with optional config', async () => {
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register({
+      id: 'configured',
+      initialize: () => {},
+      onSessionSaveConfig: () => ({ tier: 2 }),
+      onSessionSave: () => ({ score: 10 }),
+    });
+    await session.start();
+    const save = session.toSave('p-modules')!;
+    expect(save.modules).toEqual([
+      { id: 'configured', config: { tier: 2 }, data: { score: 10 } },
+    ]);
+  });
+
+  test('legacy record modules still load via tryResume', async () => {
+    const sourceStore = { unlocked: [] as string[] };
+    const source = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    source.register(achievementsModule(sourceStore));
+    await source.start();
+    await source.choose(source.visibleChoices[0]);
+
+    const modern = source.toSave('p-modules')!;
+    const legacySave = {
+      ...modern,
+      modules: {
+        achievements: { unlocked: ['reached-forest'] },
+      },
+    };
+
+    const targetStore = { unlocked: [] as string[] };
+    const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    target.register(achievementsModule(targetStore));
+    const resume = await target.tryResume({ save: legacySave });
+    expect(resume.ok).toBe(true);
+    expect(targetStore.unlocked).toEqual(['reached-forest']);
+  });
+
+  test('loadAll applies config before data', async () => {
+    const order: string[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register({
+      id: 'ordered',
+      initialize: () => {},
+      onSessionLoadConfig: () => { order.push('config'); },
+      onSessionLoad: () => { order.push('data'); },
+    });
+    await session.start();
+    await session.modules.loadAll(session.context, [
+      { id: 'ordered', config: { tier: 1 }, data: { score: 3 } },
+    ]);
+    expect(order).toEqual(['config', 'data']);
+  });
+
+  test('loadAll skips config hook when config is missing', async () => {
+    const configHook = jest.fn();
+    const dataHook = jest.fn();
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.register({
+      id: 'data-only',
+      initialize: () => {},
+      onSessionLoadConfig: configHook,
+      onSessionLoad: dataHook,
+    });
+    await session.start();
+    await session.modules.loadAll(session.context, [
+      { id: 'data-only', data: { score: 1 } },
+    ]);
+    expect(configHook).not.toHaveBeenCalled();
+    expect(dataHook).toHaveBeenCalledWith(expect.anything(), { score: 1 });
+  });
+
+  test('config and data save hook errors remain isolated', async () => {
+    const errors: ModuleErrorEvent[] = [];
+    const session = new ChronicaSession(compileOrThrow(makeProject(fragments)));
+    session.bus.on('module_error', payload => errors.push(payload));
+    session.register({
+      id: 'broken-config',
+      initialize: () => {},
+      onSessionSaveConfig: () => { throw new Error('config fail'); },
+    });
+    session.register({
+      id: 'broken-data',
+      initialize: () => {},
+      onSessionSave: () => { throw new Error('data fail'); },
+    });
+    session.register({
+      id: 'healthy',
+      initialize: () => {},
+      onSessionSaveConfig: () => ({ tier: 1 }),
+      onSessionSave: () => ({ value: 1 }),
+    });
+
+    await session.start();
+    const save = session.toSave('p-modules')!;
+    expect(save.modules).toEqual([
+      { id: 'healthy', config: { tier: 1 }, data: { value: 1 } },
+    ]);
+    expect(errors.map(e => `${e.moduleId}:${e.hook}`)).toEqual([
+      'broken-config:onSessionSaveConfig',
+      'broken-data:onSessionSave',
+    ]);
   });
 });

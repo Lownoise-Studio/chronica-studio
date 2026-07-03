@@ -1,0 +1,55 @@
+---
+description: Chronica Platform model — spec-first, parity, and implementation boundaries for Chronica Mobile Studio
+globs: artifacts/chronica-mobile/**
+alwaysApply: false
+---
+
+# Chronica Platform
+
+Chronica is the **platform**. The **Chronica Specification** is the source of truth.
+
+| Layer | Role |
+|-------|------|
+| **Chronica Specification** | Package, runtime, module API, save, event/scene/asset models, rendering contract, compatibility rules |
+| **Implementations** | Chronica Studio, Chronica Mobile Studio, Chronica Player, other Chronica runtimes |
+| **This repo (`artifacts/chronica-mobile`)** | First-class **Chronica Mobile Studio** — React Native + Expo |
+
+Mobile is **not** a reduced engine, side experiment, or separate product runtime.
+
+## Principles
+
+1. **Feature parity** — same story capabilities across implementations; mobile may ship features later, not redefine them.
+2. **Workflow divergence** — touch-first authoring, player app mode, on-device import are allowed UX differences.
+3. **Behavioral parity** — runtime outcomes matter more than code structure. Package round-trip and save/resume tests are guardrails.
+4. **Spec-first** — if behavior differs from another Chronica runtime, **update the spec** or **fix the implementation**. Do not paper over drift in mobile-only code.
+5. **Package / save / module compatibility** — `.chronica`, `RuntimeSave`, and `engine/` module contracts stay portable.
+
+## Code boundaries
+
+- **`engine/`** — shared spec logic: compiler, session, validator, package, assets, actions. No React Native imports.
+- **`runtime/`** — play session host; no editor UI.
+- **`storage/`** — persistence and package I/O.
+- **`components/`, `app/`** — presentation and authoring workflows only.
+
+Do **not** put RN/Expo assumptions in `engine/` or `runtime/`.
+
+When editing **desktop Chronica Studio** or another runtime (outside this tree), do not assume mobile file layout — follow that implementation’s structure.
+
+## Compatibility expectations
+
+- **`.chronica`** — `manifest.json` + `story.json` + `assets/*`; integrity via `storyContentHash` and `assetsManifest`.
+- **Runtime** — `ChronicaRuntime` / `PlayerHost`; deterministic state transitions via compiled actions.
+- **Saves** — `gameId` + `contentHash` + serialized `ChronicaState`; stale saves rejected.
+- **Events** — choice/hotspot actions parse to `ActionStep[]` (`goto`, `set`, `assign`, …).
+
+## Public documentation
+
+README and `docs/` must use neutral language: *Chronica Specification*, *desktop implementation*, *other Chronica runtimes*, *cross-runtime compatibility*.
+
+Do **not** reference private repositories, unpublished paths, or internal audit findings in committed docs.
+
+## When unsure
+
+1. Read [WHY_CHRONICA.md](../../WHY_CHRONICA.md), [docs/spec/README.md](../../docs/spec/README.md), and `artifacts/chronica-mobile/docs/ARCHITECTURE.md`.
+2. Prefer spec clarification over implementation-specific shortcuts.
+3. Keep presentation changes out of engine/runtime unless the rendering contract requires it.

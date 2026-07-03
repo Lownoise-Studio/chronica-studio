@@ -1,61 +1,53 @@
-# Chronica Studio — Vision
+# Chronica — Vision
 
-Chronica Studio is a **mobile-first game engine for state-driven games**. Its compiler transforms editable projects into executable games, its runtime executes deterministic rules over authoritative game state, and its package system preserves game integrity across devices.
+## Vision
 
-**Narrative is the first proof that the architecture works.** The current scene, dialogue, character/cast, and hotspot workflows are early **gameplay models** on this foundation—not the engine itself, and not merely a story-writing app.
+**What is Chronica?**
 
-Chronica's goal is not to be a general-purpose rendering engine. Its goal is to become the best engine for creating **state-driven interactive games on mobile**, where gameplay emerges from validated state, deterministic rules, and meaningful player decisions.
+Chronica is a **platform for creating, packaging, and playing story-driven games**.
 
-## Lineage
+Creators author against the Chronica Specification. Games ship as portable **`.chronica` packages**. Any compliant implementation can load, run, and present the same project—mobile studio, desktop studio, dedicated player, or future services.
 
-Chronica Studio inherits concepts and runtime behavior from the **Godot Chronica Engine** (GDScript plugin). The mobile app ports that engine to TypeScript so creators can author, playtest, and ship without a desktop toolchain. The Godot engine remains the reference implementation for full-game runtime; Chronica Studio is the creator-facing, mobile-native layer.
+Chronica is not a single app, not a plugin for someone else's engine, and not a genre locked to one editor. It is the shared contract and ecosystem around portable interactive fiction and state-driven adventure.
 
-## What the engine provides
+## Mission
 
-Every game built in Chronica Studio is structured around shared primitives:
+**Why does it exist?**
 
-| Concept | Role |
-|---------|------|
-| **Scenes** | Discrete story moments (locations, dialogue beats, encounters) with text, media, and logic |
-| **Choices** | Player actions that branch the narrative and trigger effects |
-| **Assets** | Images, audio, and data files attached to scenes |
-| **Variables** | Typed game state (booleans, numbers, strings) read by conditions and updated by effects |
-| **State** | The live snapshot of location, variables, memory, and instability during play |
-| **Events** | Conditions and effects that gate scenes/choices and mutate state on entry or selection |
-| **Playtest** | In-app player to run the game on device as the creator builds it |
-| **Export** | Portable `.chronica` packages for sharing and runtime import, with JSON backup for project data |
+To let creators **build games once** and **move them across Chronica implementations** without redefining gameplay.
 
-Creators work scene-by-scene today. Implemented gameplay models such as dialogue, characters, and hotspots compose with the same compiler, runtime, package, and state architecture. Additional gameplay models—such as inventory, quests, and challenge systems—should extend that foundation rather than replacing it.
+Story structure, variables, branching, assets, and runtime behavior should survive the tool change—not be re-authored for every device or every vendor.
 
-## Architecture
+## Principles
+
+- **Specification first** — the Chronica Specification is the source of truth; implementations comply
+- **Behavioral parity** — the same package and inputs produce the same game outcomes on every runtime
+- **Feature parity, workflow divergence** — capabilities align across implementations; UX may differ (touch on mobile, professional tooling on desktop)
+- **Portable packages** — `.chronica` is the canonical handoff between authoring and play
+- **Creator-first tooling** — reduce friction from idea to playable build on the devices creators actually use
+- **Long-term ecosystem** — specification, studios, players, and services as peers—not one monolithic app
+
+## Platform
 
 ```
-Core (compiler, runtime, identity, packages, state, actions, persistence)
-  ↓
-Gameplay models (narrative, dialogue, inventory, character, quest, interaction, combat, …)
-  ↓
-Presentation (narrative reader, visual novel, adventure, top-down, hidden object, …)
+Chronica
+├── Specification
+├── Studio                    ← professional / desktop authoring
+├── Mobile Studio             ← first public implementation (this repository)
+├── Player                    ← play-only experiences
+└── Future services           ← sync, discovery, analytics, marketplace (TBD)
 ```
 
-**State + Rules + Execution = Gameplay. Gameplay + Presentation = Player experience.**
+## What ships today
 
-**Core owns execution. Gameplay models describe rules. Presentation decides how those rules are experienced.**
+This repository implements **Chronica Mobile Studio** and **Chronica Player** on React Native + Expo. It is the first public surface of the platform—not a reduced or experimental fork.
 
-A single gameplay model (e.g. inventory) may be used by multiple presentation styles. Presentation concerns must not leak into engine code.
+For the technical contract, see the [Chronica Specification](docs/spec/README.md).  
+For why the platform exists, see [WHY_CHRONICA.md](WHY_CHRONICA.md).  
+For how to run and contribute to this implementation, see [README.md](README.md).
 
-When evaluating new work, ask: *Is this a new gameplay model on top of the same state engine, or is it forcing the core to become genre-specific?* If the latter, it belongs in a gameplay model—not in the engine.
+## What comes next
 
-Conceptual capabilities (state engine, action engine, execution engine) belong in documentation, not in folder names. The current `engine/`, `runtime/`, and `components/` layout is authoritative.
+The platform story is only as credible as the games it runs. The next proof points are **finished, compelling games** and **new gameplay and presentation capabilities** shipped on the same package and runtime foundation—not more documentation.
 
-## Design principles
-
-- **Mobile-first** — editing and playtesting happen on the device creators already carry.
-- **State-driven** — the engine computes state; consequences emerge from validated transitions, not from ad hoc application code.
-- **Data-driven** — engine behavior is defined by validated data wherever practical; engine code executes rules, gameplay models describe them.
-- **Engine, not editor-only** — every feature must compose with state, compile, runtime, and export.
-- **Offline-capable** — projects live on device; cloud sync is optional, not required.
-- **Progressive depth** — simple defaults for new creators; Advanced Mode for power users who need raw IDs, conditions, and state inspection.
-
-## Success looks like
-
-A creator opens Chronica Studio on their phone or tablet, builds a state-driven interactive game with unlockable paths, playtests it immediately, exports `.chronica` packages, and eventually publishes a playable build—without leaving their mobile-first workflow. Android is the first shipping target, while the product remains mobile-first.
+Build once. Play anywhere.

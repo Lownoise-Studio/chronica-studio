@@ -1,79 +1,69 @@
-# Chronica Studio Engine
+# Chronica Mobile Studio
 
-**Chronica Studio** is a mobile-first game engine for building, playtesting, and shipping state-driven interactive games on phone and tablet. The narrative workflow shipping today is Phase 1 of the engine—not the whole product.
+**The first public implementation of the Chronica Platform.**
 
-## Project Status
+Chronica Mobile Studio is a mobile-first implementation of the Chronica Platform, allowing creators to build, test, and play portable `.chronica` games directly on mobile devices. It ships **Chronica Mobile Studio** (authoring) and **Chronica Player** (play-only) in one React Native + Expo app.
 
-Chronica Studio is under active development. The engine foundation is stabilizing, and the core architecture—compiler, runtime, package format, and state model—is becoming stable. Gameplay models will continue to expand over time, and breaking changes may occur before the first stable release.
+This repository is the public home for that work. Application code lives in [`artifacts/chronica-mobile/`](artifacts/chronica-mobile/).
 
-## Current Scope
+Chronica is designed around **portable game creation**. See [WHY_CHRONICA.md](WHY_CHRONICA.md).
 
-Chronica Studio currently focuses on:
+Rather than coupling projects to a specific editor or runtime, games are authored against the **[Chronica Specification](docs/spec/README.md)** and distributed as portable **`.chronica` packages**. The long-term goal is to let creators build, edit, test, and play the same projects across multiple Chronica implementations while maintaining consistent gameplay behavior.
 
-- State-driven interactive games
-- Branching narrative
-- Visual novel experiences
-- Light adventure experiences
+## Platform
 
-Real-time gameplay, physics, and 3D are outside the current scope. Chronica is focused on deterministic state transitions, authored gameplay models, and mobile-first presentation rather than frame-based simulation or general-purpose rendering.
+```
+Chronica
+├── Chronica Specification     ← [docs/spec/](docs/spec/README.md) (future public chronica-spec repo)
+├── Chronica Studio              ← desktop / professional authoring implementation
+├── Chronica Mobile Studio       ← this repository
+└── Chronica Player              ← play-only shell (included in this app)
+```
 
-## Current Capabilities
+Mobile is not a reduced fork or a side experiment. It targets **cross-runtime compatibility** with the specification and other Chronica runtimes.
 
-Implemented capabilities in the current mobile app include:
+## Design principles
 
-- Mobile-first editor
-- Scene editor
-- Dialogue system
-- Character/cast system
-- Hotspots
-- Variables and state
-- Conditional branching
-- Asset library
-- ZIP asset import
-- Compiler & validation
-- Playtest runtime
-- `.chronica` package export/import
-- Chronica Player
-- Save/resume
-- Showcase demo
+- **Specification-first architecture** — the Chronica Specification defines behavior; implementations comply
+- **Portable `.chronica` packages** — one format for export, import, and play across devices
+- **Behavioral parity across implementations** — gameplay outcomes must agree; code structure may differ
+- **Feature parity with workflow divergence** — same capabilities over time; mobile uses touch-first UX
+- **Touch-first creation experience** — author, playtest, and ship from phone or tablet
 
-## Road to v1
+## What you can do today
 
-The next major milestones are focused on:
+| Capability | Description |
+|------------|-------------|
+| **Mobile authoring** | Scenes, dialogue, characters, hotspots, variables, assets |
+| **Compile & validate** | Catch broken links, invalid conditions, and missing assets before play |
+| **Playtest & Player** | In-editor playtest or standalone Chronica Player mode |
+| **`.chronica` packages** | Export and import portable games with integrity checks |
+| **Save / resume** | Runtime saves tied to `gameId` and content hash |
+| **Try Demo** | Bundled Pasture demo (`.chronica` round-trip on device) |
 
-- Engine stabilization
-- Additional gameplay models
-- Presentation improvements
-- Standalone player polish
-- Public creator release
+Current public implementation focuses on **state-driven gameplay models**. The Chronica Specification is designed to evolve to support additional presentation capabilities over time.
 
-No release dates are promised yet; the priority is a stable, portable foundation for creators and players.
-
-## What’s in this repo
+## Repository layout
 
 | Path | Purpose |
 |------|---------|
-| [`artifacts/chronica-mobile/`](artifacts/chronica-mobile/) | Expo/React Native app — editor + runtime host |
-| [`artifacts/chronica-mobile/engine/`](artifacts/chronica-mobile/engine/) | Pure TypeScript engine (no UI) |
-| [`artifacts/chronica-mobile/runtime/`](artifacts/chronica-mobile/runtime/) | Runtime host — session loop for playtest & Load Game |
-| Godot Chronica plugin | Reference engine (separate import) |
+| [`artifacts/chronica-mobile/`](artifacts/chronica-mobile/) | React Native + Expo app — Mobile Studio + Player |
+| [`artifacts/chronica-mobile/engine/`](artifacts/chronica-mobile/engine/) | Specification logic — compiler, session, package, validation (no UI) |
+| [`artifacts/chronica-mobile/runtime/`](artifacts/chronica-mobile/runtime/) | Play session host — runtime loop, saves, player boundary |
+| [`docs/spec/`](docs/spec/README.md) | Chronica Specification — platform contract |
+| [`artifacts/chronica-mobile/docs/`](artifacts/chronica-mobile/docs/) | Mobile architecture and package details |
 
-## Engine vs editor
+Other Chronica implementations (including desktop and professional authoring tools) may live in separate repositories. This repo documents and implements the **mobile** surface of the platform.
 
-- **Editor** — create scenes, choices, assets; validate; export packages  
-- **Runtime** — load `.chronica`, run deterministic session logic, render scenes  
+## `.chronica` packages
 
-See [ENGINE_SPEC.md](ENGINE_SPEC.md) and [RUNTIME_SPEC.md](RUNTIME_SPEC.md) for the full contract.
+A `.chronica` file is a portable ZIP package:
 
-## Ship format: `.chronica` packages
+- `manifest.json` — identity, integrity metadata, asset manifest
+- `story.json` — full project (portable asset references)
+- `assets/*` — embedded media
 
-A `.chronica` file is a ZIP package containing:
-
-- `manifest.json` — package metadata  
-- `story.json` — full project (portable asset paths)  
-- `assets/*` — embedded image/audio files  
-
-Load Game on the Library screen imports a package and opens the player immediately.
+Open a package in **Chronica Player** or import via **Load Game**. See [package boundary docs](artifacts/chronica-mobile/docs/package-round-trip.md).
 
 ## Local development
 
@@ -82,18 +72,31 @@ pnpm install
 cd artifacts/chronica-mobile
 pnpm typecheck
 pnpm test
-pnpm exec expo start
+pnpm exec expo start          # Chronica Mobile Studio (authoring)
+pnpm start:player           # Chronica Player
 ```
 
-See [docs/local-dev.md](docs/local-dev.md) for local development and platform build details.
+See [docs/local-dev.md](docs/local-dev.md) for platform build details.
 
-## Docs
+## Documentation
 
-- [VISION.md](VISION.md) — product direction  
-- [ROADMAP.md](ROADMAP.md) — phased delivery  
-- [ENGINE_SPEC.md](ENGINE_SPEC.md) — engine architecture & guarantees  
-- [RUNTIME_SPEC.md](RUNTIME_SPEC.md) — editor/runtime boundary  
+| Document | Description |
+|----------|-------------|
+| [Why Chronica?](WHY_CHRONICA.md) | Strategic manifesto — why the platform exists |
+| [Chronica Specification](docs/spec/README.md) | Platform contract (package, runtime, save, scene, …) |
+| [Mobile architecture](artifacts/chronica-mobile/docs/ARCHITECTURE.md) | Implementation layout and compliance status |
+| [Package boundary](artifacts/chronica-mobile/docs/package-round-trip.md) | Import/export rules and integrity |
+| [VISION.md](VISION.md) | Product direction |
+| [ROADMAP.md](ROADMAP.md) | Phased delivery |
 
-## Try it
+## Project status
 
-On device: open the app → **Try Demo** (bundled `.chronica` showcase) or **Load Game** (your own package).
+Chronica Mobile Studio is under active development as a **public preview**. The compiler, runtime, package format, and state model are stabilizing; breaking changes may occur before a stable release.
+
+## Repository naming
+
+This repository is currently named **`chronica-studio`** while its primary public artifact is **Chronica Mobile Studio** under `artifacts/chronica-mobile/`. A future rename (for example `chronica-mobile` or `chronica-mobile-studio`) would align the GitHub name with the public product and sit alongside a future ecosystem such as `chronica-spec`, `chronica-player`, and `chronica-mobile`.
+
+## License
+
+Chronica Mobile Studio by [Lownoise Studio](https://lownoise.studio).

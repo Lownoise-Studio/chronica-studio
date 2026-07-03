@@ -9,6 +9,7 @@ import {
   type InstabilityData,
   type InstabilitySavePayload,
 } from '../engine/compat/modules/instability-module';
+import { moduleSaveDataFromCompat } from '../engine/compat/module-save';
 import type { Fragment, Project } from '../engine/types';
 
 function makeProject(fragments: Fragment[], overrides: Partial<Project> = {}): Project {
@@ -131,7 +132,7 @@ describe('InstabilityModule', () => {
     await source.start();
     await source.choose(source.visibleChoices[0]); // instability 60, layer 1
     const save = source.toSave('p-instab')!;
-    const payload = save.modules?.[INSTABILITY_MODULE_ID] as InstabilitySavePayload;
+    const payload = moduleSaveDataFromCompat(save.modules, INSTABILITY_MODULE_ID) as InstabilitySavePayload;
     expect(payload).toEqual({ version: 1, instability: 60, realityLayer: 1 });
 
     const target = new ChronicaSession(compileOrThrow(makeProject(fragments)));

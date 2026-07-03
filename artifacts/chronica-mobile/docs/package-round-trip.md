@@ -1,5 +1,7 @@
 # `.chronica` Package Boundary
 
+See also: [Chronica Specification](../../../docs/spec/README.md) · [Architecture](./ARCHITECTURE.md).
+
 A `.chronica` file is a **STORE-only ZIP** (no compression) containing exactly:
 
 ```
@@ -37,7 +39,10 @@ package **missing** an integrity field (e.g. no `storyContentHash` or
 ## `story.json` rules
 
 - `schemaVersion` is a number within `[PACKAGE_SCHEMA_VERSION_MIN, PACKAGE_SCHEMA_VERSION_MAX]`
-  (currently `1`–`3`). Newer schemas are rejected as `unsupported-schema-version`.
+  (currently `1`–`3`, all **known** spec revisions).
+- Versions above `CHRONICA_SCHEMA_VERSION_MOBILE_PLAYER_FULLY_ENABLED_MAX` (currently `2`) are
+  accepted by the ZIP importer but reported as **known-limited** on the compat ingest path.
+- Schema versions above `PACKAGE_SCHEMA_VERSION_MAX` fail as `unsupported-schema-version`.
 - `id`, `title`, `gameId` required; `fragments` and `assets` must be arrays.
 - After hydration the project must pass `compileProject` — otherwise import fails
   with `compile-failed` and the broken project is **not** installed.

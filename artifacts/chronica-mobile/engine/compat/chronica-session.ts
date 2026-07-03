@@ -1,6 +1,7 @@
 import type { CompiledGame } from '../compiler/types';
 import {
   createInitialState,
+  deserializeState,
   serializeState,
 } from '../chronica-session';
 import { applyEffect } from '../expression-evaluator';
@@ -20,12 +21,24 @@ import { FragmentStore } from './fragment-store';
 import type { ChronicaModule } from './module';
 import { ModuleRegistry } from './module-registry';
 import { TurnResolver } from './turn-resolver';
+import { normalizeSaveEnvelope } from './save-load';
 import {
+  CANONICAL_SAVE_FORMAT_VERSION,
   COMPAT_SAVE_VERSION,
+  type CanonicalSaveV2,
   type CompatSave,
   type ModuleSavePayload,
+  type SessionSaveEnvelope,
+  type SessionSaveFormat,
+  type SessionToSaveOptions,
   type TurnResult,
   type TurnSource,
+} from './types';
+
+export type {
+  SessionSaveEnvelope,
+  SessionSaveFormat,
+  SessionToSaveOptions,
 } from './types';
 
 export interface SessionSnapshot {
@@ -50,13 +63,22 @@ export type SessionAdvanceDialogueResult =
   | { ok: true; advanced: boolean }
   | { ok: false; reason: 'not-started' | 'invalid-index' };
 
+export interface SessionToSaveInput {
+  projectId: string;
+  format?: SessionSaveFormat;
+}
+
 export interface SessionResumeInput {
-  save: CompatSave;
+  /** Any recognized save envelope — normalized internally before resume. */
+  save: unknown;
 }
 
 export type SessionResumeResult =
   | { ok: true; fragment: Fragment | null }
-  | { ok: false; reason: 'wrong-game' | 'stale-content' | 'corrupt-state' };
+  | {
+      ok: false;
+      reason: 'wrong-game' | 'stale-content' | 'corrupt-state' | 'missing-identity';
+    };
 
 /**
  * Top-level compat facade for a Chronica play session.
@@ -65,14 +87,14 @@ export type SessionResumeResult =
  * action resolver, event bus, module registry) and drives the deterministic
  * turn flow specified by the runtime compatibility spec:
  *
- * 1. `emit choice_selected`
- * 2. `await` module `onChoiceSelected`
- * 3. resolve turn via {@link TurnResolver}
- * 4. commit state + fragment
- * 5. `await` module `onTurnResolved`
+ * 1. validate session + choice
+ * 2. snapshot previous state / fragment
+ * 3. resolve turn via {@link TurnResolver} and commit state + fragment
+ * 4. `await` module hooks (`onChoiceSelected`, then `onTurnResolved`)
+ * 5. `emit choice_selected` (full payload)
  * 6. `emit turn_resolved`
- * 7. `emit state_changed` if state changed
- * 8. `emit fragment_changed` if fragment changed
+ * 7. `emit state_changed`
+ * 8. `emit fragment_changed`
  */
 export class ChronicaSession {
   readonly game: CompiledGame;
@@ -199,10 +221,7 @@ export class ChronicaSession {
     }
 
     const previousFragment = this._fragment;
-    const stateBefore = serializeState(this._state.raw);
-
-    this.bus.emit('choice_selected', { choice });
-    await this.modules.callHook('onChoiceSelected', this.context, choice);
+    const previousState = this.snapshotState();
 
     const fragment = this.turns.applyChoice(choice, this._state.raw);
     if (!fragment) return { ok: false, reason: 'dead-end' };
@@ -210,8 +229,9 @@ export class ChronicaSession {
     this.pushHistory(fragment);
     this._fragment = fragment;
 
-    const stateAfter = serializeState(this._state.raw);
-    const stateChanged = stateBefore !== stateAfter;
+    const currentState = this.snapshotState();
+    const stateChanged =
+      serializeState(previousState.raw) !== serializeState(currentState.raw);
     const fragmentChanged = previousFragment?.uid !== fragment.uid;
 
     const result: TurnResult = {
@@ -223,10 +243,21 @@ export class ChronicaSession {
       fragmentChanged,
     };
 
+    await this.modules.callHook('onChoiceSelected', this.context, choice);
     await this.modules.callHook('onTurnResolved', this.context, result);
+
+    this.bus.emit('choice_selected', {
+      choice,
+      previousFragment,
+      resultingFragment: fragment,
+      currentFragment: fragment,
+      previousState: previousState.raw,
+      currentState: currentState.raw,
+      turnResult: result,
+    });
     this.bus.emit('turn_resolved', { result });
-    if (stateChanged) this.bus.emit('state_changed', { state: this._state.raw });
-    if (fragmentChanged) this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
+    this.bus.emit('state_changed', { state: this._state.raw });
+    this.bus.emit('fragment_changed', { from: previousFragment, to: fragment });
     return { ok: true, result };
   }
 
@@ -304,30 +335,65 @@ export class ChronicaSession {
   }
 
   /**
-   * Build a compat save envelope for the current session.
+   * Build a save envelope for the current session.
    *
    * Returns null before {@link ChronicaSession.start} has been called.
+   * Default format is `compat-v1` (`compatVersion: 1`). Pass
+   * `{ format: 'canonical-v2' }` to emit SAVE_SPEC canonical v2.
+   *
    * After building, emits `session_saved` with the moduleIds that contributed
    * a payload — subscribers can persist the save to storage from there.
    */
-  toSave(projectId: string): CompatSave | null {
+  toSave(projectId: string, options?: SessionToSaveOptions): SessionSaveEnvelope | null;
+  toSave(input: SessionToSaveInput): SessionSaveEnvelope | null;
+  toSave(
+    projectIdOrInput: string | SessionToSaveInput,
+    options?: SessionToSaveOptions,
+  ): SessionSaveEnvelope | null {
     if (!this._started) return null;
-    const modulePayloads = this.modules.saveAll(this.context);
+
+    const projectId =
+      typeof projectIdOrInput === 'string' ? projectIdOrInput : projectIdOrInput.projectId;
+    const format =
+      typeof projectIdOrInput === 'string'
+        ? (options?.format ?? 'compat-v1')
+        : (projectIdOrInput.format ?? 'compat-v1');
+
+    const moduleEntries = this.modules.saveAll(this.context);
+    const state = JSON.parse(serializeState(this._state.raw)) as Record<string, unknown>;
+    const history = [...this._history];
+    const savedAt = new Date().toISOString();
+    const fragmentId = this._fragment?.uid;
+    const moduleIds = moduleEntries?.map(entry => entry.id) ?? [];
+
+    if (format === 'canonical-v2') {
+      const save: CanonicalSaveV2 = {
+        formatVersion: CANONICAL_SAVE_FORMAT_VERSION,
+        projectId,
+        gameId: this.game.gameId,
+        contentHash: this.game.contentHash,
+        state,
+        history,
+        savedAt,
+      };
+      if (fragmentId) save.fragmentId = fragmentId;
+      if (moduleEntries) save.modules = moduleEntries;
+      this.bus.emit('session_saved', { moduleIds, save });
+      return save;
+    }
+
     const save: CompatSave = {
       compatVersion: COMPAT_SAVE_VERSION,
       projectId,
       gameId: this.game.gameId,
       contentHash: this.game.contentHash,
-      state: JSON.parse(serializeState(this._state.raw)),
-      history: [...this._history],
-      savedAt: new Date().toISOString(),
+      state,
+      history,
+      savedAt,
     };
-    if (this._fragment) save.fragmentId = this._fragment.uid;
-    if (modulePayloads) save.modules = modulePayloads;
-    this.bus.emit('session_saved', {
-      moduleIds: Object.keys(modulePayloads ?? {}),
-      save,
-    });
+    if (fragmentId) save.fragmentId = fragmentId;
+    if (moduleEntries) save.modules = moduleEntries;
+    this.bus.emit('session_saved', { moduleIds, save });
     return save;
   }
 
@@ -336,16 +402,15 @@ export class ChronicaSession {
    * no `fragmentId`) are supported — modules receive `undefined` payloads and
    * the fragment is re-resolved from `state.location`.
    */
-  async tryResume({ save }: SessionResumeInput): Promise<SessionResumeResult> {
-    if (!save.gameId?.trim() || save.gameId !== this.game.gameId) {
-      return { ok: false, reason: 'wrong-game' };
+  async tryResume({ save: raw }: SessionResumeInput): Promise<SessionResumeResult> {
+    const normalized = normalizeSaveEnvelope(raw, {
+      gameId: this.game.gameId,
+      contentHash: this.game.contentHash,
+    });
+    if (!normalized.ok) {
+      return { ok: false, reason: normalized.reason };
     }
-    if (!save.contentHash?.trim() || save.contentHash !== this.game.contentHash) {
-      return { ok: false, reason: 'stale-content' };
-    }
-    if (!save.state || typeof save.state !== 'object') {
-      return { ok: false, reason: 'corrupt-state' };
-    }
+    const save = normalized.envelope;
 
     const restored = new ChronicaState(
       createInitialState(
@@ -422,6 +487,13 @@ export class ChronicaSession {
       ...this._history,
       { locationId: fragment.locationId, title: fragment.title || fragment.locationId },
     ];
+  }
+
+  /** Deep-copy the live session state for turn snapshots and event payloads. */
+  private snapshotState(): ChronicaState {
+    const raw = deserializeState(JSON.parse(serializeState(this._state.raw)));
+    if (!raw) throw new Error('state snapshot failed');
+    return new ChronicaState(raw);
   }
 
   /**

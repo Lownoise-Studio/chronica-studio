@@ -13,6 +13,32 @@ describe('ChronicaEventBus', () => {
 
     bus.emit('choice_selected', {
       choice: { uid: 'c1', label: '', action: '', conditions: [] },
+      previousFragment: null,
+      resultingFragment: null,
+      currentFragment: null,
+      previousState: {
+        location: '',
+        instability: 0,
+        reality_layer: 0,
+        memory: {},
+        variables: {},
+        dialogueLineIndex: 0,
+      },
+      currentState: {
+        location: '',
+        instability: 0,
+        reality_layer: 0,
+        memory: {},
+        variables: {},
+        dialogueLineIndex: 0,
+      },
+      turnResult: {
+        source: 'choice',
+        fragment: null,
+        previousFragment: null,
+        stateChanged: false,
+        fragmentChanged: false,
+      },
     });
 
     expect(seen).toEqual(['a:c1', 'b:c1']);
