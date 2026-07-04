@@ -1,4 +1,5 @@
 import { ProjectAsset } from './types';
+import { findAssetById, isModelAsset } from './model-assets';
 
 export type AssetResolveIssue =
   | { kind: 'not-in-library'; reference: string; field: 'backgroundImage' | 'backgroundAudio' }
@@ -135,4 +136,54 @@ export function resolveSceneAudioUri(
     assets.filter(a => a.type === 'audio'),
     backgroundAudio,
   );
+}
+
+/** Resolve a stage object asset reference — images return URIs; models return undefined (no 3D renderer yet). */
+export function resolveStageObjectAssetUri(
+  assets: readonly ProjectAsset[],
+  assetName?: string,
+): string | undefined {
+  const ref = assetName?.trim();
+  if (!ref) return undefined;
+
+  const record = findAssetRecord(assets, ref);
+  if (!record) return undefined;
+  if (isModelAsset(record)) return undefined;
+
+  return resolveAssetUri(assets.filter(a => a.type === 'image'), ref);
+}
+
+/** Preview thumbnail for a model asset via previewImageAssetId, when configured. */
+export function resolveModelPreviewUri(
+  assets: readonly ProjectAsset[],
+  asset: Pick<ProjectAsset, 'previewImageAssetId' | 'name' | 'type'>,
+): string | undefined {
+  const previewId = asset.previewImageAssetId?.trim();
+  if (!previewId) return undefined;
+  const previewAsset = findAssetById(assets, previewId);
+  if (!previewAsset) return undefined;
+  return resolveAssetUri(assets.filter(a => a.type === 'image'), previewAsset.name);
+}
+
+export function resolveStageObjectPresentationUri(
+  assets: readonly ProjectAsset[],
+  assetName?: string,
+): { kind: 'image'; uri: string } | { kind: 'model'; previewUri?: string; label: string } | undefined {
+  const ref = assetName?.trim();
+  if (!ref) return undefined;
+
+  const record = findAssetRecord(assets, ref);
+  if (!record) return undefined;
+
+  if (isModelAsset(record)) {
+    return {
+      kind: 'model',
+      previewUri: resolveModelPreviewUri(assets, record),
+      label: record.name,
+    };
+  }
+
+  const uri = resolveAssetUri(assets.filter(a => a.type === 'image'), ref);
+  if (!uri) return undefined;
+  return { kind: 'image', uri };
 }

@@ -11,8 +11,9 @@ import { CompileResult } from './types';
  */
 export function compileProject(project: Project): CompileResult {
   const diagnostics = validateProject(project);
-  if (diagnostics.length > 0) {
-    return { ok: false, diagnostics };
+  const errors = diagnostics.filter(d => d.severity !== 'warning');
+  if (errors.length > 0) {
+    return { ok: false, diagnostics: errors };
   }
   return { ok: true, game: buildCompiledGame(project), warnings: analyzeProjectWarnings(project) };
 }

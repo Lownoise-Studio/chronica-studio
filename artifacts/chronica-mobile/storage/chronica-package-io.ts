@@ -19,6 +19,7 @@ import {
   type PackageExportDiagnostic,
   type PackageImportReason,
 } from '@/engine/chronica-package';
+import { packagePathForAsset } from '@/engine/model-assets';
 import { compileProject } from '@/engine/compiler';
 import { computeProjectContentHash } from '@/engine/compiler/build-compiled-game';
 import { migrateProject } from '@/engine/project-migration';
@@ -86,10 +87,11 @@ export async function extractPackageAssets(
     const normalized = normalizeZipPath(entryPath);
     if (!normalized.startsWith(ASSETS_PREFIX)) continue;
 
-    const filename = sanitizePackageFilename(normalized.slice(ASSETS_PREFIX.length));
+    const relativePath = normalized.slice(ASSETS_PREFIX.length);
+    const filename = sanitizePackageFilename(relativePath);
     if (!filename) continue;
 
-    const destUri = toLocalFileUri(`${dir}${filename}`);
+    const destUri = toLocalFileUri(`${dir}${relativePath.includes('/') ? relativePath.replace(/\//g, '_') : filename}`);
     if (!written.has(destUri)) {
       await writeBytes(destUri, zipData);
       written.add(destUri);
@@ -97,9 +99,11 @@ export async function extractPackageAssets(
 
     const keys = new Set([
       normalized,
-      `${ASSETS_PREFIX}${filename}`,
+      `${ASSETS_PREFIX}${relativePath}`,
       packageAssetPath(filename),
+      packagePathForAsset({ name: filename, type: relativePath.startsWith('models/') ? 'model' : 'image' }),
       filename,
+      relativePath,
     ]);
     for (const key of keys) {
       localUriByPackagePath[key] = destUri;

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
@@ -13,6 +13,16 @@ import { useChronicaRuntime } from '@/hooks/useChronicaRuntime';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { PlayerView } from '@/components/PlayerView';
+import { GameplayInventoryHud } from '@/components/player/GameplayInventoryHud';
+import { GameplayObjectiveTracker } from '@/components/player/GameplayObjectiveTracker';
+import { InteractionFeedbackToast } from '@/components/player/InteractionFeedbackToast';
+import {
+  buildHotspotInteractionFeedback,
+  cloneState,
+  getActiveObjectives,
+  getCollectedInventoryItems,
+  getCompletedObjectives,
+} from '@/engine/gameplay-feedback';
 import { AdventureInteractable, Choice, SceneHotspot } from '@/engine';
 import { isPlayerApp, getAppHomeHref } from '@/config/app-mode';
 import { loadRuntimeSaveResult, loadSaveFailureMessage, persistRuntimeSave, resumeRejectionMessage } from '@/runtime';
@@ -27,6 +37,7 @@ export default function PlayScreen() {
 
   const project = getProject(projectId!);
   const {
+    host,
     compileOk,
     compileDiagnostics,
     started,
@@ -53,6 +64,25 @@ export default function PlayScreen() {
   } = useChronicaRuntime(project);
 
   const sfx = useAdventureSfx(project?.assets ?? []);
+  const [interactionFeedback, setInteractionFeedback] = useState<string | null>(null);
+  const dismissFeedback = useCallback(() => setInteractionFeedback(null), []);
+
+  const collectedInventory = useMemo(
+    () => (project && gameState ? getCollectedInventoryItems(project, gameState) : []),
+    [project, gameState],
+  );
+  const playtestStageAuthoring = useMemo(() => {
+    if (!project || !currentFragment) return undefined;
+    return project.fragments.find(f => f.uid === currentFragment.uid)?.stageAuthoring;
+  }, [project, currentFragment?.uid]);
+  const activeObjectives = useMemo(
+    () => (project && gameState ? getActiveObjectives(project, gameState) : []),
+    [project, gameState],
+  );
+  const completedObjectives = useMemo(
+    () => (project && gameState ? getCompletedObjectives(project, gameState) : []),
+    [project, gameState],
+  );
 
   const playerMode = isPlayerApp();
   const exitPlay = () => {
@@ -128,6 +158,7 @@ export default function PlayScreen() {
 
   const handleHotspot = (hotspot: SceneHotspot) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const beforeState = gameState ? cloneState(gameState) : null;
     const result = activateHotspot(hotspot);
     if (!result.ok && result.reason === 'dead-end') {
       Alert.alert(
@@ -136,6 +167,14 @@ export default function PlayScreen() {
           ? 'Hotspot action did not resolve to a valid scene.\nCheck action steps and conditions.'
           : 'This hotspot has no valid action yet. Check the scene link.',
       );
+      return;
+    }
+    if (result.ok && project && beforeState) {
+      const afterState = host?.snapshot().state ?? null;
+      if (afterState) {
+        const message = buildHotspotInteractionFeedback(project, hotspot, beforeState, afterState);
+        if (message) setInteractionFeedback(message);
+      }
     }
   };
 
@@ -232,51 +271,69 @@ export default function PlayScreen() {
   }
 
   return (
-    <PlayerView
-      colors={colors}
-      advancedMode={advancedMode}
-      fragment={currentFragment}
-      visibleChoices={visibleChoices}
-      visibleHotspots={visibleHotspots}
-      visibleInteractables={visibleInteractables}
-      stageActors={stageActors}
-      history={history}
-      gameState={gameState}
-      backgroundUri={bgUri}
-      audioUri={audioUri}
-      assets={project.assets}
-      onBack={exitPlay}
-      onRestart={resetGame}
-      onSave={saveGame}
-      onChoose={handleChoice}
-      onActivateHotspot={handleHotspot}
-      onActivateInteractable={handleInteract}
-      onMovePlayer={handleMovePlayer}
-      onFootstep={handleFootstep}
-      dialogue={dialogue}
-      onAdvanceDialogue={handleAdvanceDialogue}
-      debugPanel={
-        advancedMode && gameState && currentFragment ? (
-          <View style={{ marginTop: 8, gap: 8 }}>
-            {assetWarnings.length > 0 && (
-              <View style={{ gap: 4 }}>
-                {assetWarnings.map((warning, i) => (
-                  <Text key={i} style={{ color: colors.destructive, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
-                    {warning.message}
-                  </Text>
-                ))}
-              </View>
-            )}
-            <DebugPanel
-              state={gameState}
-              onStateChange={updated => {
-                setRuntimeState(updated);
-              }}
-            />
-          </View>
-        ) : undefined
-      }
-    />
+    <View style={styles.fill}>
+      <PlayerView
+        colors={colors}
+        advancedMode={advancedMode}
+        fragment={currentFragment}
+        visibleChoices={visibleChoices}
+        visibleHotspots={visibleHotspots}
+        visibleInteractables={visibleInteractables}
+        stageActors={stageActors}
+        history={history}
+        gameState={gameState}
+        backgroundUri={bgUri}
+        audioUri={audioUri}
+        assets={project.assets}
+        onBack={exitPlay}
+        onRestart={resetGame}
+        onSave={saveGame}
+        onChoose={handleChoice}
+        onActivateHotspot={handleHotspot}
+        onActivateInteractable={handleInteract}
+        onMovePlayer={handleMovePlayer}
+        onFootstep={handleFootstep}
+        dialogue={dialogue}
+        onAdvanceDialogue={handleAdvanceDialogue}
+        stageAuthoring={playtestStageAuthoring}
+        debugPanel={
+          advancedMode && gameState && currentFragment ? (
+            <View style={{ marginTop: 8, gap: 8 }}>
+              {assetWarnings.length > 0 && (
+                <View style={{ gap: 4 }}>
+                  {assetWarnings.map((warning, i) => (
+                    <Text key={i} style={{ color: colors.destructive, fontSize: 11, fontFamily: 'Inter_400Regular' }}>
+                      {warning.message}
+                    </Text>
+                  ))}
+                </View>
+              )}
+              <DebugPanel
+                state={gameState}
+                onStateChange={updated => {
+                  setRuntimeState(updated);
+                }}
+              />
+            </View>
+          ) : undefined
+        }
+      />
+      {started && gameState && (
+        <>
+          <GameplayInventoryHud items={collectedInventory} colors={colors} />
+          <GameplayObjectiveTracker
+            active={activeObjectives}
+            completed={completedObjectives}
+            colors={colors}
+          />
+        </>
+      )}
+      <InteractionFeedbackToast
+        message={interactionFeedback}
+        colors={colors}
+        onDismiss={dismissFeedback}
+      />
+    </View>
   );
 }
 

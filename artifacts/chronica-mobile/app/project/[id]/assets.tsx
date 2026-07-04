@@ -12,9 +12,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { AssetItem } from '@/components/AssetItem';
+import { ModelAssetDetailPanel } from '@/components/ModelAssetDetailPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectAsset } from '@/engine/types';
 import { createId } from '@/engine/identity';
+import { isModelAsset, validateModelAssetsInLibrary } from '@/engine/model-assets';
 import { pickAndImportAssetFiles, pickAndImportAssetZip, type ImportAssetsResult } from '@/storage/asset-import-io';
 import { assetDir, ensureDir, copyFile, deleteFile, readText } from '@/storage/fileSystem';
 
@@ -22,9 +24,10 @@ export default function AssetsScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getProject, addAsset, deleteAsset } = useProjects();
+  const { getProject, addAsset, updateAsset, deleteAsset } = useProjects();
   const [importing, setImporting] = useState(false);
   const [previewAsset, setPreviewAsset] = useState<ProjectAsset | null>(null);
+  const [modelDetailAsset, setModelDetailAsset] = useState<ProjectAsset | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const audioRef = useRef<{ unload: () => void; pause: () => void; play: () => void } | null>(null);
 
@@ -134,7 +137,7 @@ export default function AssetsScreen() {
 
     Alert.alert(
       'Import Assets',
-      'Add images or audio from your device, or import a zip pack (e.g. Kenney UI packs).',
+      'Add images, audio, or portable 3D models (GLB/glTF) from your device, or import a zip pack.',
       [
         { text: 'Photo Library', onPress: () => { void handleImportImage(); } },
         { text: 'Files (multi-select)', onPress: () => { void handleImportFiles(); } },
@@ -154,12 +157,17 @@ export default function AssetsScreen() {
           if (asset) await deleteFile(asset.uri).catch(() => {});
           deleteAsset(projectId!, assetId);
           if (previewAsset?.id === assetId) closePreview();
+          if (modelDetailAsset?.id === assetId) setModelDetailAsset(null);
         },
       },
     ]);
   };
 
   const handlePreview = (asset: ProjectAsset) => {
+    if (isModelAsset(asset)) {
+      setModelDetailAsset(asset);
+      return;
+    }
     setPreviewAsset(asset);
     setAudioPlaying(false);
     if (audioRef.current) { audioRef.current.unload(); audioRef.current = null; }
@@ -171,7 +179,26 @@ export default function AssetsScreen() {
     setPreviewAsset(null);
   };
 
+  const closeModelDetail = () => setModelDetailAsset(null);
+
+  const handleModelUpdate = (assetId: string, patch: Partial<ProjectAsset>) => {
+    updateAsset(projectId!, assetId, patch);
+    setModelDetailAsset(prev => (prev?.id === assetId ? { ...prev, ...patch } : prev));
+  };
+
+  const handleImportModelPreview = (modelAsset: ProjectAsset, imageAsset: ProjectAsset) => {
+    const previewId = createId();
+    const preview = { ...imageAsset, id: previewId };
+    addAsset(projectId!, preview);
+    updateAsset(projectId!, modelAsset.id, { previewImageAssetId: previewId });
+    setModelDetailAsset(prev => (prev?.id === modelAsset.id ? { ...prev, previewImageAssetId: previewId } : prev));
+  };
+
   const assets = project?.assets ?? [];
+  const modelLibraryWarnings = project ? validateModelAssetsInLibrary(project) : [];
+  const resolvedModelDetail = modelDetailAsset
+    ? assets.find(a => a.id === modelDetailAsset.id) ?? modelDetailAsset
+    : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -181,6 +208,7 @@ export default function AssetsScreen() {
         renderItem={({ item }) => (
           <AssetItem
             asset={item}
+            assets={assets}
             onDelete={() => handleDelete(item.id, item.name)}
             onPreview={() => handlePreview(item)}
           />
@@ -191,16 +219,26 @@ export default function AssetsScreen() {
         }}
         ListHeaderComponent={
           assets.length > 0 ? (
-            <Text style={[styles.hint, { color: colors.mutedForeground }]}>
-              Tap an asset to preview. Import PNG, JPG, WEBP, GIF, MP3, WAV, OGG, M4A, or a zip pack.
-            </Text>
+            <View style={styles.headerBlock}>
+              <Text style={[styles.hint, { color: colors.mutedForeground }]}>
+                Tap an asset to preview. Import PNG, JPG, WEBP, GIF, MP3, WAV, OGG, M4A, GLB, GLTF, or a zip pack.
+              </Text>
+              {modelLibraryWarnings.length > 0 && (
+                <View style={[styles.libraryWarning, { borderColor: colors.destructive + '55', backgroundColor: colors.destructive + '10' }]}>
+                  <Feather name="alert-triangle" size={14} color={colors.destructive} />
+                  <Text style={[styles.libraryWarningText, { color: colors.foreground }]}>
+                    {modelLibraryWarnings.length} model asset{modelLibraryWarnings.length === 1 ? '' : 's'} need attention (missing preview or invalid extension).
+                  </Text>
+                </View>
+              )}
+            </View>
           ) : null
         }
         ListEmptyComponent={
           <EmptyState
             icon="image"
             title="No assets yet"
-            message="Import images and audio for scene backgrounds, music, and future character portraits. Zip packs from asset stores work too."
+            message="Import images, audio, and portable GLB/glTF models for scenes and stage composition. Zip packs from asset stores work too."
             actionLabel="Import Assets"
             onAction={showImportMenu}
           />
@@ -282,6 +320,18 @@ export default function AssetsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ModelAssetDetailPanel
+        visible={!!resolvedModelDetail}
+        asset={resolvedModelDetail}
+        assets={assets}
+        onClose={closeModelDetail}
+        onUpdate={patch => resolvedModelDetail && handleModelUpdate(resolvedModelDetail.id, patch)}
+        onImportPreviewImage={imageAsset => {
+          if (!resolvedModelDetail) return;
+          handleImportModelPreview(resolvedModelDetail, imageAsset);
+        }}
+      />
     </View>
   );
 }
@@ -321,7 +371,18 @@ function DataPreview({ asset }: { asset: ProjectAsset }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  hint: { fontSize: 12, fontFamily: 'Inter_400Regular', paddingHorizontal: 20, paddingBottom: 8 },
+  headerBlock: { gap: 8, paddingBottom: 4 },
+  hint: { fontSize: 12, fontFamily: 'Inter_400Regular', paddingHorizontal: 20 },
+  libraryWarning: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'flex-start',
+  },
+  libraryWarningText: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
   fab: {
     position: 'absolute', right: 20,
     width: 54, height: 54, borderRadius: 27,

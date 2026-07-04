@@ -1,5 +1,6 @@
 import { Fragment, Project, VariableValue } from './types';
 import { parseActionString } from './actions/parse-action';
+import { collectGameplayConditionSuggestions } from './gameplay-authoring';
 
 export type VariableType = 'boolean' | 'number' | 'string' | 'unknown';
 
@@ -16,7 +17,85 @@ export interface SceneOption {
   title: string;
 }
 
+const MEMORY_PATH_ASSIGN_RE = /memory\.(\w+)\s*(?:=|[+\-]=)/;
+
+function extractMemoryFlagsFromAction(action: string): string[] {
+  const flags: string[] = [];
+  const parsed = parseActionString(action);
+  if (parsed.ok) {
+    for (const step of parsed.steps) {
+      if (step.kind === 'set') flags.push(step.flag);
+      if (step.kind === 'clear') flags.push(step.flag);
+    }
+  }
+  return flags;
+}
+
+function extractMemoryPathsFromEffect(effect: string): string[] {
+  const m = effect.trim().match(MEMORY_PATH_ASSIGN_RE);
+  return m ? [m[1]] : [];
+}
+
+/** Collect memory flags from initialMemory, set/clear actions, and memory.* effects. */
+export function extractProjectMemoryFlags(
+  project: Pick<Project, 'fragments' | 'initialMemory'>,
+): string[] {
+  const flags = new Set<string>();
+
+  for (const [key, value] of Object.entries(project.initialMemory ?? {})) {
+    if (key.trim()) flags.add(key.trim());
+    void value;
+  }
+
+  for (const frag of project.fragments) {
+    for (const effect of frag.effects) {
+      for (const key of extractMemoryPathsFromEffect(effect)) flags.add(key);
+    }
+    for (const choice of frag.choices) {
+      for (const key of extractMemoryFlagsFromAction(choice.action ?? '')) flags.add(key);
+    }
+    for (const hotspot of frag.hotspots ?? []) {
+      for (const key of extractMemoryFlagsFromAction(hotspot.action ?? '')) flags.add(key);
+      for (const key of extractMemoryPathsFromEffect(hotspot.action ?? '')) flags.add(key);
+    }
+  }
+
+  return Array.from(flags).sort();
+}
+
 const VARIABLE_ASSIGN_RE = /variables\.(\w+)\s*(?:[+\-*]=|=)\s*(.+)/;
+
+export interface GameplaySuggestion {
+  label: string;
+  value: string;
+}
+
+/** Merge variables, memory flags, and gameplay catalog entries into condition chips. */
+export function buildGameplaySuggestions(project: Project): GameplaySuggestion[] {
+  const suggestions: GameplaySuggestion[] = [];
+  const seen = new Set<string>();
+
+  const add = (label: string, value: string) => {
+    const key = value.trim();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    suggestions.push({ label, value: key });
+  };
+
+  for (const variable of extractProjectVariables(project)) {
+    add(variable.name, buildUnlockCondition(variable.name, variable.type, variable.rawValue));
+  }
+
+  for (const flag of extractProjectMemoryFlags(project)) {
+    add(`memory.${flag}`, `memory.${flag} == true`);
+  }
+
+  for (const value of collectGameplayConditionSuggestions(project)) {
+    add(value, value);
+  }
+
+  return suggestions.sort((a, b) => a.label.localeCompare(b.label));
+}
 
 function inferType(rawVal: string, jsValue?: VariableValue): VariableType {
   if (jsValue !== undefined) {

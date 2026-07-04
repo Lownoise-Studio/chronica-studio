@@ -12,10 +12,21 @@ import { ArrayEditor, ArrayEditorSuggestion } from '@/components/ArrayEditor';
 import { ChoiceEditor } from '@/components/ChoiceEditor';
 import { DialogueEditor } from '@/components/DialogueEditor';
 import { HotspotEditor } from '@/components/HotspotEditor';
-import { Choice, DialogueLine, SceneHotspot } from '@/engine/types';
+import { StageActorEditor } from '@/components/StageActorEditor';
+import { StageComposer } from '@/components/stage/StageComposer';
+import { SceneInspectorPanel } from '@/components/stage/SceneInspectorPanel';
+import { GameplayScenePreview } from '@/components/GameplayScenePreview';
+import { GameplayComponentBrowser } from '@/components/GameplayComponentBrowser';
+import { GameplayTemplatePicker } from '@/components/GameplayTemplatePicker';
+import { getObjectForHotspot } from '@/engine/stage-presentation';
+import { Choice, DialogueLine, SceneHotspot, StageActor, StageComposition } from '@/engine/types';
+import { emptyStageComposition } from '@/engine/stage-authoring';
+import { applyGameplayComponentToFragment, mergeGameplayComponentPatch } from '@/engine/gameplay-components';
+import { applyGameplayTemplateToFragment, mergeGameplayTemplateCatalogs } from '@/engine/gameplay-templates';
 import { getFragmentDialogueLines, syncFragmentTextFromDialogue } from '@/engine/dialogue';
 import { isValidCondition, isValidEffect } from '@/engine/expression-evaluator';
 import {
+  buildGameplaySuggestions,
   buildUnlockCondition,
   extractProjectVariables,
   isVariableInConditions,
@@ -25,7 +36,7 @@ export default function FragmentEditorScreen() {
   const { id: projectId, uid } = useLocalSearchParams<{ id: string; uid: string }>();
   const colors = useColors();
   const navigation = useNavigation();
-  const { getProject, updateFragment } = useProjects();
+  const { getProject, updateFragment, updateProject } = useProjects();
   const { advancedMode } = useAdvancedMode();
 
   const project = getProject(projectId!);
@@ -39,7 +50,13 @@ export default function FragmentEditorScreen() {
   const [effects, setEffects] = useState<string[]>([]);
   const [choices, setChoices] = useState<Choice[]>([]);
   const [hotspots, setHotspots] = useState<SceneHotspot[]>([]);
+  const [stageActors, setStageActors] = useState<StageActor[]>([]);
   const [bgImage, setBgImage] = useState('');
+  const [stageAuthoring, setStageAuthoring] = useState<StageComposition>(emptyStageComposition());
+  const [focusedHotspotUid, setFocusedHotspotUid] = useState<string | null>(null);
+  const [focusedStageObjectUid, setFocusedStageObjectUid] = useState<string | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [componentBrowserOpen, setComponentBrowserOpen] = useState(false);
 
   useEffect(() => {
     if (fragment) {
@@ -51,17 +68,27 @@ export default function FragmentEditorScreen() {
       setEffects([...fragment.effects]);
       setChoices([...fragment.choices]);
       setHotspots([...(fragment.hotspots ?? [])]);
+      setStageActors([...(fragment.stageActors ?? [])]);
       setBgImage(fragment.backgroundImage ?? '');
+      setStageAuthoring(fragment.stageAuthoring ?? emptyStageComposition());
     }
   }, [fragment?.uid]);
 
   const variableSuggestions = useMemo((): ArrayEditorSuggestion[] => {
     if (!project) return [];
-    return extractProjectVariables(project).map(v => ({
+    const catalog = buildGameplaySuggestions(project).map(s => ({
+      label: s.label,
+      value: s.value,
+      disabled: false,
+    }));
+    const variables = extractProjectVariables(project).map(v => ({
       label: v.name,
       value: buildUnlockCondition(v.name, v.type, v.rawValue),
       disabled: isVariableInConditions(v.name, conditions),
     }));
+    const merged = new Map<string, ArrayEditorSuggestion>();
+    for (const item of [...catalog, ...variables]) merged.set(item.value, item);
+    return Array.from(merged.values());
   }, [project, conditions]);
 
   const conditionErrors = conditions.filter(c => c.trim() && !isValidCondition(c));
@@ -80,7 +107,11 @@ export default function FragmentEditorScreen() {
       effects,
       choices,
       hotspots,
+      stageActors: stageActors.length ? stageActors : undefined,
       backgroundImage: bgImage.trim() || undefined,
+      stageAuthoring: JSON.stringify(stageAuthoring) !== JSON.stringify(emptyStageComposition())
+        ? stageAuthoring
+        : undefined,
     });
     router.back();
   };
@@ -94,7 +125,7 @@ export default function FragmentEditorScreen() {
         </TouchableOpacity>
       ),
     });
-  }, [title, locationId, priority, dialogue, conditions, effects, choices, hotspots, bgImage]);
+  }, [title, locationId, priority, dialogue, conditions, effects, choices, hotspots, stageActors, bgImage, stageAuthoring]);
 
   if (!project || !fragment) {
     return (
@@ -105,6 +136,30 @@ export default function FragmentEditorScreen() {
   }
 
   const imageAssets = project.assets.filter(a => a.type === 'image').map(a => a.name);
+
+  const linkedStageObject = focusedHotspotUid
+    ? getObjectForHotspot(stageAuthoring, focusedHotspotUid)
+    : undefined;
+  const linkedHotspot = focusedStageObjectUid
+    ? hotspots.find(h => {
+      const object = stageAuthoring.objects.find(o => o.uid === focusedStageObjectUid);
+      const ref = object?.hotspotRef ?? object?.interactionRef;
+      return ref && h.uid === ref;
+    })
+    : undefined;
+
+  const inspectorFragment = {
+    ...fragment,
+    hotspots,
+    stageActors,
+    stageAuthoring,
+    choices,
+    conditions,
+    effects,
+    dialogue,
+    text: syncFragmentTextFromDialogue(dialogue),
+    backgroundImage: bgImage,
+  };
 
   return (
     <ScrollView
@@ -246,12 +301,83 @@ export default function FragmentEditorScreen() {
 
       <View style={[styles.div, { backgroundColor: colors.border }]} />
 
+      <StageComposer
+        composition={stageAuthoring}
+        onChange={setStageAuthoring}
+        backgroundImage={bgImage}
+        assets={project.assets}
+        hotspots={hotspots}
+        stageActors={stageActors}
+        selectedObjectUid={focusedStageObjectUid}
+        highlightedHotspotUid={focusedHotspotUid}
+        onSelectObject={uid => {
+          setFocusedStageObjectUid(uid);
+          if (!uid) return;
+          const object = stageAuthoring.objects.find(o => o.uid === uid);
+          const ref = object?.hotspotRef ?? object?.interactionRef;
+          if (ref) setFocusedHotspotUid(ref);
+        }}
+        onSelectHotspot={setFocusedHotspotUid}
+        conditionSuggestions={variableSuggestions}
+      />
+
+      <View style={[styles.div, { backgroundColor: colors.border }]} />
+
+      <StageActorEditor
+        stageActors={stageActors}
+        onChange={setStageActors}
+        assets={project.assets}
+        characters={project.characters ?? []}
+        npcProfiles={project.npcProfiles ?? []}
+        conditionSuggestions={variableSuggestions}
+      />
+
+      <View style={[styles.div, { backgroundColor: colors.border }]} />
+
+      <TouchableOpacity
+        style={[styles.templateBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+        onPress={() => setComponentBrowserOpen(true)}
+      >
+        <Feather name="layers" size={15} color={colors.primary} />
+        <Text style={[styles.templateBtnText, { color: colors.primary }]}>Add gameplay component</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.templateBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+        onPress={() => setTemplatePickerOpen(true)}
+      >
+        <Feather name="zap" size={15} color={colors.primary} />
+        <Text style={[styles.templateBtnText, { color: colors.primary }]}>Add gameplay template</Text>
+      </TouchableOpacity>
+
       <HotspotEditor
         hotspots={hotspots}
         onChange={setHotspots}
         fragments={project.fragments}
         backgroundImage={bgImage}
         assets={project.assets}
+        inventory={project.inventory ?? []}
+        selectedUid={focusedHotspotUid}
+        onSelectedUidChange={uid => {
+          setFocusedHotspotUid(uid);
+          if (!uid) return;
+          const object = getObjectForHotspot(stageAuthoring, uid);
+          if (object) setFocusedStageObjectUid(object.uid);
+        }}
+        linkedStageObjectLabel={linkedStageObject?.label || linkedStageObject?.asset}
+      />
+
+      <View style={[styles.div, { backgroundColor: colors.border }]} />
+
+      <GameplayScenePreview project={project} fragment={inspectorFragment} />
+
+      <SceneInspectorPanel
+        fragment={inspectorFragment}
+        project={project}
+        focusedStageObjectUid={focusedStageObjectUid}
+        focusedHotspotUid={focusedHotspotUid}
+        linkedHotspotLabel={linkedHotspot?.label}
+        linkedStageObjectLabel={linkedStageObject?.label || linkedStageObject?.asset}
       />
 
       <TouchableOpacity
@@ -262,6 +388,55 @@ export default function FragmentEditorScreen() {
         <Feather name="check" size={17} color="#fff" />
         <Text style={styles.saveBtnText}>Save Scene</Text>
       </TouchableOpacity>
+
+      {project && (
+        <GameplayComponentBrowser
+          visible={componentBrowserOpen}
+          project={project}
+          includeScenePatches
+          onClose={() => setComponentBrowserOpen(false)}
+          onInsert={({ result }) => {
+            const merged = mergeGameplayComponentPatch(project, result.patch);
+            updateProject(project.id, merged);
+            const patched = applyGameplayComponentToFragment(
+              { ...fragment!, hotspots, stageActors },
+              result.patch,
+            );
+            if (patched.hotspots) setHotspots(patched.hotspots);
+            if (patched.stageActors) setStageActors(patched.stageActors);
+            if (result.patch.suggestedConditions?.length) {
+              setConditions(prev => [...prev, ...result.patch.suggestedConditions!.filter(c => !prev.includes(c))]);
+            }
+            if (result.patch.suggestedEffects?.length) {
+              setEffects(prev => [...prev, ...result.patch.suggestedEffects!.filter(e => !prev.includes(e))]);
+            }
+          }}
+        />
+      )}
+
+      {project && (
+        <GameplayTemplatePicker
+          visible={templatePickerOpen}
+          project={project}
+          includeScenePatches
+          onClose={() => setTemplatePickerOpen(false)}
+          onApply={({ result }) => {
+            const merged = mergeGameplayTemplateCatalogs(project, result.catalog);
+            updateProject(project.id, merged);
+            if (result.fragment) {
+              const patched = applyGameplayTemplateToFragment(
+                { ...fragment!, hotspots, stageActors },
+                result.fragment,
+              );
+              if (patched.hotspots) setHotspots(patched.hotspots);
+              if (patched.stageActors) setStageActors(patched.stageActors);
+              if (result.fragment.suggestedConditions?.length) {
+                setConditions(prev => [...prev, ...result.fragment!.suggestedConditions!.filter(c => !prev.includes(c))]);
+              }
+            }
+          }}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -280,6 +455,8 @@ const styles = StyleSheet.create({
   div: { height: 1 },
   chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, marginRight: 6 },
   chipText: { fontSize: 12, fontFamily: 'Inter_400Regular' },
+  templateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingVertical: 12 },
+  templateBtnText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   saveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 10, paddingVertical: 14, marginTop: 8 },
   saveBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Inter_600SemiBold' },
 });

@@ -101,13 +101,26 @@ interface ProjectsContextType {
   hasOnboarded: boolean;
   setHasOnboarded: (v: boolean) => void;
   createProject: (title: string, description: string) => Project;
-  updateProject: (id: string, updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory' | 'characters'>>) => void;
+  updateProject: (id: string, updates: Partial<Pick<Project,
+    | 'title'
+    | 'description'
+    | 'startLocation'
+    | 'initialVariables'
+    | 'initialMemory'
+    | 'characters'
+    | 'inventory'
+    | 'objectives'
+    | 'worldState'
+    | 'gameplayVariables'
+    | 'npcProfiles'
+  >>) => void;
   duplicateProject: (id: string) => Project | null;
   deleteProject: (id: string) => void;
   addFragment: (projectId: string, fragment: Omit<Fragment, 'uid'>) => Fragment;
   updateFragment: (projectId: string, uid: string, updates: Partial<Fragment>) => void;
   deleteFragment: (projectId: string, uid: string) => void;
   addAsset: (projectId: string, asset: ProjectAsset) => void;
+  updateAsset: (projectId: string, assetId: string, updates: Partial<ProjectAsset>) => void;
   deleteAsset: (projectId: string, assetId: string) => void;
   getProject: (id: string) => Project | undefined;
   exportProject: (id: string) => string | null;
@@ -259,7 +272,19 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
 
   const updateProject = (
     id: string,
-    updates: Partial<Pick<Project, 'title' | 'description' | 'startLocation' | 'initialVariables' | 'initialMemory' | 'characters'>>
+    updates: Partial<Pick<Project,
+      | 'title'
+      | 'description'
+      | 'startLocation'
+      | 'initialVariables'
+      | 'initialMemory'
+      | 'characters'
+      | 'inventory'
+      | 'objectives'
+      | 'worldState'
+      | 'gameplayVariables'
+      | 'npcProfiles'
+    >>
   ) => persist(projects.map(p => p.id === id ? { ...p, ...updates, updatedAt: nowIso() } : p), [id]);
 
   const duplicateProject = (id: string): Project | null => {
@@ -324,6 +349,15 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
   const addAsset = (projectId: string, asset: ProjectAsset) =>
     persist(projects.map(p => p.id === projectId
       ? { ...p, assets: [...p.assets, asset], updatedAt: nowIso() } : p), [projectId]);
+
+  const updateAsset = (projectId: string, assetId: string, updates: Partial<ProjectAsset>) =>
+    persist(projects.map(p => p.id === projectId
+      ? {
+        ...p,
+        updatedAt: nowIso(),
+        assets: p.assets.map(a => (a.id === assetId ? { ...a, ...updates } : a)),
+      }
+      : p), [projectId]);
 
   const deleteAsset = (projectId: string, assetId: string) =>
     persist(projects.map(p => p.id === projectId
@@ -397,7 +431,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       projects, isLoaded, hasOnboarded, setHasOnboarded,
       createProject, updateProject, duplicateProject, deleteProject,
       addFragment, updateFragment, deleteFragment,
-      addAsset, deleteAsset, getProject,
+      addAsset, updateAsset, deleteAsset, getProject,
       exportProject, importProject, importProjectPackage, getValidationErrors, getValidationWarnings,
       resetOnboarding, removeDemoProjects, clearLibrary, resetAppState,
     }}>

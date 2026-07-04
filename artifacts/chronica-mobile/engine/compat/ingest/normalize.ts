@@ -36,6 +36,7 @@ const KNOWN_CHARACTER_FIELDS = new Set([
 ]);
 const KNOWN_ASSET_FIELDS = new Set([
   'id', 'name', 'type', 'uri', 'mimeType', 'size', 'importedAt',
+  'source', 'license', 'previewImageAssetId',
 ]);
 const KNOWN_ACTOR_FIELDS = new Set([
   'uid', 'characterId', 'label', 'asset',
@@ -278,7 +279,7 @@ export function normalizeAsset(
     return null;
   }
   const type = raw.type;
-  if (type !== 'image' && type !== 'audio' && type !== 'data') {
+  if (type !== 'image' && type !== 'audio' && type !== 'data' && type !== 'model') {
     reports.push({ kind: 'asset', path, reason: `unsupported asset type: ${String(type)}` });
     return null;
   }
@@ -291,5 +292,8 @@ export function normalizeAsset(
     mimeType: typeof raw.mimeType === 'string' ? raw.mimeType : '',
     size: typeof raw.size === 'number' ? raw.size : 0,
     importedAt: typeof raw.importedAt === 'string' ? raw.importedAt : new Date().toISOString(),
+    source: typeof raw.source === 'string' ? raw.source : undefined,
+    license: typeof raw.license === 'string' ? raw.license : undefined,
+    previewImageAssetId: typeof raw.previewImageAssetId === 'string' ? raw.previewImageAssetId : undefined,
   };
 }

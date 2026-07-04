@@ -36,7 +36,10 @@ import {
   shouldShowSceneBackground,
 } from '@/engine/player-presentation';
 import { useSceneAudio } from '@/components/player/useSceneAudio';
+import { StagePresentationOverlay } from '@/components/stage/StagePresentationOverlay';
+import { shouldShowPlaytestPresentationOverlay } from '@/engine/stage-presentation';
 import type { DialoguePresentation } from '@/engine/dialogue-presentation';
+import type { StageComposition } from '@/engine/types';
 
 export type PlayerViewColors = {
   background: string;
@@ -73,6 +76,8 @@ export type PlayerViewProps = {
   dialogue?: DialoguePresentation | null;
   onAdvanceDialogue?: () => void;
   debugPanel?: React.ReactNode;
+  /** Editor-only stage composition from project (CompiledGame strips this). */
+  stageAuthoring?: StageComposition;
 };
 
 export function PlayerView({
@@ -99,10 +104,14 @@ export function PlayerView({
   dialogue,
   onAdvanceDialogue,
   debugPanel,
+  stageAuthoring,
 }: PlayerViewProps) {
   const insets = useSafeAreaInsets();
   const [showHistory, setShowHistory] = React.useState(false);
   const [bgLoadFailed, setBgLoadFailed] = React.useState(false);
+  const [stageLayout, setStageLayout] = React.useState({ width: 0, height: 0 });
+
+  const showPresentationOverlay = shouldShowPlaytestPresentationOverlay(stageAuthoring, true);
 
   React.useEffect(() => {
     setBgLoadFailed(false);
@@ -365,8 +374,18 @@ export function PlayerView({
             onMove={onMovePlayer}
             onInteract={onActivateInteractable}
             onFootstep={onFootstep}
+            onLayout={setStageLayout}
             overlay={
               <View pointerEvents="box-none" style={styles.adventureRuntimeOverlay}>
+                {showPresentationOverlay && (
+                  <StagePresentationOverlay
+                    composition={stageAuthoring}
+                    assets={assets}
+                    previewState={gameState}
+                    width={stageLayout.width}
+                    height={stageLayout.height}
+                  />
+                )}
                 {dialogueBubble}
                 {choicesOverlay}
                 {endCard}
@@ -387,7 +406,13 @@ export function PlayerView({
     return (
       <View style={[styles.fill, { backgroundColor: colors.background }]}>
         <View style={styles.adventureRoot}>
-          <View style={[styles.adventureStage, { flex: ADVENTURE_STAGE_FLEX }]}>
+          <View
+            style={[styles.adventureStage, { flex: ADVENTURE_STAGE_FLEX }]}
+            onLayout={e => {
+              const { width, height } = e.nativeEvent.layout;
+              setStageLayout({ width, height });
+            }}
+          >
             <Image
               key={bgUri}
               source={{ uri: bgUri }}
@@ -397,6 +422,15 @@ export function PlayerView({
               onError={() => setBgLoadFailed(true)}
             />
             <View pointerEvents="none" style={styles.adventureStageScrim} />
+            {showPresentationOverlay && (
+              <StagePresentationOverlay
+                composition={stageAuthoring}
+                assets={assets}
+                previewState={gameState}
+                width={stageLayout.width}
+                height={stageLayout.height}
+              />
+            )}
             {stageActors.length > 0 && (
               <SceneStageActors actors={stageActors} />
             )}

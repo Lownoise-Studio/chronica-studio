@@ -135,6 +135,13 @@ export default function ProjectScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
+          onPress={() => router.push(`/project/${project.id}/gameplay` as any)}
+          activeOpacity={0.8}
+        >
+          <Feather name="layers" size={18} color={colors.foreground} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: colors.secondary }]}
           onPress={() => router.push(`/project/${project.id}/characters` as any)}
           activeOpacity={0.8}
         >

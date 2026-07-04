@@ -1,8 +1,10 @@
 import { sanitizePackageFilename } from '@/engine/chronica-package';
+import { mimeTypeForModelFilename } from '@/engine/model-assets';
 import type { ProjectAsset } from '@/engine/types';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
 const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']);
+const MODEL_EXTENSIONS = new Set(['glb', 'gltf']);
 
 /** Per-file limit for a single image or audio import. */
 export const MAX_ASSET_FILE_BYTES = 25 * 1024 * 1024;
@@ -15,7 +17,7 @@ export const MAX_ASSET_IMPORT_COUNT = 250;
 
 export type ImportableAssetFile = {
   name: string;
-  type: 'image' | 'audio';
+  type: 'image' | 'audio' | 'model';
   bytes: Uint8Array;
   mimeType: string;
 };
@@ -41,6 +43,8 @@ const MIME_BY_EXT: Record<string, string> = {
   m4a: 'audio/mp4',
   aac: 'audio/aac',
   flac: 'audio/flac',
+  glb: 'model/gltf-binary',
+  gltf: 'model/gltf+json',
 };
 
 export function sanitizeAssetFilename(filename: string): string {
@@ -68,21 +72,24 @@ export function assetNameFromZipPath(path: string): string {
   return sanitizeAssetFilename(`${parent}_${fileName}`);
 }
 
-export function inferAssetTypeFromFilename(filename: string): 'image' | 'audio' | null {
+export function inferAssetTypeFromFilename(filename: string): 'image' | 'audio' | 'model' | null {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   if (IMAGE_EXTENSIONS.has(ext)) return 'image';
   if (AUDIO_EXTENSIONS.has(ext)) return 'audio';
+  if (MODEL_EXTENSIONS.has(ext)) return 'model';
   return null;
 }
 
-export function inferAssetType(filename: string, mimeType?: string | null): 'image' | 'audio' | null {
+export function inferAssetType(filename: string, mimeType?: string | null): 'image' | 'audio' | 'model' | null {
+  if (mimeType === 'model/gltf-binary' || mimeType === 'model/gltf+json') return 'model';
   if (mimeType?.startsWith('image/')) return 'image';
   if (mimeType?.startsWith('audio/')) return 'audio';
   return inferAssetTypeFromFilename(filename);
 }
 
-export function mimeTypeForAssetFilename(filename: string, type: 'image' | 'audio'): string {
+export function mimeTypeForAssetFilename(filename: string, type: 'image' | 'audio' | 'model'): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (type === 'model') return mimeTypeForModelFilename(filename);
   return MIME_BY_EXT[ext] ?? (type === 'image' ? 'image/png' : 'audio/mpeg');
 }
 
@@ -138,7 +145,7 @@ export function validateAssetImportPlan(plan: AssetImportPlan): AssetImportValid
     return {
       ok: false,
       error: plan.skipped > 0
-        ? 'No supported image or audio files were found in this import. Use PNG, JPG, WEBP, GIF, MP3, WAV, OGG, or M4A.'
+        ? 'No supported image, audio, or model files were found in this import. Use PNG, JPG, WEBP, GIF, MP3, WAV, OGG, M4A, GLB, or GLTF.'
         : 'No files were found to import.',
     };
   }

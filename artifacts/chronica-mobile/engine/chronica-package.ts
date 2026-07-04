@@ -1,4 +1,5 @@
 import { normalizeAssetUri } from './asset-resolver';
+import { collectPackageAssetNames, packagePathForAsset } from './model-assets';
 import { computeProjectContentHash } from './compiler/build-compiled-game';
 import {
   CHRONICA_SCHEMA_VERSION_KNOWN_MAX,
@@ -254,24 +255,7 @@ export function findUnlistedPackageAssets(
 }
 
 export function collectReferencedAssetNames(project: Project): string[] {
-  const names = new Set<string>();
-  for (const frag of project.fragments) {
-    if (frag.backgroundImage?.trim()) names.add(frag.backgroundImage.trim());
-    if (frag.backgroundAudio?.trim()) names.add(frag.backgroundAudio.trim());
-    for (const actor of frag.stageActors ?? []) {
-      if (actor.asset?.trim()) names.add(actor.asset.trim());
-      for (const expression of actor.expressions ?? []) {
-        if (expression.asset?.trim()) names.add(expression.asset.trim());
-      }
-    }
-  }
-  for (const character of project.characters ?? []) {
-    if (character.defaultPortrait?.trim()) names.add(character.defaultPortrait.trim());
-    for (const expression of character.expressions ?? []) {
-      if (expression.portrait?.trim()) names.add(expression.portrait.trim());
-    }
-  }
-  return [...names];
+  return collectPackageAssetNames(project);
 }
 
 export function findAssetByName(assets: ProjectAsset[], name: string): ProjectAsset | undefined {
@@ -280,7 +264,8 @@ export function findAssetByName(assets: ProjectAsset[], name: string): ProjectAs
     ?? assets.find(a => a.name.toLowerCase() === trimmed.toLowerCase());
 }
 
-export function packageAssetPath(filename: string): string {
+export function packageAssetPath(filename: string, type?: ProjectAsset['type']): string {
+  if (type === 'model') return packagePathForAsset({ name: filename, type: 'model' });
   const safe = sanitizePackageFilename(filename);
   return `${ASSETS_PREFIX}${safe}`;
 }
@@ -524,7 +509,7 @@ export function planChronicaPackage(
     const asset = findAssetByName(project.assets, name);
     if (!asset || !asset.uri?.trim() || !fileExists(asset.uri)) continue;
     assetFiles.push({
-      packagePath: packageAssetPath(asset.name),
+      packagePath: packagePathForAsset(asset),
       asset,
       sourceUri: asset.uri,
     });
@@ -548,13 +533,14 @@ export function hydrateImportedPackageProject(
     const filename = safeName(asset.name);
     const pkgPath = asset.uri?.startsWith(ASSETS_PREFIX)
       ? normalizePackagePath(asset.uri)
-      : packageAssetPath(asset.name);
+      : packagePathForAsset(asset);
 
     const localUri = lookupLocalUri(
       localUriByPackagePath,
       pkgPath,
-      packageAssetPath(asset.name),
-      packageAssetPath(filename),
+      packagePathForAsset(asset),
+      packageAssetPath(asset.name, asset.type),
+      packageAssetPath(filename, asset.type),
       filename,
       asset.name,
       asset.uri ?? '',

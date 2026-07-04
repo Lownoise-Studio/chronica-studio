@@ -44,13 +44,37 @@ export interface SceneHotspot {
   /** Same action grammar as choices — compiled to ActionStep[] at build time. */
   action: string;
   conditions: string[];
+  /** Authoring: inspect, collect item, use item, or custom trigger. */
+  interactionKind?: HotspotInteractionKind;
+  /** Authoring: one-shot hides after first use via suggested memory flag. */
+  repeatMode?: HotspotRepeatMode;
+  /** When false, authoring treats the hotspot as disabled (adds blocking condition). */
+  enabled?: boolean;
+  /** Inventory item id for collect / use-item interactions. */
+  itemId?: string;
+  /** Short inspect copy — authoring metadata for inspect interactions. */
+  inspectText?: string;
+  /** Item id required in inventory for use-item interactions. */
+  requiredItemId?: string;
 }
+
+export type HotspotInteractionKind = 'inspect' | 'collect' | 'use-item' | 'trigger' | 'custom';
+
+export type HotspotRepeatMode = 'one-shot' | 'repeatable';
 
 /** Sprite placed on the scene stage (0–1 coordinates; x/y = horizontal center and feet line). */
 export interface StageActorExpression {
   id: string;
   asset: string;
 }
+
+export type StageActorGameplayState =
+  | 'idle'
+  | 'following'
+  | 'hidden'
+  | 'hostile'
+  | 'friendly'
+  | 'disabled';
 
 export interface StageActor {
   uid: string;
@@ -72,6 +96,10 @@ export interface StageActor {
   expressionFromVariable?: string;
   /** All conditions must pass for this actor to render. */
   visibleWhen?: string[];
+  /** Authoring: default NPC / prop gameplay posture. */
+  gameplayState?: StageActorGameplayState;
+  /** variables.npc_state path storing the live posture value. */
+  stateVariable?: string;
 }
 
 /** Kind of interactable in the top-down adventure runtime. */
@@ -168,6 +196,76 @@ export interface Fragment {
   backgroundAudio?: string;
   /** Top-down playable room data. When present, the runtime renders the adventure stage. */
   adventure?: SceneAdventure;
+  /** Editor-only visual composition — stripped before compile/runtime. */
+  stageAuthoring?: StageComposition;
+}
+
+/** Visual layer for editor stage objects (authoring only). */
+export type StageLayer =
+  | 'background'
+  | 'foreground'
+  | 'props'
+  | 'effects'
+  | 'lighting'
+  | 'ui-guides';
+
+/** Editor lighting preset metadata — not applied at runtime. */
+export type LightingPreset =
+  | 'morning'
+  | 'day'
+  | 'sunset'
+  | 'night'
+  | 'indoor'
+  | 'cave';
+
+export interface StageCameraGuides {
+  safeArea?: boolean;
+  aspectGuide?: boolean;
+  centerGuides?: boolean;
+  ruleOfThirds?: boolean;
+}
+
+/** Editor-placed visual object — gameplay still uses hotspots/stage actors. */
+export interface StageObject {
+  uid: string;
+  label?: string;
+  asset: string;
+  /** Horizontal center, 0–1. */
+  x: number;
+  /** Vertical center, 0–1. */
+  y: number;
+  scale?: number;
+  /** Degrees clockwise. */
+  rotation?: number;
+  layer: StageLayer;
+  zIndex?: number;
+  visibleWhen?: string[];
+  /** Linked hotspot uid for visual/editor cross-reference. */
+  hotspotRef?: string;
+  /** @deprecated Use hotspotRef — kept for backward compatibility. */
+  interactionRef?: string;
+  /** Editor-only presentation transition metadata. */
+  presentation?: StagePresentationMetadata;
+  locked?: boolean;
+  /** Hidden in editor canvas only. */
+  hidden?: boolean;
+  groupId?: string;
+}
+
+export interface StageComposition {
+  objects: StageObject[];
+  lightingPreset?: LightingPreset;
+  cameraGuides?: StageCameraGuides;
+  /** Playtest-only presentation overlay toggle (editor metadata). */
+  showPresentationOverlay?: boolean;
+}
+
+export type PresentationTransitionKind = 'fade-in' | 'fade-out' | 'slide' | 'zoom';
+
+/** Editor/presentation metadata — never affects runtime state. */
+export interface StagePresentationMetadata {
+  enter?: PresentationTransitionKind;
+  exit?: PresentationTransitionKind;
 }
 
 export interface ChronicaState {
@@ -189,11 +287,82 @@ export interface ChronicaState {
 export interface ProjectAsset {
   id: string;
   name: string;
-  type: 'image' | 'audio' | 'data';
+  type: 'image' | 'audio' | 'data' | 'model';
   uri: string;
   mimeType: string;
   size: number;
   importedAt: string;
+  /** Optional provenance label — source-agnostic (e.g. "Sketchfab", "In-house"). */
+  source?: string;
+  /** Optional license string for packaged assets. */
+  license?: string;
+  /** Optional preview image asset id for model thumbnails in the editor. */
+  previewImageAssetId?: string;
+}
+
+/** Authoring catalog — items map to variables.* / memory.* the runtime already understands. */
+export interface InventoryItem {
+  id: string;
+  label: string;
+  /** Linked asset name from the project library. */
+  assetName: string;
+  /** Full state path, e.g. variables.has_lantern or memory.lantern_found. */
+  stateKey: string;
+  stateKind: 'variable' | 'memory';
+  consumable?: boolean;
+  description?: string;
+}
+
+export type ObjectivePresentation = 'active' | 'completed' | 'failed' | 'hidden';
+
+export interface GameObjective {
+  id: string;
+  title: string;
+  description?: string;
+  /** Authoring label for HUD / docs — progress uses completeWhen / failWhen. */
+  presentation: ObjectivePresentation;
+  completeWhen: string;
+  failWhen?: string;
+  revealWhen?: string;
+}
+
+export type WorldStateCategory = 'door' | 'bridge' | 'light' | 'enemy' | 'npc' | 'custom';
+
+/** Persistent world flag the scenes can gate on via conditions. */
+export interface WorldStateFlag {
+  id: string;
+  label: string;
+  category: WorldStateCategory;
+  /** memory.door_unlocked or variables.bridge_down */
+  stateKey: string;
+  stateKind: 'variable' | 'memory';
+  initialValue: VariableValue;
+  description?: string;
+}
+
+export type GameplayVariableKind = 'boolean' | 'number' | 'string' | 'counter';
+
+/** Designer-friendly variable definition — syncs to initialVariables on save. */
+export interface GameplayVariable {
+  id: string;
+  /** Slug without prefix — stored under variables.<key>. */
+  key: string;
+  label: string;
+  kind: GameplayVariableKind;
+  initialValue: VariableValue;
+  description?: string;
+}
+
+export interface NpcStateProfile {
+  id: string;
+  label: string;
+  characterId?: string;
+  defaultState: StageActorGameplayState;
+  /** variables.npc_keeper_state */
+  stateVariable?: string;
+  /** memory.met_keeper */
+  metFlag?: string;
+  description?: string;
 }
 
 export interface Project {
@@ -212,6 +381,12 @@ export interface Project {
   fragments: Fragment[];
   assets: ProjectAsset[];
   characters: Character[];
+  /** Gameplay authoring catalogs (Phase 1 — no new runtime paths). */
+  inventory?: InventoryItem[];
+  objectives?: GameObjective[];
+  worldState?: WorldStateFlag[];
+  gameplayVariables?: GameplayVariable[];
+  npcProfiles?: NpcStateProfile[];
 }
 
 export interface GameSave {

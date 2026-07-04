@@ -1,4 +1,4 @@
-import { Project } from '../types';
+import { Project, Fragment } from '../types';
 import { parseActionString } from '../actions/parse-action';
 import { ActionStep } from '../actions/types';
 import { COMPILED_GAME_VERSION, CompiledGame } from './types';
@@ -39,6 +39,12 @@ function fnv1a64Hex(input: string): string {
   return hash.toString(16).padStart(16, '0');
 }
 
+/** Strip editor-only stage composition before compile/hash. */
+export function fragmentForRuntimeCompile<T extends Fragment>(fragment: T): Omit<T, 'stageAuthoring'> {
+  const { stageAuthoring: _stageAuthoring, ...runtimeFragment } = fragment;
+  return runtimeFragment;
+}
+
 /** Stable hash of authored project content — used by CompiledGame and package manifests. */
 export function computeProjectContentHash(project: Project): string {
   const payload = JSON.stringify({
@@ -47,7 +53,7 @@ export function computeProjectContentHash(project: Project): string {
     startLocation: project.startLocation,
     initialVariables: project.initialVariables,
     initialMemory: project.initialMemory,
-    fragments: project.fragments,
+    fragments: project.fragments.map(fragmentForRuntimeCompile),
     assets: project.assets.map(a => ({
       id: a.id,
       name: a.name,
@@ -109,44 +115,47 @@ function buildInteractableActions(project: Project): Record<string, ActionStep[]
  * Use compileProject() at product boundaries; this is for tests and internal reuse.
  */
 export function buildCompiledGame(project: Project): CompiledGame {
-  const fragments = project.fragments.map(f => ({
-    ...f,
-    conditions: [...(f.conditions ?? [])],
-    effects: [...(f.effects ?? [])],
-    choices: (f.choices ?? []).map(c => ({
+  const fragments = project.fragments.map(f => {
+    const runtime = fragmentForRuntimeCompile(f);
+    return {
+    ...runtime,
+    conditions: [...(runtime.conditions ?? [])],
+    effects: [...(runtime.effects ?? [])],
+    choices: (runtime.choices ?? []).map(c => ({
       ...c,
       conditions: [...(c.conditions ?? [])],
     })),
-    hotspots: (f.hotspots ?? []).map(h => ({
+    hotspots: (runtime.hotspots ?? []).map(h => ({
       ...h,
       conditions: [...(h.conditions ?? [])],
     })),
-    stageActors: (f.stageActors ?? []).map(a => ({
+    stageActors: (runtime.stageActors ?? []).map(a => ({
       ...a,
       expressions: (a.expressions ?? []).map(e => ({ ...e })),
       visibleWhen: [...(a.visibleWhen ?? [])],
     })),
-    dialogue: (f.dialogue ?? []).map(line => ({ ...line })),
-    adventure: f.adventure
+    dialogue: (runtime.dialogue ?? []).map(line => ({ ...line })),
+    adventure: runtime.adventure
       ? {
-          ...f.adventure,
+          ...runtime.adventure,
           entry: {
-            default: { ...f.adventure.entry.default },
-            from: f.adventure.entry.from
+            default: { ...runtime.adventure.entry.default },
+            from: runtime.adventure.entry.from
               ? Object.fromEntries(
-                  Object.entries(f.adventure.entry.from).map(([k, v]) => [k, { ...v }]),
+                  Object.entries(runtime.adventure.entry.from).map(([k, v]) => [k, { ...v }]),
                 )
               : undefined,
           },
-          colliders: (f.adventure.colliders ?? []).map(c => ({ ...c })),
-          interactables: (f.adventure.interactables ?? []).map(i => ({
+          colliders: (runtime.adventure.colliders ?? []).map(c => ({ ...c })),
+          interactables: (runtime.adventure.interactables ?? []).map(i => ({
             ...i,
             conditions: [...(i.conditions ?? [])],
           })),
-          sfx: f.adventure.sfx ? { ...f.adventure.sfx } : undefined,
+          sfx: runtime.adventure.sfx ? { ...runtime.adventure.sfx } : undefined,
         }
       : undefined,
-  }));
+  };
+  });
 
   return {
     version: COMPILED_GAME_VERSION,

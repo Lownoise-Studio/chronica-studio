@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { resolveModelPreviewUri } from '@/engine/asset-resolver';
+import { getModelAssetLibraryMessages, isModelAsset } from '@/engine/model-assets';
 import { ProjectAsset } from '@/engine/types';
 
 function fmtSize(b: number): string {
@@ -10,29 +12,48 @@ function fmtSize(b: number): string {
   return `${(b / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-const icons: Record<string, string> = { audio: 'music', data: 'file-text', image: 'image' };
+const icons: Record<string, string> = { audio: 'music', data: 'file-text', image: 'image', model: 'box' };
 
 export function AssetItem({
   asset,
+  assets = [],
   onDelete,
   onPreview,
 }: {
   asset: ProjectAsset;
+  assets?: readonly ProjectAsset[];
   onDelete: () => void;
   onPreview?: () => void;
 }) {
   const colors = useColors();
+  const previewUri = useMemo(
+    () => (isModelAsset(asset) ? resolveModelPreviewUri(assets, asset) : undefined),
+    [asset, assets],
+  );
+  const hasWarning = useMemo(
+    () => isModelAsset(asset) && getModelAssetLibraryMessages(asset, assets).some(m => m.kind === 'warning'),
+    [asset, assets],
+  );
+
   return (
     <TouchableOpacity
-      style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[styles.item, { backgroundColor: colors.card, borderColor: hasWarning ? colors.destructive + '88' : colors.border }]}
       onPress={onPreview}
       activeOpacity={onPreview ? 0.7 : 1}
     >
       {asset.type === 'image' ? (
         <Image source={{ uri: asset.uri }} style={styles.thumb} />
+      ) : isModelAsset(asset) ? (
+        previewUri ? (
+          <Image source={{ uri: previewUri }} style={styles.thumb} />
+        ) : (
+          <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
+            <Feather name="box" size={22} color={colors.primary} />
+          </View>
+        )
       ) : (
         <View style={[styles.iconBox, { backgroundColor: colors.secondary }]}>
-          <Feather name={icons[asset.type] as any} size={22} color={colors.primary} />
+          <Feather name={icons[asset.type] as keyof typeof Feather.glyphMap} size={22} color={colors.primary} />
         </View>
       )}
       <View style={styles.info}>
@@ -41,8 +62,12 @@ export function AssetItem({
         </Text>
         <Text style={[styles.meta, { color: colors.mutedForeground }]}>
           {asset.type.toUpperCase()} · {fmtSize(asset.size)}
+          {hasWarning ? ' · needs attention' : ''}
         </Text>
       </View>
+      {hasWarning && (
+        <Feather name="alert-triangle" size={14} color={colors.destructive} style={{ marginRight: 2 }} />
+      )}
       {onPreview && (
         <Feather name="eye" size={15} color={colors.mutedForeground} style={{ marginRight: 4 }} />
       )}

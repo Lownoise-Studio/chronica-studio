@@ -61,7 +61,7 @@ describe('asset-import', () => {
     const result = validateAssetImportPlan({ files: [], skipped: 3 });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toContain('No supported image or audio files');
+    expect(result.error).toContain('No supported image, audio, or model files');
   });
 
   test('rejects oversized single files with a friendly message', () => {

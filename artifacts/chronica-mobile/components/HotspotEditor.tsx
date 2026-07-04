@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
-import { Fragment, ProjectAsset, SceneHotspot } from '@/engine/types';
+import type { Fragment, HotspotInteractionKind, HotspotRepeatMode, InventoryItem, ProjectAsset, SceneHotspot } from '@/engine/types';
+import { applyHotspotInteractionAuthoring } from '@/engine/gameplay-authoring';
 import { resolveSceneBackgroundUri } from '@/engine/asset-resolver';
 import { createId } from '@/engine/identity';
 import {
@@ -89,6 +90,37 @@ function ResizeButton({
   );
 }
 
+const INTERACTION_KINDS: HotspotInteractionKind[] = ['inspect', 'collect', 'use-item', 'trigger', 'custom'];
+const REPEAT_MODES: HotspotRepeatMode[] = ['one-shot', 'repeatable'];
+
+function InteractionChipRow<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly T[];
+  value: T | undefined;
+  onChange: (next: T) => void;
+}) {
+  const colors = useColors();
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+      {options.map(option => {
+        const selected = value === option;
+        return (
+          <TouchableOpacity
+            key={option}
+            style={[styles.chip, { backgroundColor: selected ? colors.primary + '22' : colors.muted, borderColor: selected ? colors.primary : colors.border }]}
+            onPress={() => onChange(option)}
+          >
+            <Text style={[styles.chipText, { color: selected ? colors.primary : colors.foreground }]}>{option}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 function HotspotCard({
   hotspot,
   index,
@@ -97,6 +129,7 @@ function HotspotCard({
   onChange,
   onRemove,
   scenes,
+  inventory,
 }: {
   hotspot: SceneHotspot;
   index: number;
@@ -105,6 +138,7 @@ function HotspotCard({
   onChange: (patch: Partial<SceneHotspot>) => void;
   onRemove: () => void;
   scenes: SceneOption[];
+  inventory: InventoryItem[];
 }) {
   const colors = useColors();
   const { advancedMode } = useAdvancedMode();
@@ -185,6 +219,65 @@ function HotspotCard({
         <ResizeButton label="Shorter" onPress={() => resize('shorter')} />
       </View>
 
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Interaction</Text>
+      <InteractionChipRow
+        options={INTERACTION_KINDS}
+        value={hotspot.interactionKind ?? 'trigger'}
+        onChange={interactionKind => onChange({ interactionKind })}
+      />
+
+      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Repeat</Text>
+      <InteractionChipRow
+        options={REPEAT_MODES}
+        value={hotspot.repeatMode ?? 'repeatable'}
+        onChange={repeatMode => onChange({ repeatMode })}
+      />
+
+      <TouchableOpacity
+        style={styles.toggleRow}
+        onPress={() => onChange({ enabled: hotspot.enabled === false ? true : false })}
+      >
+        <Text style={[styles.toggleText, { color: colors.mutedForeground }]}>Enabled</Text>
+        <Feather name={hotspot.enabled !== false ? 'check-square' : 'square'} size={16} color={hotspot.enabled !== false ? colors.primary : colors.mutedForeground} />
+      </TouchableOpacity>
+
+      {(hotspot.interactionKind === 'collect' || hotspot.interactionKind === 'use-item') && inventory.length > 0 && (
+        <>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
+            {hotspot.interactionKind === 'use-item' ? 'Item to use' : 'Item to collect'}
+          </Text>
+          <InteractionChipRow
+            options={inventory.map(i => i.id)}
+            value={hotspot.interactionKind === 'use-item' ? (hotspot.requiredItemId ?? hotspot.itemId) : hotspot.itemId}
+            onChange={itemId => onChange(hotspot.interactionKind === 'use-item' ? { requiredItemId: itemId, itemId } : { itemId })}
+          />
+        </>
+      )}
+
+      {hotspot.interactionKind === 'inspect' && (
+        <View style={styles.field}>
+          <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Inspect text</Text>
+          <TextInput
+            style={[styles.fieldInput, { color: colors.foreground, borderColor: colors.border }]}
+            value={hotspot.inspectText ?? ''}
+            onChangeText={inspectText => onChange({ inspectText })}
+            placeholder="What the player reads when inspecting…"
+            placeholderTextColor={colors.mutedForeground}
+          />
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={[styles.applyBtn, { borderColor: colors.primary, backgroundColor: colors.primary + '12' }]}
+        onPress={() => {
+          const applied = applyHotspotInteractionAuthoring(hotspot, inventory);
+          onChange(applied);
+        }}
+      >
+        <Feather name="zap" size={13} color={colors.primary} />
+        <Text style={[styles.applyBtnText, { color: colors.primary }]}>Apply interaction to action</Text>
+      </TouchableOpacity>
+
       <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Tap action</Text>
       <ScenePicker
         scenes={scenes}
@@ -237,15 +330,28 @@ export function HotspotEditor({
   fragments,
   backgroundImage,
   assets,
+  inventory = [],
+  selectedUid: selectedUidProp,
+  onSelectedUidChange,
+  linkedStageObjectLabel,
 }: {
   hotspots: SceneHotspot[];
   onChange: (hotspots: SceneHotspot[]) => void;
   fragments: Fragment[];
   backgroundImage?: string;
   assets: ProjectAsset[];
+  inventory?: InventoryItem[];
+  selectedUid?: string | null;
+  onSelectedUidChange?: (uid: string | null) => void;
+  linkedStageObjectLabel?: string;
 }) {
   const colors = useColors();
-  const [selectedUid, setSelectedUid] = useState<string | null>(hotspots[0]?.uid ?? null);
+  const [internalSelectedUid, setInternalSelectedUid] = useState<string | null>(hotspots[0]?.uid ?? null);
+  const selectedUid = selectedUidProp !== undefined ? selectedUidProp : internalSelectedUid;
+  const setSelectedUid = (uid: string | null) => {
+    if (onSelectedUidChange) onSelectedUidChange(uid);
+    else setInternalSelectedUid(uid);
+  };
 
   const scenes = useMemo(() => getSceneOptions(fragments), [fragments]);
   const backgroundUri = resolveSceneBackgroundUri(assets, backgroundImage);
@@ -320,6 +426,12 @@ export function HotspotEditor({
         </ScrollView>
       )}
 
+      {selected && linkedStageObjectLabel ? (
+        <Text style={[styles.hint, { color: colors.primary }]}>
+          Linked stage object: {linkedStageObjectLabel}
+        </Text>
+      ) : null}
+
       {selected && selectedIndex >= 0 ? (
         <HotspotCard
           hotspot={selected}
@@ -329,6 +441,7 @@ export function HotspotEditor({
           onChange={patch => update(selected.uid, patch)}
           onRemove={() => remove(selected.uid)}
           scenes={scenes}
+          inventory={inventory}
         />
       ) : hotspots.length > 0 ? (
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
@@ -392,4 +505,6 @@ const styles = StyleSheet.create({
   hotspotTabs: { gap: 8, paddingVertical: 2 },
   hotspotTab: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
   hotspotTabText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  applyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10 },
+  applyBtnText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
 });
