@@ -4,11 +4,28 @@ Roadmap organized by phase. Items marked ✅ are implemented in the current mobi
 
 Phases map to **gameplay models** on the Chronica platform (compiler, runtime, state, packages). See the [Chronica Specification](docs/spec/README.md) and [VISION.md](./VISION.md) for architecture principles.
 
+---
+
+## Milestones
+
+| Milestone | Status | Notes |
+|-----------|--------|-------|
+| **Foundation v1** | ✅ Complete | Runtime, asset pipeline, editor transactions, diagnostics, audit P0/P1 — see [RELEASE_NOTES_FOUNDATION_V1.md](./RELEASE_NOTES_FOUNDATION_V1.md) |
+| **Visual Scene Composer** | ➡️ Next | Visual stage authoring, placement tools, higher-level editing UX |
+| **Inventory** | Planned | Pick up, use, consume; catalog wiring |
+| **Quest system** | Planned | Objectives, flags, progression authoring |
+| **Animation tooling** | Planned | Character and scene animation helpers |
+| **Lighting / weather** | Planned | Presentation-layer atmosphere controls |
+| **Combat framework** | Planned | Choice-resolved or turn-based encounters |
+| **Chronica Silentia vertical slice** | Planned | End-to-end demo game on the full stack |
+
+---
+
 | Layer | Phases |
 |-------|--------|
-| **Core** | Phase 1 (compiler, runtime, packages, identity, persistence) |
+| **Core** | Phase 1 (compiler, runtime, packages, identity, persistence) · **Foundation v1** ✅ |
 | **Gameplay models** | Phase 1 narrative + hotspots · Phase 2 dialogue · Phase 3 inventory/quests |
-| **Presentation** | Phase 2 VN · future adventure/top-down/hidden-object renderers |
+| **Presentation** | Phase 2 VN · Visual Scene Composer ➡️ · future adventure/top-down renderers |
 | **Distribution** | Phase 4 export/APK · Phase 5 marketplace |
 
 ---

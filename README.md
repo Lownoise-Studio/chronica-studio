@@ -1,26 +1,90 @@
-# Chronica Mobile Studio
+# Chronica Studio
 
-**The first public implementation of the Chronica Platform.**
+**Chronica Studio** is a platform for building and playing portable narrative games. Creators author against the **[Chronica Specification](docs/spec/README.md)**, export **`.chronica` packages**, and play the same project across Chronica implementations with consistent gameplay behavior.
 
-Chronica Mobile Studio is a mobile-first implementation of the Chronica Platform, allowing creators to build, test, and play portable `.chronica` games directly on mobile devices. It ships **Chronica Mobile Studio** (authoring) and **Chronica Player** (play-only) in one React Native + Expo app.
+This repository is the public home for **Chronica Mobile Studio** — a mobile-first authoring and play app — plus the TypeScript engine that implements the specification on device. Application code lives in [`artifacts/chronica-mobile/`](artifacts/chronica-mobile/).
 
-This repository is the public home for that work. Application code lives in [`artifacts/chronica-mobile/`](artifacts/chronica-mobile/).
+| Milestone | Status |
+|-----------|--------|
+| **Foundation v1** | ✅ Complete — core runtime, asset pipeline, editor safety, diagnostics |
+| **Visual Scene Composer** | ➡️ Next — visual stage authoring and higher-level editing tools |
 
-Chronica is designed around **portable game creation**. See [WHY_CHRONICA.md](WHY_CHRONICA.md).
+See [ROADMAP.md](ROADMAP.md) for phased delivery and [RELEASE_NOTES_FOUNDATION_V1.md](RELEASE_NOTES_FOUNDATION_V1.md) for the v1 baseline summary.
 
-Rather than coupling projects to a specific editor or runtime, games are authored against the **[Chronica Specification](docs/spec/README.md)** and distributed as portable **`.chronica` packages**. The long-term goal is to let creators build, edit, test, and play the same projects across multiple Chronica implementations while maintaining consistent gameplay behavior.
+---
+
+## What you get today
+
+Core capabilities shipped in **Foundation v1**:
+
+| Feature | Description |
+|---------|-------------|
+| **Playable narrative adventure runtime** | Branching scenes, choices, hotspots, dialogue, and adventure-mode movement/interaction |
+| **Deterministic runtime** | Same project + same inputs → same state and scene sequence |
+| **Smart asset pipeline** | Import, classify, and validate assets with intake hints |
+| **Asset recipes** | Apply reusable patterns (pickups, NPCs, doors) from library assets |
+| **Playable room generation** | Scaffold adventure scenes from a background and asset set |
+| **Editor transactions** | Atomic, validated editor mutations with rollback on failure |
+| **Diagnostics** | Structured error reports with recovery classification |
+| **Package compatibility** | Feature matrix checks before play and import |
+
+You can also export/import **`.chronica` packages**, playtest in-app, run **Chronica Player** mode, and save/resume with integrity checks. See [WHY_CHRONICA.md](WHY_CHRONICA.md) for the product rationale.
+
+---
+
+## Architecture
+
+Chronica separates the **specification** (portable contract), **authoring implementations** (Studio tools), and **player runtimes** (play-only shells):
+
+```
+Chronica Specification
+        │
+        ├── Chronica Studio          ← desktop / professional authoring (future / separate repos)
+        │
+        ├── Chronica Mobile Studio   ← this repository (author + play)
+        │
+        └── Chronica Player          ← play-only shell (included in this app)
+```
+
+Portable **`.chronica` packages** flow from any compliant authoring tool into any compliant player. Mobile is a first-class implementation, not a reduced fork.
+
+---
+
+## Foundation v1
+
+**Foundation v1** is the engineering baseline tagged before Visual Scene Composer work begins. It establishes:
+
+- A **playable narrative adventure runtime** with compile gates, runtime fallbacks, and save/resume
+- **Asset Pipeline Phases 1–5** — smart intake, recipes, playable room generation
+- **Foundation Hardening Phases 1–6** — validation, project integrity, runtime fallbacks, package compatibility, engine contracts, diagnostics & recovery
+- **Architecture Audit P0 + P1** — atomic editor transactions, unified validation severity, shared diagnostics pipeline, batch import transactions
+
+**Quality at v1:** 741 passing automated tests · typecheck clean
+
+Engineering references: [FOUNDATION_HARDENING.md](docs/spec/FOUNDATION_HARDENING.md) · [ARCHITECTURE_AUDIT.md](docs/spec/ARCHITECTURE_AUDIT.md)
+
+---
+
+## What Chronica is not yet
+
+Foundation v1 is a strong **core architecture baseline**, not a full game-engine product:
+
+- **Not a full Unity/Godot replacement** — Chronica targets portable narrative and adventure games, not general-purpose 3D engines
+- **No visual scene editor yet** — scenes are edited through mobile forms and lists; Visual Scene Composer is the next milestone
+- **No combat framework yet** — inventory, quests, and encounter systems are planned, not shipped
+- **No marketplace or cloud tooling yet** — distribution, sync, and discovery remain future work
+
+---
 
 ## Platform
 
 ```
 Chronica
-├── Chronica Specification     ← [docs/spec/](docs/spec/README.md) (future public chronica-spec repo)
-├── Chronica Studio              ← desktop / professional authoring implementation
+├── Chronica Specification     ← [docs/spec/](docs/spec/README.md)
+├── Chronica Studio              ← desktop / professional authoring (future)
 ├── Chronica Mobile Studio       ← this repository
 └── Chronica Player              ← play-only shell (included in this app)
 ```
-
-Mobile is not a reduced fork or a side experiment. It targets **cross-runtime compatibility** with the specification and other Chronica runtimes.
 
 ## Design principles
 
@@ -29,19 +93,6 @@ Mobile is not a reduced fork or a side experiment. It targets **cross-runtime co
 - **Behavioral parity across implementations** — gameplay outcomes must agree; code structure may differ
 - **Feature parity with workflow divergence** — same capabilities over time; mobile uses touch-first UX
 - **Touch-first creation experience** — author, playtest, and ship from phone or tablet
-
-## What you can do today
-
-| Capability | Description |
-|------------|-------------|
-| **Mobile authoring** | Scenes, dialogue, characters, hotspots, variables, assets |
-| **Compile & validate** | Catch broken links, invalid conditions, and missing assets before play |
-| **Playtest & Player** | In-editor playtest or standalone Chronica Player mode |
-| **`.chronica` packages** | Export and import portable games with integrity checks |
-| **Save / resume** | Runtime saves tied to `gameId` and content hash |
-| **Try Demo** | Bundled Pasture demo (`.chronica` round-trip on device) |
-
-Current public implementation focuses on **state-driven gameplay models**. The Chronica Specification is designed to evolve to support additional presentation capabilities over time.
 
 ## Repository layout
 
@@ -52,8 +103,6 @@ Current public implementation focuses on **state-driven gameplay models**. The C
 | [`artifacts/chronica-mobile/runtime/`](artifacts/chronica-mobile/runtime/) | Play session host — runtime loop, saves, player boundary |
 | [`docs/spec/`](docs/spec/README.md) | Chronica Specification — platform contract |
 | [`artifacts/chronica-mobile/docs/`](artifacts/chronica-mobile/docs/) | Mobile architecture and package details |
-
-Other Chronica implementations (including desktop and professional authoring tools) may live in separate repositories. This repo documents and implements the **mobile** surface of the platform.
 
 ## `.chronica` packages
 
@@ -102,14 +151,16 @@ See [docs/local-dev.md](docs/local-dev.md) for platform build details.
 |----------|-------------|
 | [Why Chronica?](WHY_CHRONICA.md) | Strategic manifesto — why the platform exists |
 | [Chronica Specification](docs/spec/README.md) | Platform contract (package, runtime, save, scene, …) |
+| [Foundation Hardening](docs/spec/FOUNDATION_HARDENING.md) | Validation, integrity, contracts, transactions, diagnostics |
+| [Release notes — Foundation v1](RELEASE_NOTES_FOUNDATION_V1.md) | v1 milestone summary |
+| [Roadmap](ROADMAP.md) | Phased delivery |
 | [Mobile architecture](artifacts/chronica-mobile/docs/ARCHITECTURE.md) | Implementation layout and compliance status |
 | [Package boundary](artifacts/chronica-mobile/docs/package-round-trip.md) | Import/export rules and integrity |
 | [VISION.md](VISION.md) | Product direction |
-| [ROADMAP.md](ROADMAP.md) | Phased delivery |
 
 ## Project status
 
-Chronica Mobile Studio is under active development as a **public preview**. The compiler, runtime, package format, and state model are stabilizing; breaking changes may occur before a stable release.
+**Foundation v1 is complete** and tagged as the baseline before Visual Scene Composer. The compiler, runtime, package format, and editor safety layer are stabilizing; breaking changes may still occur before a stable public release.
 
 ## Repository naming
 

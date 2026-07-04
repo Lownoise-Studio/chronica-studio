@@ -24,6 +24,23 @@ For the product rationale, read [WHY_CHRONICA.md](../../WHY_CHRONICA.md).
 
 ---
 
+## Foundation engineering (v1 baseline)
+
+These documents describe the **Foundation v1** architecture — validation, editor safety, contracts, and diagnostics. They complement the platform specification above.
+
+| Document | Defines |
+|----------|---------|
+| [ASSET_SPEC.md](./ASSET_SPEC.md) | Asset catalog, references, resolution, intake pipeline |
+| [FOUNDATION_HARDENING.md](./FOUNDATION_HARDENING.md) | Validation, integrity, fallbacks, compatibility, transactions, diagnostics |
+| [ENGINE_CONTRACTS.md](./ENGINE_CONTRACTS.md) | Runtime, asset, recipe, room, and package contracts |
+| [EDITOR_TRANSACTIONS.md](./EDITOR_TRANSACTIONS.md) | Atomic editor mutations, rollback, dirty-state |
+| [DIAGNOSTICS.md](./DIAGNOSTICS.md) | Typed diagnostics, reports, recovery classification |
+| [ARCHITECTURE_AUDIT.md](./ARCHITECTURE_AUDIT.md) | Architecture consistency review and completed audit work |
+
+Release summary: [RELEASE_NOTES_FOUNDATION_V1.md](../../RELEASE_NOTES_FOUNDATION_V1.md)
+
+---
+
 ## Design principles
 
 1. **Specification-first** — implementations comply; they do not fork behavior silently.
