@@ -1,3 +1,4 @@
+import { applyMissingAssetSeverity } from './validation-severity';
 import type { Project, ProjectAsset, ValidationError } from './types';
 
 export const MODEL_EXTENSIONS = new Set(['glb', 'gltf']);
@@ -161,12 +162,12 @@ export function validateProjectAssets(project: Project): ValidationError[] {
     }
     const previewId = asset.previewImageAssetId?.trim();
     if (previewId && !findAssetById(project.assets, previewId)) {
-      errors.push({
+      errors.push(applyMissingAssetSeverity({
         fragmentUid: '',
         fragmentTitle: 'Project',
         type: 'missing-asset',
         message: `Asset "${asset.name}" references missing preview image id "${previewId}"`,
-      });
+      }));
     }
   }
 

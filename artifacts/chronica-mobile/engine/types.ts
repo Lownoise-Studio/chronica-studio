@@ -403,4 +403,6 @@ export interface ValidationError {
   message: string;
   /** Defaults to 'error' when absent (back-compat). Warnings inform but never block compile. */
   severity?: 'error' | 'warning';
+  /** Canonical severity when set; otherwise derived by validation-severity policy. */
+  level?: 'info' | 'warning' | 'error' | 'blocking';
 }

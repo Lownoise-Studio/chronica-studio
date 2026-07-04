@@ -1,5 +1,9 @@
 import { CompiledGame } from '@/engine/compiler/types';
 import { resolveSceneAssetIssues } from '@/engine/asset-resolver';
+import { diagnoseRuntimeActionFailure, type DiagnosticReport } from '@/engine/diagnostics';
+import { engineLog } from '@/engine/engine-logging';
+import { buildRuntimeContractAuditReport } from '@/engine/runtime-contracts';
+import { collectSceneRuntimeFallbacks, type RuntimeFallbackWarning } from '@/engine/runtime-fallbacks';
 import { DialoguePresentation, resolveDialoguePresentationFromGame } from '@/engine/dialogue-presentation';
 import { StageActorPresentation, resolveStageActorPresentations } from '@/engine/stage-actors';
 import {
@@ -39,6 +43,7 @@ export type PlayerSnapshot = {
   backgroundUri: string | undefined;
   audioUri: string | undefined;
   assetWarnings: AssetWarning[];
+  mediaFallbacks: RuntimeFallbackWarning[];
   runtimeWarnings: RuntimeWarning[];
   dialogue: DialoguePresentation | null;
   stageActors: StageActorPresentation[];
@@ -302,6 +307,7 @@ export class PlayerHost {
       backgroundUri,
       audioUri,
       assetWarnings: [...libraryWarnings, ...missingWarnings],
+      mediaFallbacks: collectSceneRuntimeFallbacks(fragment, this.runtime.runtimeState, this.game.assets),
       runtimeWarnings: this.runtimeWarnings,
       dialogue,
       stageActors,
@@ -312,9 +318,33 @@ export class PlayerHost {
     return this.runtime.toSave(installId);
   }
 
+  /** Optional non-blocking runtime contract audit — does not affect play behavior. */
+  auditRuntimeContracts(): DiagnosticReport {
+    return buildRuntimeContractAuditReport({
+      game: this.game,
+      started: this.runtime.isStarted,
+      state: this.runtime.runtimeState,
+      fragment: this.runtime.currentFragment,
+      visibleChoiceUids: this.runtime.visibleChoices.map(choice => choice.uid),
+      visibleHotspotUids: this.runtime.visibleHotspots.map(hotspot => hotspot.uid),
+      visibleInteractableUids: this.runtime.visibleInteractables.map(item => item.uid),
+      history: this.runtime.pathHistory,
+    });
+  }
+
   private recordFailure(err: unknown): { ok: false; reason: PlayerFailureReason; message: string } {
     const message = err instanceof Error ? err.message : 'Unknown runtime error.';
     const reason: PlayerFailureReason = err instanceof RuntimeInvariantError ? 'runtime-invariant' : 'action-failed';
+    const diagnostic = diagnoseRuntimeActionFailure(err, {
+      fragmentUids: this.runtime.currentFragment?.uid ? [this.runtime.currentFragment.uid] : undefined,
+      locationIds: this.runtime.currentFragment?.locationId ? [this.runtime.currentFragment.locationId] : undefined,
+      gameId: this.game.gameId,
+    });
+    engineLog('warning', diagnostic.message, {
+      code: diagnostic.code,
+      subsystem: diagnostic.subsystem,
+      recoveryCategory: diagnostic.recoveryCategory,
+    });
     this.runtimeWarnings = [...this.runtimeWarnings, { code: reason, message }];
     return { ok: false, reason, message };
   }

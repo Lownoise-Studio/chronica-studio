@@ -254,7 +254,7 @@ export function validateStageObject(object: StageObject): string[] {
   return issues;
 }
 
-export function stripStageAuthoringFromFragment<T extends Fragment>(fragment: T): Omit<T, 'stageAuthoring'> {
+function stripStageAuthoringFromFragment<T extends Fragment>(fragment: T): Omit<T, 'stageAuthoring'> {
   const { stageAuthoring: _ignored, ...runtimeFragment } = fragment;
   return runtimeFragment;
 }

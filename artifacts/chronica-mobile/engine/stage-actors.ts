@@ -116,13 +116,6 @@ export function validateFragmentStageActors(
       if (!condition.trim()) continue;
       // Syntax validated via isValidCondition in validateFragment
     }
-    if (actor.asset?.trim() && !findAssetByName([...assets], actor.asset.trim())?.uri?.trim()) {
-      errors.push({
-        ...meta,
-        type: 'missing-asset',
-        message: `Stage actor "${label}" sprite "${actor.asset}" is not in the asset library`,
-      });
-    }
     for (const expression of actor.expressions ?? []) {
       if (!expression.id?.trim() || !expression.asset?.trim()) {
         errors.push({
@@ -131,13 +124,6 @@ export function validateFragmentStageActors(
           message: `Stage actor "${label}" has an expression missing id or asset`,
         });
         continue;
-      }
-      if (!findAssetByName([...assets], expression.asset.trim())?.uri?.trim()) {
-        errors.push({
-          ...meta,
-          type: 'missing-asset',
-          message: `Stage actor "${label}" expression "${expression.id}" asset "${expression.asset}" is not in the asset library`,
-        });
       }
     }
   }

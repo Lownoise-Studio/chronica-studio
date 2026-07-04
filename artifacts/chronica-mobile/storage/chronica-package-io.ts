@@ -23,6 +23,9 @@ import { packagePathForAsset } from '@/engine/model-assets';
 import { compileProject } from '@/engine/compiler';
 import { computeProjectContentHash } from '@/engine/compiler/build-compiled-game';
 import { migrateProject } from '@/engine/project-migration';
+import {
+  checkProjectPlayCompatibility,
+} from '@/engine/package-compatibility';
 import { Project, ValidationError } from '@/engine/types';
 import {
   assetDir,
@@ -51,6 +54,8 @@ export type BuildChronicaPackageResult = {
   error: string;
   plan?: BuildPackagePlan;
   diagnostics?: PackageExportDiagnostic[];
+  /** Present when strict compile validation fails before export. */
+  validationErrors?: ValidationError[];
 };
 
 export type ImportChronicaPackageResult = {
@@ -114,9 +119,15 @@ export async function extractPackageAssets(
   return localUriByPackagePath;
 }
 
+export type BuildChronicaPackageOptions = {
+  /** When true, run strict compile validation before export. Default preserves existing export checks only. */
+  strictValidation?: boolean;
+};
+
 export async function buildChronicaPackageBytes(
   project: Project,
   exportedAt = new Date().toISOString(),
+  options?: BuildChronicaPackageOptions,
 ): Promise<BuildChronicaPackageResult> {
   const uriExists = new Map<string, boolean>();
   for (const asset of project.assets) {
@@ -155,6 +166,18 @@ export async function buildChronicaPackageBytes(
       plan,
       diagnostics,
     };
+  }
+
+  if (options?.strictValidation) {
+    const compiled = compileProject(project, { strictValidation: true });
+    if (!compiled.ok) {
+      return {
+        ok: false,
+        error: 'Cannot export: project fails strict validation.',
+        plan,
+        validationErrors: compiled.diagnostics,
+      };
+    }
   }
 
   // Guard: two library assets whose names collapse to the same package path
@@ -285,6 +308,20 @@ export async function parseChronicaPackage(
     id: targetProjectId,
     updatedAt: new Date().toISOString(),
   });
+
+  const featureCompatibility = checkProjectPlayCompatibility(project);
+  if (!featureCompatibility.compatible) {
+    return importFailure(
+      'incompatible-features',
+      featureCompatibility.blockers.join(' '),
+      featureCompatibility.blockers.map(message => ({
+        fragmentUid: '',
+        fragmentTitle: 'Package compatibility',
+        type: 'type-mismatch' as const,
+        message,
+      })),
+    );
+  }
 
   const compiled = compileProject(project);
   if (!compiled.ok) {

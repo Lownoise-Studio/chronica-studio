@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { createId } from '@/engine/identity';
 import { resolveModelPreviewUri } from '@/engine/asset-resolver';
+import { AssetIntakeSummary } from '@/components/AssetIntakeHint';
+import { AssetRecipeApplySheet } from '@/components/AssetRecipeApplySheet';
 import {
   MODEL_IMPORT_GUIDANCE,
   formatModelAssetSize,
@@ -24,27 +26,36 @@ import {
   modelAssetHasPreview,
   suggestedPreviewImageName,
 } from '@/engine/model-assets';
+import { classifyProjectAsset } from '@/engine/asset-intake';
+import type { AssetIntakeRecipe } from '@/engine/asset-intake';
+import type { Project } from '@/engine/types';
 import type { ProjectAsset } from '@/engine/types';
 
 export function ModelAssetDetailPanel({
   visible,
   asset,
   assets,
+  project,
   onClose,
   onUpdate,
   onImportPreviewImage,
+  onRecipeApplied,
 }: {
   visible: boolean;
   asset: ProjectAsset | null;
   assets: readonly ProjectAsset[];
+  project: Project | null;
   onClose: () => void;
   onUpdate: (patch: Partial<ProjectAsset>) => void;
   onImportPreviewImage: (imageAsset: ProjectAsset) => void;
+  onRecipeApplied?: (result: import('@/engine/asset-recipes').AssetRecipeApplyResult) => void;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [source, setSource] = useState('');
   const [license, setLicense] = useState('');
+  const [recipeSheetOpen, setRecipeSheetOpen] = useState(false);
+  const [recipeToApply, setRecipeToApply] = useState<AssetIntakeRecipe>('none');
 
   React.useEffect(() => {
     if (!asset) return;
@@ -62,6 +73,10 @@ export function ModelAssetDetailPanel({
     [assets, asset?.id],
   );
   const hasPreview = asset ? modelAssetHasPreview(asset, assets) : false;
+  const intake = useMemo(
+    () => (asset ? classifyProjectAsset(asset) : null),
+    [asset?.id, asset?.name, asset?.type, asset?.mimeType],
+  );
 
   if (!asset) return null;
 
@@ -154,6 +169,22 @@ export function ModelAssetDetailPanel({
               <MetaRow label="License" value={asset.license || '—'} colors={colors} />
             </MetaSection>
 
+            {intake && (
+              <MetaSection title="Suggested use" colors={colors}>
+                <AssetIntakeSummary
+                  classification={intake}
+                  onApplySuggestion={
+                    project && intake.suggestedRecipe !== 'none'
+                      ? () => {
+                          setRecipeToApply(intake.suggestedRecipe);
+                          setRecipeSheetOpen(true);
+                        }
+                      : undefined
+                  }
+                />
+              </MetaSection>
+            )}
+
             <MetaSection title="Edit metadata" colors={colors}>
               <Field label="Source" value={source} onChange={setSource} placeholder="e.g. Blender export" colors={colors} />
               <Field label="License" value={license} onChange={setLicense} placeholder="e.g. CC0" colors={colors} />
@@ -211,6 +242,19 @@ export function ModelAssetDetailPanel({
               </MetaSection>
             )}
           </ScrollView>
+          {project && asset && (
+            <AssetRecipeApplySheet
+              visible={recipeSheetOpen}
+              project={project}
+              asset={asset}
+              recipe={recipeToApply}
+              onClose={() => setRecipeSheetOpen(false)}
+              onApplied={result => {
+                onRecipeApplied?.(result);
+                setRecipeSheetOpen(false);
+              }}
+            />
+          )}
         </View>
       </View>
     </Modal>

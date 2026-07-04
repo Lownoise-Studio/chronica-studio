@@ -179,7 +179,7 @@ function sortNodes(nodes: StoryGraphNode[]): StoryGraphNode[] {
   });
 }
 
-export function getOutgoingEdges(edges: StoryGraphEdge[], fragmentUid: string): StoryGraphEdge[] {
+function getOutgoingEdges(edges: StoryGraphEdge[], fragmentUid: string): StoryGraphEdge[] {
   return edges.filter(e => e.fromFragmentUid === fragmentUid);
 }
 

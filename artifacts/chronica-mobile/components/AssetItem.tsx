@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { AssetIntakeBadge, useAssetIntakeClassification } from '@/components/AssetIntakeHint';
 import { resolveModelPreviewUri } from '@/engine/asset-resolver';
 import { getModelAssetLibraryMessages, isModelAsset } from '@/engine/model-assets';
 import { ProjectAsset } from '@/engine/types';
@@ -34,6 +35,7 @@ export function AssetItem({
     () => isModelAsset(asset) && getModelAssetLibraryMessages(asset, assets).some(m => m.kind === 'warning'),
     [asset, assets],
   );
+  const classification = useAssetIntakeClassification(asset);
 
   return (
     <TouchableOpacity
@@ -64,6 +66,7 @@ export function AssetItem({
           {asset.type.toUpperCase()} · {fmtSize(asset.size)}
           {hasWarning ? ' · needs attention' : ''}
         </Text>
+        <AssetIntakeBadge classification={classification} compact />
       </View>
       {hasWarning && (
         <Feather name="alert-triangle" size={14} color={colors.destructive} style={{ marginRight: 2 }} />

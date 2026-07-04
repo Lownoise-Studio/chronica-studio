@@ -45,7 +45,7 @@ export function validateFragmentDialogue(
   return errors;
 }
 
-export function normalizeDialogueLines(lines: DialogueLine[]): DialogueLine[] {
+function normalizeDialogueLines(lines: DialogueLine[]): DialogueLine[] {
   return lines.map(line => ({
     ...line,
     speakerId: line.speakerId?.trim() ? line.speakerId.trim() : null,

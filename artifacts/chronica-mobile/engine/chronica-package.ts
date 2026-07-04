@@ -67,7 +67,8 @@ export type PackageImportReason =
   | 'hash-mismatch'
   | 'missing-asset'
   | 'corrupt-asset'
-  | 'compile-failed';
+  | 'compile-failed'
+  | 'incompatible-features';
 
 export type PackageImportFailure = { ok: false; reason: PackageImportReason; error: string };
 

@@ -1,4 +1,8 @@
 import type { CompiledGame } from '../../compiler/types';
+import type {
+  PackageCompatibilityResult,
+  RuntimeCapabilities,
+} from '../../package-compatibility';
 import type { Project, VariableValue } from '../../types';
 import type { ChronicaSession } from '../chronica-session';
 import type { EchoModuleConfig, InstabilityModuleConfig } from '../modules';
@@ -42,10 +46,13 @@ export interface IngestionOptions {
   installId?: string;
   /** Optional description recorded on the constructed Project. */
   description?: string;
+  /** Override foundation feature runtime profile (defaults to mobile player). */
+  runtimeCapabilities?: RuntimeCapabilities;
 }
 
 export type IngestionFailureReason =
   | 'incompatible'
+  | 'feature-incompatible'
   | 'missing-entry-fragment'
   | 'no-fragments'
   | 'compile-failed';
@@ -60,12 +67,14 @@ interface IngestionCommon {
   warnings: string[];
   unsupportedContent: UnsupportedContentReport[];
   compatibility?: CompatibilityResult;
+  featureCompatibility?: PackageCompatibilityResult;
 }
 
 export interface IngestionSuccess extends IngestionCommon {
   ok: true;
   manifest: ChronicaPackageManifest;
   compatibility: CompatibilityResult;
+  featureCompatibility: PackageCompatibilityResult;
   selectedRuntimeTarget?: ChronicaRuntimeTarget;
   entryFragmentId: string;
   game: CompiledGame;

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { compileProject } from '@/engine/compiler';
+import type { DiagnosticReport } from '@/engine/diagnostics';
+import {
+  checkProjectPlayCompatibility,
+  type PackageCompatibilityResult,
+} from '@/engine/package-compatibility';
 import {
   AdventureInteractable,
   Choice,
@@ -30,6 +35,7 @@ const EMPTY_SNAPSHOT: PlayerSnapshot = {
   backgroundUri: undefined,
   audioUri: undefined,
   assetWarnings: [],
+  mediaFallbacks: [],
   runtimeWarnings: [],
   dialogue: null,
   stageActors: [],
@@ -41,6 +47,11 @@ export function useChronicaRuntime(project: Project | undefined) {
   const compileResult = useMemo(() => {
     if (!project) return null;
     return compileProject(project);
+  }, [project?.id, project?.updatedAt]);
+
+  const featureCompatibility = useMemo((): PackageCompatibilityResult | null => {
+    if (!project) return null;
+    return checkProjectPlayCompatibility(project);
   }, [project?.id, project?.updatedAt]);
 
   const host = useMemo(() => {
@@ -137,15 +148,23 @@ export function useChronicaRuntime(project: Project | undefined) {
     return host?.toSave(installId) ?? null;
   }, [host]);
 
+  const auditRuntimeContracts = useCallback((): DiagnosticReport | null => {
+    return host?.auditRuntimeContracts() ?? null;
+  }, [host]);
+
   const compileDiagnostics: ValidationError[] = compileResult?.ok
     ? []
     : compileResult?.diagnostics ?? [];
 
+  const playCompatibilityOk = featureCompatibility?.compatible ?? true;
+
   return {
     host,
     runtime: host?.runtime ?? null,
-    compileOk: compileResult?.ok ?? false,
+    compileOk: (compileResult?.ok ?? false) && playCompatibilityOk,
     compileDiagnostics,
+    featureCompatibility,
+    playCompatibilityBlockers: featureCompatibility?.blockers ?? [],
     ...view,
     start,
     resume,
@@ -157,5 +176,6 @@ export function useChronicaRuntime(project: Project | undefined) {
     advanceDialogue,
     setRuntimeState,
     toSave,
+    auditRuntimeContracts,
   };
 }

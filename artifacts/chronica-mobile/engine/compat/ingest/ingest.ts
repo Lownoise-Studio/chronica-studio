@@ -1,6 +1,13 @@
 import { compileProject } from '../../compiler';
 import type { Character, Fragment, Project, ProjectAsset } from '../../types';
 import {
+  checkPackageCompatibility,
+  checkProjectPlayCompatibility,
+  deriveParsedPackageCapabilities,
+  MOBILE_PLAYER_RUNTIME_CAPABILITIES,
+  type PackageCompatibilityResult,
+} from '../../package-compatibility';
+import {
   MOBILE_PLAYER_COMPATIBILITY_OPTIONS,
   MOBILE_PLAYER_TARGET_ID,
   validateChronicaPackageCompatibility,
@@ -71,6 +78,27 @@ export function ingestChronicaPackageForMobilePlayer(
     });
   }
 
+  const runtimeCapabilities = options.runtimeCapabilities ?? MOBILE_PLAYER_RUNTIME_CAPABILITIES;
+  const rawCapabilities = deriveParsedPackageCapabilities(pkg);
+  const rawFeatureCompatibility = checkPackageCompatibility(
+    {
+      schemaVersion: pkg.manifest.schemaVersion,
+      requiredFeatures: rawCapabilities.required,
+      optionalFeatures: rawCapabilities.optional,
+    },
+    runtimeCapabilities,
+  );
+  warnings.push(...rawFeatureCompatibility.warnings);
+  if (!rawFeatureCompatibility.compatible) {
+    return failure(
+      'feature-incompatible',
+      rawFeatureCompatibility.blockers.length
+        ? rawFeatureCompatibility.blockers
+        : ['Package requires runtime features this host does not support.'],
+      { warnings, unsupportedContent, compatibility, featureCompatibility: rawFeatureCompatibility },
+    );
+  }
+
   const selectedRuntimeTarget = compatibility.selectedRuntimeTarget;
   const entryFragmentId = resolveEntryFragmentId(pkg.manifest, selectedRuntimeTarget);
   if (!entryFragmentId) {
@@ -118,12 +146,28 @@ export function ingestChronicaPackageForMobilePlayer(
     : [];
 
   const project = buildProjectFromPackage(pkg, fragments, characters, assets, entryFragment.locationId, options);
+
+  const featureCompatibility = checkProjectPlayCompatibility(
+    project,
+    runtimeCapabilities,
+  );
+  warnings.push(...featureCompatibility.warnings);
+  if (!featureCompatibility.compatible) {
+    return failure(
+      'feature-incompatible',
+      featureCompatibility.blockers.length
+        ? featureCompatibility.blockers
+        : ['Package requires runtime features this host does not support.'],
+      { warnings, unsupportedContent, compatibility, featureCompatibility },
+    );
+  }
+
   const compileResult = compileProject(project);
   if (!compileResult.ok) {
     return failure(
       'compile-failed',
       compileResult.diagnostics.map(d => `${d.fragmentTitle || d.fragmentUid}: ${d.message}`),
-      { warnings, unsupportedContent, compatibility },
+      { warnings, unsupportedContent, compatibility, featureCompatibility },
     );
   }
   for (const warning of compileResult.warnings) {
@@ -140,6 +184,7 @@ export function ingestChronicaPackageForMobilePlayer(
     project,
     warnings,
     unsupportedContent,
+    featureCompatibility,
   };
   return success;
 }
@@ -173,7 +218,7 @@ function buildProjectFromPackage(
 function failure(
   reason: IngestionFailure['reason'],
   errors: string[],
-  extras: Pick<IngestionFailure, 'warnings' | 'unsupportedContent' | 'compatibility'>,
+  extras: Pick<IngestionFailure, 'warnings' | 'unsupportedContent' | 'compatibility' | 'featureCompatibility'>,
 ): IngestionFailure {
   return {
     ok: false,
@@ -182,6 +227,7 @@ function failure(
     warnings: extras.warnings,
     unsupportedContent: extras.unsupportedContent,
     compatibility: extras.compatibility,
+    featureCompatibility: extras.featureCompatibility,
   };
 }
 

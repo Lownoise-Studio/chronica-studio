@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert, FlatList, Image, Modal, Platform, ScrollView,
@@ -12,11 +12,20 @@ import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { AssetItem } from '@/components/AssetItem';
+import { AssetIntakeSummary, suggestedRecipeForAsset, useAssetIntakeClassification } from '@/components/AssetIntakeHint';
+import { AssetRecipeApplySheet } from '@/components/AssetRecipeApplySheet';
+import { PlayableRoomGeneratorSheet } from '@/components/PlayableRoomGeneratorSheet';
 import { ModelAssetDetailPanel } from '@/components/ModelAssetDetailPanel';
 import { EmptyState } from '@/components/EmptyState';
 import { ProjectAsset } from '@/engine/types';
 import { createId } from '@/engine/identity';
 import { isModelAsset, validateModelAssetsInLibrary } from '@/engine/model-assets';
+import { buildAssetImportReport, summarizeImportReport, type AssetIntakeRecipe } from '@/engine/asset-intake';
+import type { AssetRecipePlan } from '@/engine/asset-recipes';
+import type { PlayableRoomPlan } from '@/engine/playable-room-generator';
+import { buildProjectIntegrityReport } from '@/engine/project-integrity';
+import { executeBatchAssetImportTransaction, executeSafeAssetDelete } from '@/engine/editor-mutations';
+import { buildBatchImportFailureReport, formatDiagnosticReportMessage } from '@/engine/diagnostics';
 import { pickAndImportAssetFiles, pickAndImportAssetZip, type ImportAssetsResult } from '@/storage/asset-import-io';
 import { assetDir, ensureDir, copyFile, deleteFile, readText } from '@/storage/fileSystem';
 
@@ -24,10 +33,15 @@ export default function AssetsScreen() {
   const { id: projectId } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getProject, addAsset, updateAsset, deleteAsset } = useProjects();
+  const { getProject, addAsset, updateAsset, replaceProjectSnapshot } = useProjects();
   const [importing, setImporting] = useState(false);
   const [previewAsset, setPreviewAsset] = useState<ProjectAsset | null>(null);
   const [modelDetailAsset, setModelDetailAsset] = useState<ProjectAsset | null>(null);
+  const [recipeSheetOpen, setRecipeSheetOpen] = useState(false);
+  const [recipeAsset, setRecipeAsset] = useState<ProjectAsset | null>(null);
+  const [recipeToApply, setRecipeToApply] = useState<AssetIntakeRecipe>('none');
+  const [roomGeneratorOpen, setRoomGeneratorOpen] = useState(false);
+  const [importReportSummary, setImportReportSummary] = useState<string | null>(null);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const audioRef = useRef<{ unload: () => void; pause: () => void; play: () => void } | null>(null);
 
@@ -41,13 +55,26 @@ export default function AssetsScreen() {
       return;
     }
 
-    for (const asset of result.assets) {
-      addAsset(projectId!, asset);
+    if (!project) return;
+
+    const transaction = executeBatchAssetImportTransaction(project, result.assets);
+    if (!transaction.ok) {
+      const report = buildBatchImportFailureReport(transaction);
+      Alert.alert('Import failed', formatDiagnosticReportMessage(report));
+      return;
     }
+
+    replaceProjectSnapshot(projectId!, transaction.after!);
+
+    const report = buildAssetImportReport(result.assets);
+    setImportReportSummary(summarizeImportReport(report));
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     const skippedNote = result.skipped > 0 ? ` ${result.skipped} unsupported file(s) were skipped.` : '';
-    Alert.alert('Import complete', `Added ${result.assets.length} asset(s) to your library.${skippedNote}`);
+    const intakeNote = report.suggestedNextActions.length > 0
+      ? `\n\n${summarizeImportReport(report)}. Tap assets for suggested use.`
+      : '';
+    Alert.alert('Import complete', `Added ${result.assets.length} asset(s) to your library.${skippedNote}${intakeNote}`);
   };
 
   const handleImportImage = async () => {
@@ -67,7 +94,9 @@ export default function AssetsScreen() {
         allowsMultipleSelection: true,
         quality: 0.9,
       });
-      if (result.canceled || !result.assets?.length) return;
+      if (result.canceled || !result.assets?.length || !project) return;
+
+      const incoming: ProjectAsset[] = [];
 
       if (Platform.OS !== 'web') {
         const dir = assetDir(projectId!);
@@ -77,7 +106,7 @@ export default function AssetsScreen() {
           const name = `img_${createId()}.${ext}`;
           const destUri = `${dir}${name}`;
           await copyFile(img.uri, destUri);
-          addAsset(projectId!, {
+          incoming.push({
             id: createId(),
             name,
             type: 'image',
@@ -86,14 +115,13 @@ export default function AssetsScreen() {
             size: img.fileSize ?? 0,
             importedAt: new Date().toISOString(),
           });
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
       } else {
         for (const img of result.assets) {
           const mimeType = img.mimeType ?? 'image/jpeg';
           const ext = mimeType.split('/')[1] ?? 'jpg';
           const name = img.fileName ?? `img_${createId()}.${ext}`;
-          addAsset(projectId!, {
+          incoming.push({
             id: createId(),
             name,
             type: 'image',
@@ -104,6 +132,18 @@ export default function AssetsScreen() {
           });
         }
       }
+
+      if (incoming.length === 0) return;
+
+      const transaction = executeBatchAssetImportTransaction(project, incoming);
+      if (!transaction.ok) {
+        const report = buildBatchImportFailureReport(transaction);
+        Alert.alert('Import failed', formatDiagnosticReportMessage(report));
+        return;
+      }
+
+      replaceProjectSnapshot(projectId!, transaction.after!);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Import failed', 'Could not import the selected image(s).');
     } finally {
@@ -153,9 +193,23 @@ export default function AssetsScreen() {
       {
         text: 'Remove', style: 'destructive',
         onPress: async () => {
-          const asset = project?.assets.find(a => a.id === assetId);
+          if (!project) return;
+          const { transaction } = executeSafeAssetDelete(project, assetId);
+          if (!transaction.ok || !transaction.after) {
+            const report = transaction.diagnosticReport;
+            const message = report?.summary
+              ?? transaction.diagnostics
+                .filter(item => item.severity === 'error')
+                .map(item => item.message)
+                .join('\n\n')
+              ?? 'This asset is still referenced elsewhere in the project.';
+            Alert.alert('Cannot remove asset', message);
+            return;
+          }
+
+          const asset = project.assets.find(a => a.id === assetId);
           if (asset) await deleteFile(asset.uri).catch(() => {});
-          deleteAsset(projectId!, assetId);
+          replaceProjectSnapshot(projectId!, transaction.after!);
           if (previewAsset?.id === assetId) closePreview();
           if (modelDetailAsset?.id === assetId) setModelDetailAsset(null);
         },
@@ -194,8 +248,42 @@ export default function AssetsScreen() {
     setModelDetailAsset(prev => (prev?.id === modelAsset.id ? { ...prev, previewImageAssetId: previewId } : prev));
   };
 
+  const commitRecipeResult = ({ project: nextProject, plan }: { project: NonNullable<ReturnType<typeof getProject>>; plan: AssetRecipePlan }) => {
+    if (!projectId) return;
+    replaceProjectSnapshot(projectId, nextProject);
+    Alert.alert(
+      'Suggestion applied',
+      `Updated "${plan.targetFragmentTitle}" with ${plan.preview.length} planned change${plan.preview.length === 1 ? '' : 's'}. You can edit the results in the scene editor.`,
+    );
+  };
+
+  const openRecipeSheet = (asset: ProjectAsset) => {
+    const recipe = suggestedRecipeForAsset(asset);
+    if (recipe === 'none') return;
+    setRecipeAsset(asset);
+    setRecipeToApply(recipe);
+    setRecipeSheetOpen(true);
+  };
+
+  const commitPlayableRoomResult = ({ project: nextProject, plan }: {
+    project: NonNullable<ReturnType<typeof getProject>>;
+    plan: PlayableRoomPlan;
+  }) => {
+    if (!projectId || !plan.patch) return;
+    replaceProjectSnapshot(projectId, nextProject);
+    Alert.alert(
+      'Playable room generated',
+      `"${plan.targetFragmentTitle}" is ready in Chronica Player. Talk to the NPC, collect the pickup, then try the gate.`,
+    );
+  };
+
   const assets = project?.assets ?? [];
   const modelLibraryWarnings = project ? validateModelAssetsInLibrary(project) : [];
+  const libraryIntakeReport = useMemo(() => buildAssetImportReport(assets), [assets]);
+  const integrityReport = useMemo(
+    () => (project ? buildProjectIntegrityReport(project) : null),
+    [project],
+  );
   const resolvedModelDetail = modelDetailAsset
     ? assets.find(a => a.id === modelDetailAsset.id) ?? modelDetailAsset
     : null;
@@ -223,6 +311,22 @@ export default function AssetsScreen() {
               <Text style={[styles.hint, { color: colors.mutedForeground }]}>
                 Tap an asset to preview. Import PNG, JPG, WEBP, GIF, MP3, WAV, OGG, M4A, GLB, GLTF, or a zip pack.
               </Text>
+              {integrityReport && !integrityReport.ok && (
+                <View style={[styles.libraryWarning, { borderColor: colors.destructive + '55', backgroundColor: colors.destructive + '10' }]}>
+                  <Feather name="shield" size={14} color={colors.destructive} />
+                  <Text style={[styles.libraryWarningText, { color: colors.foreground }]}>
+                    Project integrity: {integrityReport.summary}. Review scenes and assets before playtest.
+                  </Text>
+                </View>
+              )}
+              {integrityReport && integrityReport.ok && integrityReport.warnings.length > 0 && (
+                <View style={[styles.libraryInfo, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+                  <Feather name="shield" size={14} color={colors.primary} />
+                  <Text style={[styles.libraryWarningText, { color: colors.foreground }]}>
+                    Project integrity: {integrityReport.summary}
+                  </Text>
+                </View>
+              )}
               {modelLibraryWarnings.length > 0 && (
                 <View style={[styles.libraryWarning, { borderColor: colors.destructive + '55', backgroundColor: colors.destructive + '10' }]}>
                   <Feather name="alert-triangle" size={14} color={colors.destructive} />
@@ -231,6 +335,34 @@ export default function AssetsScreen() {
                   </Text>
                 </View>
               )}
+              {libraryIntakeReport.unknown.length > 0 && (
+                <View style={[styles.libraryInfo, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+                  <Feather name="info" size={14} color={colors.primary} />
+                  <Text style={[styles.libraryWarningText, { color: colors.foreground }]}>
+                    {libraryIntakeReport.unknown.length} asset{libraryIntakeReport.unknown.length === 1 ? '' : 's'} may need classification — optional, tap to review suggested use.
+                  </Text>
+                </View>
+              )}
+              {importReportSummary && (
+                <View style={[styles.libraryInfo, { borderColor: colors.border, backgroundColor: colors.secondary }]}>
+                  <Feather name="check-circle" size={14} color={colors.primary} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={[styles.libraryWarningText, { color: colors.foreground }]}>
+                      Last import: {importReportSummary}
+                    </Text>
+                    <TouchableOpacity onPress={() => setImportReportSummary(null)}>
+                      <Text style={[styles.dismissLink, { color: colors.primary }]}>Dismiss</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              <TouchableOpacity
+                style={[styles.generateRoomBtn, { borderColor: colors.primary, backgroundColor: colors.primary + '10' }]}
+                onPress={() => setRoomGeneratorOpen(true)}
+              >
+                <Feather name="map" size={15} color={colors.primary} />
+                <Text style={[styles.generateRoomText, { color: colors.primary }]}>Generate playable room</Text>
+              </TouchableOpacity>
             </View>
           ) : null
         }
@@ -317,6 +449,12 @@ export default function AssetsScreen() {
             <Text style={styles.previewMetaText}>
               {previewAsset?.mimeType} · {((previewAsset?.size ?? 0) / 1024).toFixed(1)} KB
             </Text>
+            {previewAsset && project && (
+              <PreviewIntakeSummary
+                asset={previewAsset}
+                onApply={() => openRecipeSheet(previewAsset)}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -325,13 +463,53 @@ export default function AssetsScreen() {
         visible={!!resolvedModelDetail}
         asset={resolvedModelDetail}
         assets={assets}
+        project={project ?? null}
         onClose={closeModelDetail}
         onUpdate={patch => resolvedModelDetail && handleModelUpdate(resolvedModelDetail.id, patch)}
         onImportPreviewImage={imageAsset => {
           if (!resolvedModelDetail) return;
           handleImportModelPreview(resolvedModelDetail, imageAsset);
         }}
+        onRecipeApplied={commitRecipeResult}
       />
+
+      {project && recipeAsset && (
+        <AssetRecipeApplySheet
+          visible={recipeSheetOpen}
+          project={project}
+          asset={recipeAsset}
+          recipe={recipeToApply}
+          onClose={() => setRecipeSheetOpen(false)}
+          onApplied={result => {
+            commitRecipeResult(result);
+            setRecipeSheetOpen(false);
+          }}
+        />
+      )}
+
+      {project && (
+        <PlayableRoomGeneratorSheet
+          visible={roomGeneratorOpen}
+          project={project}
+          onClose={() => setRoomGeneratorOpen(false)}
+          onApplied={commitPlayableRoomResult}
+        />
+      )}
+    </View>
+  );
+}
+
+function PreviewIntakeSummary({
+  asset,
+  onApply,
+}: {
+  asset: ProjectAsset;
+  onApply?: () => void;
+}) {
+  const classification = useAssetIntakeClassification(asset);
+  return (
+    <View style={styles.previewIntake}>
+      <AssetIntakeSummary classification={classification} onApplySuggestion={onApply} />
     </View>
   );
 }
@@ -383,6 +561,27 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   libraryWarningText: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular' },
+  libraryInfo: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'flex-start',
+  },
+  dismissLink: { fontSize: 11, fontFamily: 'Inter_600SemiBold' },
+  generateRoomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  generateRoomText: { fontSize: 13, fontFamily: 'Inter_600SemiBold' },
   fab: {
     position: 'absolute', right: 20,
     width: 54, height: 54, borderRadius: 27,
@@ -409,4 +608,5 @@ const styles = StyleSheet.create({
   dataText: { color: '#e0ddf0', fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
   previewMeta: { position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', gap: 4, paddingTop: 16 },
   previewMetaText: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontFamily: 'Inter_400Regular' },
+  previewIntake: { width: '90%', marginTop: 8, paddingHorizontal: 8 },
 });

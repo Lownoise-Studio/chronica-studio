@@ -7,7 +7,8 @@ import { isValidHotspotBounds } from './hotspots';
 import { validateCharacters, validateCharacterAssetRefs } from './characters';
 import { validateFragmentDialogue } from './validate-dialogue';
 import { validateFragmentStageActors } from './stage-actors';
-import { findMissingStageObjectAssetRefs, validateProjectAssets } from './model-assets';
+import { findMissingAssetReferences } from './asset-reference-safety';
+import { validateProjectAssets } from './model-assets';
 
 function assetExists(assets: ProjectAsset[], name: string): boolean {
   const asset = findAssetByName(assets, name);
@@ -199,6 +200,7 @@ export function validateProject(project: Project): ValidationError[] {
   for (const frag of project.fragments) {
     errors.push(...validateFragment(frag));
     errors.push(...validateFragmentDialogue(frag, project.characters ?? []));
+    errors.push(...validateFragmentStageActors(frag, project.assets));
   }
 
   errors.push(...validateCharacters(project.characters ?? []));
@@ -206,8 +208,7 @@ export function validateProject(project: Project): ValidationError[] {
 
   errors.push(...validateProjectActions(project));
   errors.push(...findDuplicateLocations(project));
-  errors.push(...findMissingAssetRefs(project));
-  errors.push(...findMissingStageObjectAssetRefs(project));
+  errors.push(...findMissingAssetReferences(project));
   errors.push(...validateProjectAssets(project));
   errors.push(...findOrphanScenes(project));
   return errors;

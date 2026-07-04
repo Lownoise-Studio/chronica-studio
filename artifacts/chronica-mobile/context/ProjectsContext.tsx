@@ -121,7 +121,10 @@ interface ProjectsContextType {
   deleteFragment: (projectId: string, uid: string) => void;
   addAsset: (projectId: string, asset: ProjectAsset) => void;
   updateAsset: (projectId: string, assetId: string, updates: Partial<ProjectAsset>) => void;
+  /** @deprecated Prefer executeSafeAssetDelete + replaceProjectSnapshot — bypasses reference validation. */
   deleteAsset: (projectId: string, assetId: string) => void;
+  /** Replace a project snapshot after a committed editor transaction. */
+  replaceProjectSnapshot: (projectId: string, snapshot: Project) => void;
   getProject: (id: string) => Project | undefined;
   exportProject: (id: string) => string | null;
   importProject: (json: string) => { ok: boolean; error?: string; project?: Project };
@@ -363,6 +366,11 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
     persist(projects.map(p => p.id === projectId
       ? { ...p, assets: p.assets.filter(a => a.id !== assetId), updatedAt: nowIso() } : p), [projectId]);
 
+  const replaceProjectSnapshot = (projectId: string, snapshot: Project) =>
+    persist(projects.map(p => p.id === projectId
+      ? { ...snapshot, id: projectId, updatedAt: nowIso() }
+      : p), [projectId]);
+
   const getProject = (id: string) => projects.find(p => p.id === id);
 
   const exportProject = (id: string): string | null => {
@@ -431,7 +439,7 @@ export function ProjectsProvider({ children }: { children: ReactNode }) {
       projects, isLoaded, hasOnboarded, setHasOnboarded,
       createProject, updateProject, duplicateProject, deleteProject,
       addFragment, updateFragment, deleteFragment,
-      addAsset, updateAsset, deleteAsset, getProject,
+      addAsset, updateAsset, deleteAsset, replaceProjectSnapshot, getProject,
       exportProject, importProject, importProjectPackage, getValidationErrors, getValidationWarnings,
       resetOnboarding, removeDemoProjects, clearLibrary, resetAppState,
     }}>

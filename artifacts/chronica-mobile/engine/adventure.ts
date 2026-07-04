@@ -18,11 +18,11 @@ export const DEFAULT_ENTRY_POINT = { x: 0.5, y: 0.75 };
 /** Fixed collision inflation around the player feet so sprites don't clip walls visually. */
 const PLAYER_COLLIDER_HALF = 0.025;
 
-export function getAdventure(fragment: Fragment | null | undefined): SceneAdventure | undefined {
+function getAdventure(fragment: Fragment | null | undefined): SceneAdventure | undefined {
   return fragment?.adventure;
 }
 
-export function hasAdventure(fragment: Fragment | null | undefined): boolean {
+function hasAdventure(fragment: Fragment | null | undefined): boolean {
   return !!fragment?.adventure;
 }
 

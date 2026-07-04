@@ -11,9 +11,11 @@ import { useColors } from '@/hooks/useColors';
 import { useProjects } from '@/context/ProjectsContext';
 import { useAdvancedMode } from '@/context/AdvancedModeContext';
 import { compileProject } from '@/engine/compiler';
+import { fromCompileFailure, buildExportFailureReport, formatDiagnosticReportMessage } from '@/engine/diagnostics';
 import { isChronicaPackageBytes } from '@/engine/chronica-package';
 import { documentDirectory } from '@/storage/fileSystem';
-import { buildChronicaPackageBytes } from '@/storage/chronica-package-io';
+import { buildChronicaPackageBytes, type ImportChronicaPackageResult } from '@/storage/chronica-package-io';
+import { buildPackageImportReport } from '@/engine/diagnostics';
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -101,7 +103,7 @@ export default function ExportScreen() {
     if (errors.length > 0) {
       Alert.alert(
         'Fix issues before export',
-        `${errors.length} validation issue${errors.length !== 1 ? 's' : ''} must be resolved before exporting a game package.\n\n${errors.slice(0, 4).map(e => `• ${e.message}`).join('\n')}`,
+        formatDiagnosticReportMessage(fromCompileFailure(errors)),
       );
       return;
     }
@@ -109,10 +111,10 @@ export default function ExportScreen() {
     try {
       const built = await buildChronicaPackageBytes(project);
       if (!built.ok) {
-        const detail = built.diagnostics?.length
-          ? built.diagnostics.map(d => `• ${d.message}`).join('\n')
-          : built.error;
-        setStatus({ ok: false, msg: detail });
+        setStatus({
+          ok: false,
+          msg: formatDiagnosticReportMessage(buildExportFailureReport(built)),
+        });
         return;
       }
       const filename = `${project.title.replace(/[^a-z0-9]/gi, '_')}.chronica`;
@@ -154,10 +156,11 @@ export default function ExportScreen() {
             msg: `Imported game package "${outcome.project.title}" with images.`,
           });
         } else {
-          const detail = outcome.diagnostics?.length
-            ? `${outcome.error ?? 'Package import failed.'}\n\n${outcome.diagnostics.slice(0, 4).map(d => `• ${d.message}`).join('\n')}`
-            : (outcome.error ?? 'Package import failed.');
-          setStatus({ ok: false, msg: detail });
+          const failure = outcome as Extract<ImportChronicaPackageResult, { ok: false }>;
+          setStatus({
+            ok: false,
+            msg: formatDiagnosticReportMessage(buildPackageImportReport(failure, file.name)),
+          });
         }
         return;
       }
